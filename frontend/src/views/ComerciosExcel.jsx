@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { FileUp, FileSpreadsheet, Download, RefreshCw, AlertCircle, CheckCircle2 } from 'lucide-react';
+import API_BASE_URL from '../config';
 
 const ComerciosExcel = () => {
     const [data, setData] = useState(null);
@@ -12,7 +13,7 @@ const ComerciosExcel = () => {
         setError(null);
         setSuccess(false);
         try {
-            const response = await fetch('http://localhost:3001/api/excel/parse-comercios', {
+            const response = await fetch(`${API_BASE_URL}/api/excel/parse-comercios`, {
                 method: 'POST'
             });
             const result = await response.json();
@@ -37,7 +38,7 @@ const ComerciosExcel = () => {
         setError(null);
         setSuccess(false);
         try {
-            const response = await fetch('http://localhost:3001/api/excel/parse-comercios', {
+            const response = await fetch(`${API_BASE_URL}/api/excel/parse-comercios`, {
                 method: 'POST',
                 body: formData
             });

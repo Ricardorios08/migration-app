@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Database, Zap, Activity } from 'lucide-react';
+import API_BASE_URL from '../config';
 
 const Header = () => {
     const [status, setStatus] = useState({ maria: 'pending', postgres: 'pending' });
@@ -7,7 +8,7 @@ const Header = () => {
     useEffect(() => {
         const checkConnections = async () => {
             try {
-                const response = await fetch('http://localhost:3001/api/test-connections');
+                const response = await fetch(`${API_BASE_URL}/api/test-connections`);
                 const data = await response.json();
                 setStatus({
                     maria: data.maria.status,

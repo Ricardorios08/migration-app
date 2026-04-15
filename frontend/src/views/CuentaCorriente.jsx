@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Search, Info, CheckCircle2, AlertCircle, Calendar, Filter, X, FileText, Download } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import API_BASE_URL from '../config';
 
 const CuentaCorriente = () => {
     const [offices, setOffices] = useState([]);
@@ -68,7 +69,7 @@ const CuentaCorriente = () => {
     };
 
     useEffect(() => {
-        fetch('http://localhost:3001/api/ctacte/offices')
+        fetch(`${API_BASE_URL}/api/ctacte/offices`)
             .then(res => res.json())
             .then(data => setOffices(data))
             .catch(err => console.error('Error fetching offices:', err));
@@ -84,7 +85,7 @@ const CuentaCorriente = () => {
         const timer = setTimeout(async () => {
             setIsResolvingOffices(true);
             try {
-                const res = await fetch(`http://localhost:3001/api/ctacte/resolve-account/${account}?searchType=${searchBy}`);
+                const res = await fetch(`${API_BASE_URL}/api/ctacte/resolve-account/${account}?searchType=${searchBy}`);
                 const data = await res.json();
                 
                 if (Array.isArray(data)) {
@@ -119,7 +120,7 @@ const CuentaCorriente = () => {
         const timer = setTimeout(async () => {
             setIsSearchingPerson(true);
             try {
-                const res = await fetch(`http://localhost:3001/api/ctacte/search-person?q=${encodeURIComponent(personSearchText)}`);
+                const res = await fetch(`${API_BASE_URL}/api/ctacte/search-person?q=${encodeURIComponent(personSearchText)}`);
                 const data = await res.json();
                 setPersonSearchResults(data);
                 setShowPersonDropdown(data.length > 0);
@@ -255,7 +256,7 @@ const CuentaCorriente = () => {
         // 1. Fetch PostgreSQL Data (New System)
         let pgData = [];
         try {
-            let pgUrl = `http://localhost:3001/api/ctacte/new/search?officeId=${selectedOffice}&account=${account}&searchType=${searchBy}&percod=${account}&toDate=${toDate}&onlyDebt=${onlyDebt}&showQuotaDetail=${showQuotaDetail}`;
+            let pgUrl = `${API_BASE_URL}/api/ctacte/new/search?officeId=${selectedOffice}&account=${account}&searchType=${searchBy}&percod=${account}&toDate=${toDate}&onlyDebt=${onlyDebt}&showQuotaDetail=${showQuotaDetail}`;
             const pgRes = await fetch(pgUrl);
             const pgResult = await pgRes.json();
             
@@ -292,7 +293,7 @@ const CuentaCorriente = () => {
         try {
             let allLegacyData = [];
             for (const group of queryGroups) {
-                let legacyUrl = `http://localhost:3001/api/ctacte/legacy/search?officeId=${group.office}&type=optimized&onlyDebt=${onlyDebt}&toDate=${toDate}&fealCorte=${fealCorte}`;
+                let legacyUrl = `${API_BASE_URL}/api/ctacte/legacy/search?officeId=${group.office}&type=optimized&onlyDebt=${onlyDebt}&toDate=${toDate}&fealCorte=${fealCorte}`;
                 group.accounts.forEach(acc => {
                     legacyUrl += `&account=${acc}`;
                 });
