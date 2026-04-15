@@ -1,0 +1,5 @@
+# VPN Credentials
+# Put your OpenVPN username on line 1 and password on line 2
+# This file is gitignored for security
+vpn_username
+vpn_password

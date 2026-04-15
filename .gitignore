@@ -30,3 +30,10 @@ npm-debug.log*
 
 # Scratch/temp files
 backend/scratch/
+
+# VPN config (sensitive - certs and credentials)
+vpn/*.ovpn
+vpn/*.crt
+vpn/*.key
+vpn/auth.txt
+vpn/*.log

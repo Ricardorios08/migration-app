@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Info, CheckCircle2, AlertCircle, Calendar, Filter, X, FileText, Download } from 'lucide-react';
 import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 
 const CuentaCorriente = () => {
     const [offices, setOffices] = useState([]);
@@ -29,6 +29,12 @@ const CuentaCorriente = () => {
     const [foundOffices, setFoundOffices] = useState([]);
     const [isResolvingOffices, setIsResolvingOffices] = useState(false);
     const [pdfBlobUrl, setPdfBlobUrl] = useState(null);
+
+    // Person search autocomplete
+    const [personSearchText, setPersonSearchText] = useState('');
+    const [personSearchResults, setPersonSearchResults] = useState([]);
+    const [showPersonDropdown, setShowPersonDropdown] = useState(false);
+    const [isSearchingPerson, setIsSearchingPerson] = useState(false);
 
     useEffect(() => {
         const handleMouseMove = (e) => {
@@ -80,13 +86,17 @@ const CuentaCorriente = () => {
             try {
                 const res = await fetch(`http://localhost:3001/api/ctacte/resolve-account/${account}?searchType=${searchBy}`);
                 const data = await res.json();
-                setFoundOffices(data);
-                if (data.length > 0) {
-                    // If current internal selection is null or not in new results, pick the first one
-                    const currentOffInNewList = data.find(o => o.id.toString() === selectedOffice);
-                    if (!selectedOffice || !currentOffInNewList) {
-                        setSelectedOffice(data[0].id.toString());
+                
+                if (Array.isArray(data)) {
+                    setFoundOffices(data);
+                    if (data.length > 0) {
+                        const currentOffInNewList = data.find(o => o.id.toString() === selectedOffice);
+                        if (!selectedOffice || !currentOffInNewList) {
+                            setSelectedOffice(data[0].id.toString());
+                        }
                     }
+                } else {
+                    setFoundOffices([]);
                 }
             } catch (err) {
                 console.error('Error resolving offices:', err);
@@ -97,6 +107,54 @@ const CuentaCorriente = () => {
 
         return () => clearTimeout(timer);
     }, [account, searchBy]);
+
+    // Debounced person search
+    useEffect(() => {
+        if (searchBy !== 'person' || personSearchText.length < 2) {
+            setPersonSearchResults([]);
+            setShowPersonDropdown(false);
+            return;
+        }
+
+        const timer = setTimeout(async () => {
+            setIsSearchingPerson(true);
+            try {
+                const res = await fetch(`http://localhost:3001/api/ctacte/search-person?q=${encodeURIComponent(personSearchText)}`);
+                const data = await res.json();
+                setPersonSearchResults(data);
+                setShowPersonDropdown(data.length > 0);
+            } catch (err) {
+                console.error('Error searching person:', err);
+            } finally {
+                setIsSearchingPerson(false);
+            }
+        }, 400);
+
+        return () => clearTimeout(timer);
+    }, [personSearchText, searchBy]);
+
+    const handleSelectPerson = (person) => {
+        // Set the percod as the account (used for person search)
+        setAccount(person.percod.toString());
+        setPersonSearchText(`${person.pernom} (${person.cuit || person.percod})`);
+        setShowPersonDropdown(false);
+
+        // Auto-resolve offices from the person's accounts
+        if (person.accounts && person.accounts.length > 0) {
+            const uniqueOffices = [];
+            const seen = new Set();
+            person.accounts.forEach(a => {
+                if (!seen.has(a.officeId)) {
+                    seen.add(a.officeId);
+                    uniqueOffices.push({ id: a.officeId, name: a.officeName });
+                }
+            });
+            setFoundOffices(uniqueOffices);
+            if (uniqueOffices.length > 0) {
+                setSelectedOffice(uniqueOffices[0].id.toString());
+            }
+        }
+    };
 
     const renderRows = () => {
         if (!legacyData || legacyData.length === 0) return null;
@@ -191,42 +249,47 @@ const CuentaCorriente = () => {
         setLoading(true);
         setError(null);
         setPostgresError(null);
+        setLegacyData([]);
+        setPostgresData([]);
 
+        // 1. Fetch PostgreSQL Data (New System)
+        let pgData = [];
         try {
-            // 1. Fetch PostgreSQL Data (New System)
-            // It resolves percod internally if searchBy === 'person'
             let pgUrl = `http://localhost:3001/api/ctacte/new/search?officeId=${selectedOffice}&account=${account}&searchType=${searchBy}&percod=${account}&toDate=${toDate}&onlyDebt=${onlyDebt}&showQuotaDetail=${showQuotaDetail}`;
             const pgRes = await fetch(pgUrl);
-            const pgData = await pgRes.json();
+            const pgResult = await pgRes.json();
             
             if (!pgRes.ok) {
-                setPostgresError(pgData.error || 'Error searching postgres data');
+                setPostgresError(pgResult.error || 'Error searching postgres data');
             } else {
+                pgData = pgResult;
                 setPostgresData(pgData);
             }
+        } catch (err) {
+            console.error('Postgres fetch error:', err);
+            setPostgresError('No se pudo conectar a PostgreSQL.');
+        }
 
-            // 2. Determine accounts and THEIR OFFICES for MariaDB
-            // Logic based on: tpotribcod = CodiOfic
-            let queryGroups = [];
-            if (searchBy === 'person' && pgData.length > 0) {
-                // Group accounts by their resolved officeId from Postgres
-                const groups = pgData.reduce((acc, r) => {
-                    const offId = r.officeId || 1; // Fallback to 1 if not provided
-                    if (!acc[offId]) acc[offId] = new Set();
-                    acc[offId].add(r.CuenCtct);
-                    return acc;
-                }, {});
-                
-                queryGroups = Object.entries(groups).map(([offId, set]) => ({
-                    office: offId,
-                    accounts: Array.from(set)
-                }));
-            } else {
-                // If searching by account, use the current office select logic (or fallback to 1)
-                queryGroups = [{ office: selectedOffice || 1, accounts: [account] }];
-            }
+        // 2. Determine accounts and THEIR OFFICES for MariaDB
+        let queryGroups = [];
+        if (searchBy === 'person' && pgData.length > 0) {
+            const groups = pgData.reduce((acc, r) => {
+                const offId = r.officeId || 1;
+                if (!acc[offId]) acc[offId] = new Set();
+                acc[offId].add(r.CuenCtct);
+                return acc;
+            }, {});
+            
+            queryGroups = Object.entries(groups).map(([offId, set]) => ({
+                office: offId,
+                accounts: Array.from(set)
+            }));
+        } else {
+            queryGroups = [{ office: selectedOffice || 1, accounts: [account] }];
+        }
 
-            // 3. Fetch MariaDB Data (Legacy System) for each office group
+        // 3. Fetch MariaDB Data (Legacy System) - independent, non-blocking
+        try {
             let allLegacyData = [];
             for (const group of queryGroups) {
                 let legacyUrl = `http://localhost:3001/api/ctacte/legacy/search?officeId=${group.office}&type=optimized&onlyDebt=${onlyDebt}&toDate=${toDate}&fealCorte=${fealCorte}`;
@@ -244,107 +307,123 @@ const CuentaCorriente = () => {
                 }
             }
             setLegacyData(allLegacyData);
-
         } catch (err) {
-            console.error('Error fetching data:', err);
-            setError('Error al conectar con los servidores.');
-        } finally {
-            setLoading(false);
+            console.error('MariaDB fetch error:', err);
+            setError('⚠️ MariaDB no disponible. Mostrando solo datos de PostgreSQL.');
         }
+
+        setLoading(false);
     };
 
     const handleGeneratePDF = () => {
-        const doc = new jsPDF('p', 'pt', 'a4');
-        const pageWidth = doc.internal.pageSize.getWidth();
-        const mainColor = [37, 99, 235]; // #2563eb
-        const legacyColor = [16, 185, 129]; // #10b981
+        try {
+            const doc = new jsPDF('p', 'pt', 'a4');
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const mainColor = [37, 99, 235]; // #2563eb
+            const legacyColor = [16, 185, 129]; // #10b981
 
-        // Header
-        doc.setFontSize(18);
-        doc.setTextColor(40);
-        doc.text('INFORME DE AUDITORÍA DE MIGRACIÓN', pageWidth / 2, 40, { align: 'center' });
-        
-        doc.setFontSize(10);
-        doc.setTextColor(100);
-        doc.text(`Fecha de Reporte: ${new Date().toLocaleString()}`, 40, 65);
-        
-        const ownerName = postgresData[0]?.OwnerName || legacyData[0]?.DetaCtct?.split(' - ')[0] || 'N/A';
-        const percod = postgresData[0]?.PersonId || 'N/A';
-        const cuit = postgresData[0]?.CUIT || '--';
-        const cta = [...new Set(postgresData.map(d => d.CuenCtct))].join(', ') || account;
-        const officeName = offices.find(o => o.id.toString() === selectedOffice)?.name || selectedOffice;
+            // Header
+            doc.setFontSize(18);
+            doc.setTextColor(40);
+            doc.text('INFORME DE AUDITORÍA DE MIGRACIÓN', pageWidth / 2, 40, { align: 'center' });
+            
+            doc.setFontSize(10);
+            doc.setTextColor(100);
+            doc.text(`Fecha de Reporte: ${new Date().toLocaleString()}`, 40, 65);
+            
+            const ownerName = postgresData[0]?.OwnerName || postgresData[0]?.ownername || legacyData[0]?.DetaCtct?.split(' - ')[0] || 'N/A';
+            const percod = postgresData[0]?.PersonId || postgresData[0]?.personid || 'N/A';
+            const cuit = postgresData[0]?.CUIT || '--';
+            const cta = [...new Set(postgresData.map(d => d.CuenCtct || d.cuenctct))].filter(Boolean).join(', ') || account;
+            const offName = (Array.isArray(foundOffices) ? foundOffices.find(o => o.id.toString() === selectedOffice)?.name : null) || selectedOffice;
 
-        doc.setFontSize(11);
-        doc.setTextColor(40);
-        doc.text(`Titular: ${ownerName} (${percod})`, 40, 85);
-        doc.text(`CUIT: ${cuit} | Cuenta: ${cta} | Oficina: ${officeName}`, 40, 100);
+            doc.setFontSize(11);
+            doc.setTextColor(40);
+            doc.text(`Titular: ${ownerName} (${percod})`, 40, 85);
+            doc.text(`CUIT: ${cuit} | Cuenta: ${cta} | Oficina: ${offName}`, 40, 100);
 
-        if (postgresData[0]?.Nomenclatura) {
-            doc.text(`Nomenclatura: ${postgresData[0].Nomenclatura}`, 40, 115);
-        } else if (postgresData[0]?.Pabellon) {
-            doc.text(`Ubicación: Pab: ${postgresData[0].Pabellon.trim()} Nicho: ${postgresData[0].Nicho?.trim()}`, 40, 115);
+            if (postgresData[0]?.Nomenclatura) {
+                doc.text(`Nomenclatura: ${postgresData[0].Nomenclatura}`, 40, 115);
+            } else if (postgresData[0]?.Pabellon) {
+                doc.text(`Ubicación: Pab: ${postgresData[0].Pabellon.trim()} Nicho: ${postgresData[0].Nicho?.trim() || ''}`, 40, 115);
+            }
+
+            let currentY = 135;
+
+            // LEGACY TABLE (only if data available)
+            if (legacyData.length > 0) {
+                doc.setFontSize(13);
+                doc.setTextColor(legacyColor[0], legacyColor[1], legacyColor[2]);
+                doc.text('SISTEMA ORIGINAL (MARIADB)', 40, currentY);
+                currentY += 10;
+
+                const legacyRows = legacyData.map(r => [
+                    `${r.PeriCtct || ''}/${r.BimeCtct || ''}`,
+                    r.FeveCtct ? new Date(r.FeveCtct).toLocaleDateString() : '-',
+                    (r.DetaCtct || '').substring(0, 35),
+                    `$${parseFloat(r.DebeCtct || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}`,
+                    `$${parseFloat(r.RecaCtct || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}`,
+                    `$${parseFloat(r.CredCtct || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}`,
+                    `$${parseFloat(r.TotaCtct || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}`
+                ]);
+
+                const legacyTable = autoTable(doc, {
+                    startY: currentY,
+                    head: [['Pe/C', 'Vencimiento', 'Detalle', 'Debe', 'Recargo', 'Haber', 'Total']],
+                    body: legacyRows,
+                    theme: 'grid',
+                    headStyles: { fillColor: legacyColor, fontSize: 8 },
+                    styles: { fontSize: 7, cellPadding: 3 },
+                    margin: { left: 40, right: 40 }
+                });
+                currentY = (legacyTable?.finalY || currentY) + 30;
+            } else {
+                doc.setFontSize(9);
+                doc.setTextColor(150);
+                doc.text('MariaDB: Sin datos disponibles (servidor no accesible)', 40, currentY);
+                currentY += 25;
+            }
+
+            // POSTGRES TABLE (only if data available)
+            if (postgresData.length > 0) {
+                doc.setFontSize(13);
+                doc.setTextColor(mainColor[0], mainColor[1], mainColor[2]);
+                doc.text('SISTEMA NUEVO (POSTGRESQL)', 40, currentY);
+                currentY += 10;
+
+                const pgRows = postgresData.map(r => [
+                    `${r.PeriCtct || ''}/${r.BimeCtct || ''}`,
+                    r.FeveCtct ? new Date(r.FeveCtct).toLocaleDateString() : '-',
+                    `${r.DetaCtct || r.TipoTributo || ''}`,
+                    `$${parseFloat(r.DebeCtct || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}`,
+                    `$${parseFloat(r.RecaCtct || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}`,
+                    `$${parseFloat(r.CredCtct || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}`,
+                    `$${parseFloat(r.TotaCtct || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}`
+                ]);
+
+                autoTable(doc, {
+                    startY: currentY,
+                    head: [['Pe/C', 'Vencimiento', 'Concepto', 'Debe', 'Interés', 'Haber', 'Total']],
+                    body: pgRows,
+                    theme: 'grid',
+                    headStyles: { fillColor: mainColor, fontSize: 8 },
+                    styles: { fontSize: 7, cellPadding: 3 },
+                    margin: { left: 40, right: 40 }
+                });
+            } else {
+                doc.setFontSize(9);
+                doc.setTextColor(150);
+                doc.text('PostgreSQL: Sin datos disponibles', 40, currentY);
+            }
+
+            const blob = doc.output('blob');
+            const url = URL.createObjectURL(blob);
+            setPdfBlobUrl(url);
+            setShowPdfModal(true);
+        } catch (err) {
+            console.error('Error generating PDF:', err);
+            alert('Error al generar el PDF: ' + err.message);
         }
-
-        let currentY = 130;
-
-        // LEGACY TABLE
-        doc.setFontSize(13);
-        doc.setTextColor(legacyColor[0], legacyColor[1], legacyColor[2]);
-        doc.text('SISTEMA ORIGINAL (MARIADB)', 40, currentY);
-        currentY += 10;
-
-        const legacyRows = legacyData.map(r => [
-            `${r.PeriCtct || ''}/${r.BimeCtct || ''}`,
-            r.FeveCtct ? new Date(r.FeveCtct).toLocaleDateString() : '-',
-            (r.DetaCtct || '').substring(0, 35),
-            `$${parseFloat(r.DebeCtct || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}`,
-            `$${parseFloat(r.RecaCtct || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}`,
-            `$${parseFloat(r.CredCtct || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}`,
-            `$${parseFloat(r.TotaCtct || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}`
-        ]);
-
-        doc.autoTable({
-            startY: currentY,
-            head: [['Pe/C', 'Vencimiento', 'Detalle', 'Debe', 'Recargo', 'Haber', 'Total']],
-            body: legacyRows,
-            theme: 'grid',
-            headStyles: { fillColor: legacyColor, fontSize: 8 },
-            styles: { fontSize: 7, cellPadding: 3 },
-            margin: { left: 40, right: 40 }
-        });
-
-        currentY = doc.lastAutoTable.finalY + 30;
-
-        // POSTGRES TABLE
-        doc.setFontSize(13);
-        doc.setTextColor(mainColor[0], mainColor[1], mainColor[2]);
-        doc.text('SISTEMA NUEVO (POSTGRESQL)', 40, currentY);
-        currentY += 10;
-
-        const pgRows = postgresData.map(r => [
-            `${r.PeriCtct || ''}/${r.BimeCtct || ''}`,
-            r.FeveCtct ? new Date(r.FeveCtct).toLocaleDateString() : '-',
-            `${r.DetaCtct || ''}${r.RecursoCod ? ' (Rec: '+r.RecursoCod+')' : ''}`,
-            `$${parseFloat(r.DebeCtct || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}`,
-            `$${parseFloat(r.RecaCtct || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}`,
-            `$${parseFloat(r.CredCtct || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}`,
-            `$${parseFloat(r.TotaCtct || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}`
-        ]);
-
-        doc.autoTable({
-            startY: currentY,
-            head: [['Pe/C', 'Vencimiento', 'Concepto', 'Debe', 'Interés', 'Haber', 'Total']],
-            body: pgRows,
-            theme: 'grid',
-            headStyles: { fillColor: mainColor, fontSize: 8 },
-            styles: { fontSize: 7, cellPadding: 3 },
-            margin: { left: 40, right: 40 }
-        });
-
-        const blob = doc.output('blob');
-        const url = URL.createObjectURL(blob);
-        setPdfBlobUrl(url);
-        setShowPdfModal(true);
     };
 
     const renderPostgresRows = () => {
@@ -559,27 +638,97 @@ const CuentaCorriente = () => {
                         </div>
                     </div>
                 )}
-                <form onSubmit={handleSearch} className="search-controls" style={{ flexWrap: 'wrap' }}>
+                <form onSubmit={(e) => { e.preventDefault(); setShowPersonDropdown(false); handleSearch(e); }} className="search-controls" style={{ flexWrap: 'wrap' }}>
                     <div className="input-group">
                         <Filter size={18} />
                         <select 
                             value={searchBy} 
-                            onChange={(e) => setSearchBy(e.target.value)}
+                            onChange={(e) => {
+                                setSearchBy(e.target.value);
+                                setAccount('');
+                                setPersonSearchText('');
+                                setPersonSearchResults([]);
+                                setShowPersonDropdown(false);
+                                setFoundOffices([]);
+                            }}
                             style={{ background: 'transparent', border: 'none', color: 'white', padding: '0.5rem' }}
                         >
                             <option value="account">Por Cuenta</option>
-                            <option value="person">Por Persona (Percod)</option>
+                            <option value="person">Por Persona</option>
                         </select>
                     </div>
 
-                    <div className="input-group">
+                    <div className="input-group" style={{ position: 'relative' }}>
                         <Search size={18} />
-                        <input 
-                            type="text" 
-                            placeholder={searchBy === 'account' ? "Nro. Cuenta" : "DNI / ID Persona"} 
-                            value={account}
-                            onChange={(e) => setAccount(e.target.value)}
-                        />
+                        {searchBy === 'account' ? (
+                            <input 
+                                type="text" 
+                                placeholder="Nro. Cuenta" 
+                                value={account}
+                                onChange={(e) => setAccount(e.target.value)}
+                            />
+                        ) : (
+                            <>
+                                <input 
+                                    type="text" 
+                                    placeholder="Nombre, CUIT (20-12345678-9), DNI o Percod" 
+                                    value={personSearchText}
+                                    onChange={(e) => {
+                                        setPersonSearchText(e.target.value);
+                                        // If they clear the input, clear selection
+                                        if (!e.target.value) {
+                                            setAccount('');
+                                            setPersonSearchResults([]);
+                                        }
+                                    }}
+                                    onFocus={() => { if (personSearchResults.length > 0) setShowPersonDropdown(true); }}
+                                    style={{ minWidth: '280px' }}
+                                />
+                                {isSearchingPerson && <div className="loader-mini"></div>}
+                                {showPersonDropdown && (
+                                    <div className="person-dropdown" style={{
+                                        position: 'absolute',
+                                        top: '100%',
+                                        left: 0,
+                                        right: 0,
+                                        background: 'var(--surface)',
+                                        border: '1px solid var(--border)',
+                                        borderRadius: '0 0 8px 8px',
+                                        maxHeight: '300px',
+                                        overflowY: 'auto',
+                                        zIndex: 1000,
+                                        boxShadow: '0 8px 24px rgba(0,0,0,0.4)'
+                                    }}>
+                                        {personSearchResults.map((p, i) => (
+                                            <div 
+                                                key={i}
+                                                className="person-option"
+                                                onClick={() => handleSelectPerson(p)}
+                                                style={{
+                                                    padding: '0.6rem 1rem',
+                                                    cursor: 'pointer',
+                                                    borderBottom: '1px solid rgba(255,255,255,0.05)',
+                                                    transition: 'background 0.15s',
+                                                }}
+                                                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(37,99,235,0.15)'}
+                                                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                                            >
+                                                <div style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>{p.pernom}</div>
+                                                <div style={{ fontSize: '0.75rem', opacity: 0.7, display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                                                    <span>ID: {p.percod}</span>
+                                                    {p.cuit && <span>CUIT: {p.cuit}</span>}
+                                                    {p.accounts && p.accounts.length > 0 && (
+                                                        <span style={{ color: '#10b981' }}>
+                                                            Ctas: {p.accounts.map(a => `${a.account} (${a.officeName})`).join(', ')}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </>
+                        )}
                         {isResolvingOffices && <div className="loader-mini"></div>}
                     </div>
 
@@ -681,8 +830,8 @@ const CuentaCorriente = () => {
                     <button 
                         type="button" 
                         className="btn-pdf" 
-                        disabled={!account || loading}
-                        onClick={() => setShowPdfModal(true)}
+                        disabled={!account || loading || (legacyData.length === 0 && postgresData.length === 0)}
+                        onClick={handleGeneratePDF}
                     >
                         Vista Previa PDF
                     </button>
@@ -847,12 +996,11 @@ const CuentaCorriente = () => {
                                 <button className="close-btn" onClick={() => setShowPdfModal(false)}>&times;</button>
                             </div>
                         </div>
-                        <div style={{ flex: 1, background: '#525659', padding: '10px', height: '100%' }}>
+                        <div style={{ flex: 1, background: '#525659', padding: '10px', minHeight: 0, display: 'flex' }}>
                             <iframe 
                                 src={pdfBlobUrl}
                                 width="100%"
-                                height="100%"
-                                style={{ border: 'none', borderRadius: '4px' }}
+                                style={{ border: 'none', borderRadius: '4px', flex: 1, minHeight: '500px' }}
                                 title="PDF Preview"
                             />
                         </div>

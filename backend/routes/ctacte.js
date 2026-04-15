@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const mariaDB = require('../db/maria');
+const postgresDB = require('../db/postgres');
 
 // Get list of offices
 router.get('/offices', async (req, res) => {
@@ -10,6 +11,90 @@ router.get('/offices', async (req, res) => {
         res.json(result);
     } catch (err) {
         console.error('Error fetching offices:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Search persons by name, CUIT, DNI, or percod
+router.get('/search-person', async (req, res) => {
+    const { q } = req.query;
+    if (!q || q.length < 2) return res.json([]);
+
+    try {
+        const searchTerm = q.trim();
+        let query;
+        let params;
+
+        // Detect search type
+        const isNumeric = /^\d+$/.test(searchTerm);
+        const isCuit = /^\d{2}-?\d{7,8}-?\d{1}$/.test(searchTerm);
+
+        if (isCuit) {
+            // Search by CUIT (with or without dashes)
+            const clean = searchTerm.replace(/-/g, '');
+            const tipo = parseInt(clean.substring(0, 2));
+            const nro = parseInt(clean.substring(2, clean.length - 1));
+            const dig = parseInt(clean.substring(clean.length - 1));
+            
+            query = `
+                SELECT p.percod, TRIM(p.pernom) as pernom, 
+                       p.percuiltipo, p.percuilnro, p.percuildigver,
+                       CONCAT(p.percuiltipo, '-', p.percuilnro, '-', p.percuildigver) as cuit
+                FROM public.persona p
+                WHERE p.percuiltipo = $1 AND p.percuilnro = $2 AND p.percuildigver = $3
+                LIMIT 20
+            `;
+            params = [tipo, nro, dig];
+        } else if (isNumeric) {
+            // Search by percod OR by DNI number (percuilnro)
+            query = `
+                SELECT p.percod, TRIM(p.pernom) as pernom,
+                       p.percuiltipo, p.percuilnro, p.percuildigver,
+                       CONCAT(p.percuiltipo, '-', p.percuilnro, '-', p.percuildigver) as cuit
+                FROM public.persona p
+                WHERE p.percod = $1 OR p.percuilnro = $1
+                ORDER BY p.percod
+                LIMIT 20
+            `;
+            params = [parseInt(searchTerm)];
+        } else {
+            // Search by name (partial, case insensitive)
+            query = `
+                SELECT p.percod, TRIM(p.pernom) as pernom,
+                       p.percuiltipo, p.percuilnro, p.percuildigver,
+                       CONCAT(p.percuiltipo, '-', p.percuilnro, '-', p.percuildigver) as cuit
+                FROM public.persona p
+                WHERE UPPER(p.pernom) LIKE UPPER($1)
+                ORDER BY p.pernom
+                LIMIT 20
+            `;
+            params = [`%${searchTerm}%`];
+        }
+
+        const result = await postgresDB.query(query, params);
+
+        // For each person found, get their associated offices/accounts
+        const enriched = await Promise.all(result.rows.map(async (person) => {
+            const accQuery = `
+                SELECT DISTINCT t.tbecod as account, tt.tpotribcod as "officeId", tt.tpotribnom as "officeName"
+                FROM public.tribper tp
+                JOIN public.tributo t ON tp.tribcod = t.tribcod
+                JOIN public.tipotributo tt ON t.tpotribcod = tt.tpotribcod
+                WHERE tp.percod = $1
+                ORDER BY tt.tpotribcod
+                LIMIT 20
+            `;
+            const accRes = await postgresDB.query(accQuery, [person.percod]);
+            return {
+                ...person,
+                cuit: person.percuiltipo > 0 ? person.cuit : null,
+                accounts: accRes.rows
+            };
+        }));
+
+        res.json(enriched);
+    } catch (err) {
+        console.error('Error searching persons:', err);
         res.status(500).json({ error: err.message });
     }
 });
@@ -68,20 +153,31 @@ router.get('/resolve-account/:account', async (req, res) => {
             return res.json([]);
         }
 
-        if (!conn) conn = await mariaDB.getConnection();
         const ids = Array.from(officesFound);
-        const officeNames = await conn.query(`
-            SELECT CodiOfic as id, DetaOfic as name 
-            FROM recaudacion.oficina 
-            WHERE CodiOfic IN (${ids.map(() => '?').join(',')})
-        `, ids);
+        let officeNames = [];
+        
+        try {
+            if (!conn) conn = await mariaDB.getConnection();
+            officeNames = await conn.query(`
+                SELECT CodiOfic as id, DetaOfic as name 
+                FROM recaudacion.oficina 
+                WHERE CodiOfic IN (${ids.map(() => '?').join(',')})
+            `, ids);
+        } catch (mErr) {
+            console.error('Error getting office names from MariaDB:', mErr.message);
+            // Fallback: return IDs with generic names since MariaDB is down
+            officeNames = ids.map(id => ({ 
+                id: parseInt(id), 
+                name: `Oficina ${id} (Nombre no disponible)` 
+            }));
+        }
 
         res.json(officeNames);
     } catch (err) {
-        console.error('Error resolving account:', err);
+        console.error('Error seeking account in databases:', err);
         res.status(500).json({ error: err.message });
     } finally {
-        if (conn) conn.release();
+        if (conn) try { conn.release(); } catch(e) {}
     }
 });
 
