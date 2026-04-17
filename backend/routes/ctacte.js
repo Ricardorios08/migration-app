@@ -35,7 +35,7 @@ router.get('/search-person', async (req, res) => {
             const tipo = parseInt(clean.substring(0, 2));
             const nro = parseInt(clean.substring(2, clean.length - 1));
             const dig = parseInt(clean.substring(clean.length - 1));
-            
+
             query = `
                 SELECT p.percod, TRIM(p.pernom) as pernom, 
                        p.percuiltipo, p.percuilnro, p.percuildigver,
@@ -155,7 +155,7 @@ router.get('/resolve-account/:account', async (req, res) => {
 
         const ids = Array.from(officesFound);
         let officeNames = [];
-        
+
         try {
             if (!conn) conn = await mariaDB.getConnection();
             officeNames = await conn.query(`
@@ -166,9 +166,9 @@ router.get('/resolve-account/:account', async (req, res) => {
         } catch (mErr) {
             console.error('Error getting office names from MariaDB:', mErr.message);
             // Fallback: return IDs with generic names since MariaDB is down
-            officeNames = ids.map(id => ({ 
-                id: parseInt(id), 
-                name: `Oficina ${id} (Nombre no disponible)` 
+            officeNames = ids.map(id => ({
+                id: parseInt(id),
+                name: `Oficina ${id} (Nombre no disponible)`
             }));
         }
 
@@ -177,7 +177,7 @@ router.get('/resolve-account/:account', async (req, res) => {
         console.error('Error seeking account in databases:', err);
         res.status(500).json({ error: err.message });
     } finally {
-        if (conn) try { conn.release(); } catch(e) {}
+        if (conn) try { conn.release(); } catch (e) { }
     }
 });
 
@@ -197,8 +197,33 @@ router.get('/legacy/search', async (req, res) => {
         if (onlyDebt === 'true') {
             const allResults = [];
             for (const acc of accList) {
-                console.log(`[DEBUG MariaDB] Calling fnDeuda(office: ${officeId}, account: ${acc}, date: ${dateStr})`);
-                await conn.query(`CALL fnDeuda(?, ?, ?)`, [officeId, acc, dateStr]);
+                console.log(`[DEBUG MariaDB] Emulating fnDeuda(office: ${officeId}, account: ${acc}, date: ${dateStr})`);
+
+                await conn.query(`DROP TEMPORARY TABLE IF EXISTS tmp_ctacteboleto`);
+                await conn.query(`
+                    CREATE TEMPORARY TABLE tmp_ctacteboleto (
+                        PeriCtct int, BimeCtct int, CuotDefa int, FeveCtct date, 
+                        DebeCtct decimal(15,2), RecaCtct decimal(15,2), NumeApre int, CodiFapa int,
+                        PeriInfo int, CodiConc char(8), NumeAcpa int, FeenAcpa date, MoviCtct int
+                    ) ENGINE=Memory
+                `);
+
+                await conn.query(`
+                    INSERT INTO tmp_ctacteboleto (PeriCtct, BimeCtct, CuotDefa, FeveCtct, DebeCtct, RecaCtct, NumeApre, CodiFapa, PeriInfo, CodiConc, NumeAcpa, FeenAcpa, MoviCtct)
+                    SELECT PeriCtct, BimeCtct, MAX(CuotDefa), MAX(FeveCtct), 
+                           SUM(IFNULL(DebeCtct, 0)) - SUM(IFNULL(CredCtct, 0)), 
+                           0, MAX(NumeApre), MAX(CodiFapa), PeriInfo, CodiConc, MAX(NumeAcpa), MAX(FeenAcpa), 0
+                    FROM ctacte
+                    WHERE CodiOfic = ? AND CuenCtct = ?
+                    GROUP BY PeriCtct, BimeCtct, PeriInfo, CodiConc
+                    HAVING (SUM(IFNULL(DebeCtct, 0)) - SUM(IFNULL(CredCtct, 0))) > 0.01
+                `, [officeId, acc]);
+
+                await conn.query(`
+                    UPDATE tmp_ctacteboleto
+                    SET RecaCtct = DebeCtct * (CEIL(DATEDIFF(?, FeveCtct) / 30) * 0.03)
+                    WHERE ? > FeveCtct
+                `, [dateStr, dateStr]);
 
                 const debtQuery = `
                     SELECT 
@@ -209,6 +234,8 @@ router.get('/legacy/search', async (req, res) => {
                         (tmp.DebeCtct + IFNULL(tmp.RecaCtct, 0)) as TotaCtct,
                         tmp.NumeAcpa,
                         tmp.FeenAcpa as FechaPago,
+                        tmp.NumeApre,
+                        tmp.CodiFapa,
                         (tmp.NumeApre > 0) as hasApremio,
                         (tmp.CodiFapa > 0) as hasPlan
                     FROM tmp_ctacteboleto tmp
@@ -294,7 +321,7 @@ router.get('/legacy/search', async (req, res) => {
                         if (referenceDate > dueDate) {
                             const diffTime = Math.abs(referenceDate - dueDate);
                             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                            reca = debe * (diffDays / 30) * 0.03;
+                            reca = debe * Math.ceil(diffDays / 30) * 0.03;
                         }
                     }
 
@@ -358,11 +385,11 @@ router.get('/new/search', async (req, res) => {
                     gc.genctanrocta as "BimeCtct", 
                     cc.ctactefchalta,
                     gc.genctafchvto as "FeveCtct",
-                    gcd.genctadetimp as "DebeCtct",
+                    COALESCE(gcd.genctadetimp, gc.genctaimpcta) as "DebeCtct",
                     gc.genctaimpcta as "TotalQuota",
                     cc.ctacteintact as "RecaCtct_stored",
                     cc.ctacteognmov,
-                    cc.ctacteapr as "NumeApre",
+                    gc.genctacednro as "NumeApre",
                     cc.genctacod as "CodiOfic",
                     cc.cabpgoctactecod as "NumeAcpa",
                     pgo.cabpgoctactefchpgo as "FechaPago",
@@ -408,7 +435,7 @@ router.get('/new/search', async (req, res) => {
                     gc.genctaimpcta as "DebeCtct",
                     cc.ctacteintact as "RecaCtct_stored",
                     cc.ctacteognmov,
-                    cc.ctacteapr as "NumeApre",
+                    gc.genctacednro as "NumeApre",
                     cc.genctacod as "CodiOfic",
                     cc.cabpgoctactecod as "NumeAcpa",
                     pgo.cabpgoctactefchpgo as "FechaPago",
@@ -467,7 +494,7 @@ router.get('/new/search', async (req, res) => {
                 if (referenceDate > dueDate) {
                     const diffTime = Math.abs(referenceDate - dueDate);
                     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                    reca = debe * (diffDays / 30) * 0.03;
+                    reca = debe * Math.ceil(diffDays / 30) * 0.03;
                 }
             } else {
                 reca = parseFloat(row.recactct_stored || row.RecaCtct_stored || 0);

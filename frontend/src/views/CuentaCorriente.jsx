@@ -20,10 +20,10 @@ const CuentaCorriente = () => {
     const [postgresError, setPostgresError] = useState(null);
 
     const [showSubtotals, setShowSubtotals] = useState(false);
-    const [isGrouped, setIsGrouped] = useState(false);
+    const [isGrouped, setIsGrouped] = useState(true);
     const [leftWidth, setLeftWidth] = useState(50); // Set initial width to 50%
     const [isResizing, setIsResizing] = useState(false);
-    const [searchBy, setSearchBy] = useState('account'); // 'account' or 'person'
+    const [searchBy, setSearchBy] = useState('person'); // 'account' or 'person'
     const [fealCorte, setFealCorte] = useState(''); // Cut-off date for FEALCTCT
     const [selectedPerson, setSelectedPerson] = useState(null);
     const [showQuotaDetail, setShowQuotaDetail] = useState(false);
@@ -160,40 +160,112 @@ const CuentaCorriente = () => {
     const renderRows = () => {
         if (!legacyData || legacyData.length === 0) return null;
 
-        if (!showSubtotals && !isGrouped) {
-            return legacyData.map((row, idx) => <DataRow key={idx} row={row} />);
+        let displayData = legacyData;
+
+        // If grouped, aggregate by period/bime just like Postgres
+        if (isGrouped && !showQuotaDetail) {
+            const groupedMap = legacyData.reduce((acc, row) => {
+                let p = parseInt(row.PeriCtct);
+                let b = parseInt(row.BimeCtct);
+                
+                if (onlyDebt && p <= 2018) {
+                    p = 2018;
+                    b = 99;
+                }
+
+                const key = `${p}-${b}`;
+                const isPaid = (row.NumeAcpa && row.NumeAcpa != '0') || (row.numeAcpa && row.numeAcpa != '0');
+                
+                if (!acc[key]) {
+                    acc[key] = { 
+                        ...row, 
+                        PeriCtct: p,
+                        BimeCtct: b,
+                        FeveCtct: (p === 2018 && b === 99) ? '2018-12-31' : row.FeveCtct,
+                        DebeCtct: 0, 
+                        RecaCtct: 0, 
+                        CredCtct: 0, 
+                        TotaCtct: 0, 
+                        paidCount: 0,
+                        totalCount: 0,
+                        hasApremio: false,
+                        hasPlan: false,
+                        NumeApre: null,
+                        CodiFapa: null,
+                        DetaCtct: (p === 2018 && b === 99) ? 'Deuda Atrasada (<= 2018)' : 'Varios Conceptos' 
+                    };
+                }
+                acc[key].DebeCtct += parseFloat(row.DebeCtct || 0);
+                acc[key].RecaCtct += parseFloat(row.RecaCtct || 0);
+                acc[key].CredCtct += parseFloat(row.CredCtct || 0);
+                acc[key].TotaCtct += parseFloat(row.TotaCtct || 0);
+                acc[key].totalCount += 1;
+                if (isPaid) acc[key].paidCount += 1;
+                
+                // Inherit Apremio/Plan only if this row has it
+                if (row.hasApremio) {
+                    acc[key].hasApremio = true;
+                    acc[key].NumeApre = row.NumeApre || row.numeapre || acc[key].NumeApre;
+                }
+                if (row.hasPlan) {
+                    acc[key].hasPlan = true;
+                    acc[key].CodiFapa = row.CodiFapa || row.codifapa || acc[key].CodiFapa;
+                }
+
+                return acc;
+            }, {});
+
+            // Filter out Apremio/Plan icons for groups that are already fully paid
+            displayData = Object.values(groupedMap).map(group => {
+                const isActuallyPaid = group.TotaCtct <= 0.10 && group.totalCount > 0;
+                if (isActuallyPaid) {
+                    return { ...group, hasApremio: false, hasPlan: false };
+                }
+                
+                // Determine label if not 2018/99
+                if (group.PeriCtct !== 2018 || group.BimeCtct !== 99) {
+                    if (group.paidCount > 0 && group.paidCount < group.totalCount) {
+                        group.DetaCtct = `Pagos Parciales (${group.paidCount}/${group.totalCount})`;
+                    } else if (group.paidCount === group.totalCount) {
+                        group.DetaCtct = 'Pagado Total';
+                        group.NumeAcpa = group.NumeAcpa || 'Varios'; 
+                    } else {
+                        group.DetaCtct = 'Pendiente Total';
+                        group.NumeAcpa = '0';
+                    }
+                }
+                return group;
+            });
         }
 
-        // Logic for subtotals (Period + Cuota)
         const rows = [];
-        let currentPeriod = legacyData[0].PeriCtct;
-        let currentBime = legacyData[0].BimeCtct;
-        let groupTotals = { debe: 0, reca: 0, haber: 0, total: 0 };
+        let currentPeriod = null;
+        let currentBime = null;
+        let periodTotals = { debe: 0, reca: 0, haber: 0, total: 0 };
 
-        legacyData.forEach((row, idx) => {
-            if (row.PeriCtct !== currentPeriod || row.BimeCtct !== currentBime) {
-                // Insert subtotal row for the previous group
-                rows.push(<SubtotalRow key={`sub-${currentPeriod}-${currentBime}`} period={currentPeriod} bime={currentBime} totals={groupTotals} />);
-                // Reset
+        displayData.forEach((row, idx) => {
+            if (showSubtotals && (currentPeriod !== row.PeriCtct || currentBime !== row.BimeCtct)) {
+                if (currentPeriod !== null) {
+                    rows.push(<SubtotalRow key={`sub-${currentPeriod}-${currentBime}`} period={currentPeriod} bime={currentBime} totals={periodTotals} />);
+                }
                 currentPeriod = row.PeriCtct;
                 currentBime = row.BimeCtct;
-                groupTotals = { debe: 0, reca: 0, haber: 0, total: 0 };
+                periodTotals = { debe: 0, reca: 0, haber: 0, total: 0 };
             }
 
-            groupTotals.debe += parseFloat(row.DebeCtct || 0);
-            groupTotals.reca += parseFloat(row.RecaCtct || 0);
-            groupTotals.haber += parseFloat(row.CredCtct || 0);
-            groupTotals.total += parseFloat(row.TotaCtct || 0);
+            periodTotals.debe += parseFloat(row.DebeCtct || 0);
+            periodTotals.reca += parseFloat(row.RecaCtct || 0);
+            periodTotals.haber += parseFloat(row.CredCtct || 0);
+            periodTotals.total += parseFloat(row.TotaCtct || 0);
 
-            if (!isGrouped) {
-                rows.push(<DataRow key={idx} row={row} />);
-            }
-
-            // If last row, add final subtotal
-            if (idx === legacyData.length - 1) {
-                rows.push(<SubtotalRow key={`sub-${currentPeriod}-${currentBime}`} period={currentPeriod} bime={currentBime} totals={groupTotals} />);
-            }
+            // Use DataRow normally, which now handles aggregated "Varios Conceptos" objects
+            rows.push(<DataRow key={idx} row={row} />);
         });
+
+        // Add last subtotal
+        if (showSubtotals && currentPeriod !== null) {
+            rows.push(<SubtotalRow key={`sub-last`} period={currentPeriod} bime={currentBime} totals={periodTotals} />);
+        }
 
         return rows;
     };
@@ -206,8 +278,20 @@ const CuentaCorriente = () => {
                 <div style={{ fontWeight: 'bold', color: 'var(--primary)' }}>{row.TipoTributo || ''}</div>
                 {row.DetaCtct.substring(0, 30)}{row.DetaCtct.length > 30 ? '...' : ''}
             </td>
-            <td style={{ textAlign: 'center' }}>{row.hasApremio ? <CheckCircle2 size={16} color="#ef4444" title={`Apremio: ${row.NumeApre}`} /> : '-'}</td>
-            <td style={{ textAlign: 'center' }}>{row.hasPlan ? <CheckCircle2 size={16} color="#3b82f6" title={`Plan: ${row.CodiFapa}`} /> : '-'}</td>
+            <td style={{ textAlign: 'center' }}>
+                {row.hasApremio ? (
+                    <span title={`Apremio: ${row.NumeApre || 'Sí'}`} style={{ cursor: 'help' }}>
+                        <CheckCircle2 size={16} color="#ef4444" />
+                    </span>
+                ) : '-'}
+            </td>
+            <td style={{ textAlign: 'center' }}>
+                {row.hasPlan ? (
+                    <span title={`Plan: ${row.CodiFapa || 'Sí'}`} style={{ cursor: 'help' }}>
+                        <CheckCircle2 size={16} color="#3b82f6" />
+                    </span>
+                ) : '-'}
+            </td>
             <td style={{ color: '#ef4444' }}>${parseFloat(row.DebeCtct || 0).toFixed(2)}</td>
             <td style={{ color: '#f59e0b' }}>${parseFloat(row.RecaCtct || 0).toFixed(2)}</td>
             <td style={{ color: '#10b981' }}>${parseFloat(row.CredCtct || 0).toFixed(2)}</td>
@@ -323,6 +407,130 @@ const CuentaCorriente = () => {
             const mainColor = [37, 99, 235]; // #2563eb
             const legacyColor = [16, 185, 129]; // #10b981
 
+            // Helper to apply grouping and subtotal logic for PDF
+            const prepareExportData = (srcData, isLegacy) => {
+                let displayData = srcData;
+                
+                // Grouping Logic
+                if (isGrouped && !showQuotaDetail) {
+                    const grouped = srcData.reduce((acc, row) => {
+                        let p = parseInt(row.PeriCtct);
+                        let b = parseInt(row.BimeCtct);
+                        
+                        if (isLegacy && onlyDebt && p <= 2018) {
+                            p = 2018;
+                            b = 99;
+                        }
+
+                        const key = `${p}-${b}`;
+                        const isPaid = (row.NumeAcpa && row.NumeAcpa != '0') || (row.numeacpa && row.numeacpa != '0');
+                        
+                        if (!acc[key]) {
+                            acc[key] = { 
+                                ...row, 
+                                PeriCtct: p,
+                                BimeCtct: b,
+                                DebeCtct: 0, RecaCtct: 0, CredCtct: 0, TotaCtct: 0, 
+                                paidCount: 0, totalCount: 0,
+                                DetaCtct: (isLegacy && p === 2018 && b === 99) ? 'Deuda Atrasada (<= 2018)' : 'Varios Conceptos',
+                                DetailName: 'Varios Conceptos' // Postgres specific
+                            };
+                            if (isLegacy && p === 2018 && b === 99) {
+                                acc[key].FeveCtct = '2018-12-31';
+                            }
+                        }
+                        acc[key].DebeCtct += parseFloat(row.DebeCtct || row.debectct || 0);
+                        acc[key].RecaCtct += parseFloat(row.RecaCtct || row.recactct || 0);
+                        acc[key].CredCtct += parseFloat(row.CredCtct || row.credctct || 0);
+                        acc[key].TotaCtct += parseFloat(row.TotaCtct || row.totactct || 0);
+                        acc[key].totalCount += 1;
+                        if (isPaid) acc[key].paidCount += 1;
+                        
+                        // Label Updates
+                        if (!isLegacy || p !== 2018 || b !== 99) {
+                            let statusLabel = 'Pendiente Total';
+                            if (acc[key].paidCount > 0 && acc[key].paidCount < acc[key].totalCount) statusLabel = `Pagos Parciales (${acc[key].paidCount}/${acc[key].totalCount})`;
+                            else if (acc[key].paidCount === acc[key].totalCount) statusLabel = 'Pagado Total';
+                            
+                            acc[key].DetaCtct = statusLabel;
+                            acc[key].DetailName = statusLabel;
+                        }
+                        return acc;
+                    }, {});
+                    displayData = Object.values(grouped);
+                }
+
+                // Subtotal Logic injected as fake rows
+                const exportRows = [];
+                let currentPeriod = null;
+                let currentBime = null;
+                let subTotals = { debe: 0, reca: 0, haber: 0, total: 0 };
+                let grandTotals = { debe: 0, reca: 0, haber: 0, total: 0 };
+
+                displayData.forEach((row) => {
+                    if (showSubtotals && (currentPeriod !== row.PeriCtct || currentBime !== row.BimeCtct)) {
+                        if (currentPeriod !== null) {
+                            exportRows.push({
+                                isSubtotal: true,
+                                label: `Subtotal ${currentPeriod}/${currentBime}:`,
+                                DebeCtct: subTotals.debe,
+                                RecaCtct: subTotals.reca,
+                                CredCtct: subTotals.haber,
+                                TotaCtct: subTotals.total
+                            });
+                        }
+                        currentPeriod = row.PeriCtct;
+                        currentBime = row.BimeCtct;
+                        subTotals = { debe: 0, reca: 0, haber: 0, total: 0 };
+                    }
+                    
+                    const pDebe = parseFloat(row.DebeCtct || 0);
+                    const pReca = parseFloat(row.RecaCtct || 0);
+                    const pHaber = parseFloat(row.CredCtct || 0);
+                    const pTotal = parseFloat(row.TotaCtct || 0);
+
+                    subTotals.debe += pDebe;
+                    subTotals.reca += pReca;
+                    subTotals.haber += pHaber;
+                    subTotals.total += pTotal;
+
+                    grandTotals.debe += pDebe;
+                    grandTotals.reca += pReca;
+                    grandTotals.haber += pHaber;
+                    grandTotals.total += pTotal;
+
+                    exportRows.push(row);
+                });
+
+                if (showSubtotals && currentPeriod !== null) {
+                    exportRows.push({
+                        isSubtotal: true,
+                        label: `Subtotal ${currentPeriod}/${currentBime}:`,
+                        DebeCtct: subTotals.debe,
+                        RecaCtct: subTotals.reca,
+                        CredCtct: subTotals.haber,
+                        TotaCtct: subTotals.total
+                    });
+                }
+
+                // Add Grand Total row at the very end
+                if (displayData.length > 0) {
+                    exportRows.push({
+                        isGrandTotal: true,
+                        label: `TOTAL GENERAL:`,
+                        DebeCtct: grandTotals.debe,
+                        RecaCtct: grandTotals.reca,
+                        CredCtct: grandTotals.haber,
+                        TotaCtct: grandTotals.total
+                    });
+                }
+
+                return exportRows;
+            };
+
+            const preparedLegacyData = prepareExportData(legacyData, true);
+            const preparedPostgresData = prepareExportData(postgresData, false);
+
             // Header
             doc.setFontSize(18);
             doc.setTextColor(40);
@@ -352,13 +560,26 @@ const CuentaCorriente = () => {
             let currentY = 135;
 
             // LEGACY TABLE (only if data available)
-            if (legacyData.length > 0) {
+            if (preparedLegacyData.length > 0) {
                 doc.setFontSize(13);
                 doc.setTextColor(legacyColor[0], legacyColor[1], legacyColor[2]);
                 doc.text('SISTEMA ORIGINAL (MARIADB)', 40, currentY);
                 currentY += 10;
 
-                const legacyRows = legacyData.map(r => [
+                const legacyRows = preparedLegacyData.map(r => 
+                r.isGrandTotal ? [
+                    { content: r.label, colSpan: 3, styles: { fontStyle: 'bold', halign: 'right', fillColor: [50, 50, 50], textColor: [255, 255, 255], fontSize: 9 } },
+                    { content: `$${r.DebeCtct.toLocaleString(undefined, {minimumFractionDigits: 2})}`, styles: { fontStyle: 'bold', fillColor: [50, 50, 50], textColor: [255, 200, 200] } },
+                    { content: `$${r.RecaCtct.toLocaleString(undefined, {minimumFractionDigits: 2})}`, styles: { fontStyle: 'bold', fillColor: [50, 50, 50], textColor: [253, 230, 138] } },
+                    { content: `$${r.CredCtct.toLocaleString(undefined, {minimumFractionDigits: 2})}`, styles: { fontStyle: 'bold', fillColor: [50, 50, 50], textColor: [167, 243, 208] } },
+                    { content: `$${r.TotaCtct.toLocaleString(undefined, {minimumFractionDigits: 2})}`, styles: { fontStyle: 'bold', fillColor: [30, 30, 30], textColor: [255, 255, 255] } }
+                ] : r.isSubtotal ? [
+                    { content: r.label, colSpan: 3, styles: { fontStyle: 'bold', halign: 'right', textColor: legacyColor } },
+                    { content: `$${r.DebeCtct.toLocaleString(undefined, {minimumFractionDigits: 2})}`, styles: { fontStyle: 'bold', textColor: [239, 68, 68] } },
+                    { content: `$${r.RecaCtct.toLocaleString(undefined, {minimumFractionDigits: 2})}`, styles: { fontStyle: 'bold', textColor: [245, 158, 11] } },
+                    { content: `$${r.CredCtct.toLocaleString(undefined, {minimumFractionDigits: 2})}`, styles: { fontStyle: 'bold', textColor: [16, 185, 129] } },
+                    { content: `$${r.TotaCtct.toLocaleString(undefined, {minimumFractionDigits: 2})}`, styles: { fontStyle: 'bold', fillColor: [240, 253, 244] } }
+                ] : [
                     `${r.PeriCtct || ''}/${r.BimeCtct || ''}`,
                     r.FeveCtct ? new Date(r.FeveCtct).toLocaleDateString() : '-',
                     (r.DetaCtct || '').substring(0, 35),
@@ -368,7 +589,7 @@ const CuentaCorriente = () => {
                     `$${parseFloat(r.TotaCtct || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}`
                 ]);
 
-                const legacyTable = autoTable(doc, {
+                autoTable(doc, {
                     startY: currentY,
                     head: [['Pe/C', 'Vencimiento', 'Detalle', 'Debe', 'Recargo', 'Haber', 'Total']],
                     body: legacyRows,
@@ -377,25 +598,40 @@ const CuentaCorriente = () => {
                     styles: { fontSize: 7, cellPadding: 3 },
                     margin: { left: 40, right: 40 }
                 });
-                currentY = (legacyTable?.finalY || currentY) + 30;
+                
+                // Add margins so it doesn't overlap with Postgres table
+                currentY = (doc.lastAutoTable?.finalY || currentY) + 35;
             } else {
                 doc.setFontSize(9);
                 doc.setTextColor(150);
                 doc.text('MariaDB: Sin datos disponibles (servidor no accesible)', 40, currentY);
-                currentY += 25;
+                currentY += 35;
             }
 
             // POSTGRES TABLE (only if data available)
-            if (postgresData.length > 0) {
+            if (preparedPostgresData.length > 0) {
                 doc.setFontSize(13);
                 doc.setTextColor(mainColor[0], mainColor[1], mainColor[2]);
                 doc.text('SISTEMA NUEVO (POSTGRESQL)', 40, currentY);
                 currentY += 10;
 
-                const pgRows = postgresData.map(r => [
+                const pgRows = preparedPostgresData.map(r => 
+                r.isGrandTotal ? [
+                    { content: r.label, colSpan: 3, styles: { fontStyle: 'bold', halign: 'right', fillColor: [50, 50, 50], textColor: [255, 255, 255], fontSize: 9 } },
+                    { content: `$${r.DebeCtct.toLocaleString(undefined, {minimumFractionDigits: 2})}`, styles: { fontStyle: 'bold', fillColor: [50, 50, 50], textColor: [255, 200, 200] } },
+                    { content: `$${r.RecaCtct.toLocaleString(undefined, {minimumFractionDigits: 2})}`, styles: { fontStyle: 'bold', fillColor: [50, 50, 50], textColor: [253, 230, 138] } },
+                    { content: `$${r.CredCtct.toLocaleString(undefined, {minimumFractionDigits: 2})}`, styles: { fontStyle: 'bold', fillColor: [50, 50, 50], textColor: [167, 243, 208] } },
+                    { content: `$${r.TotaCtct.toLocaleString(undefined, {minimumFractionDigits: 2})}`, styles: { fontStyle: 'bold', fillColor: [30, 30, 30], textColor: [255, 255, 255] } }
+                ] : r.isSubtotal ? [
+                    { content: r.label, colSpan: 3, styles: { fontStyle: 'bold', halign: 'right', textColor: mainColor } },
+                    { content: `$${r.DebeCtct.toLocaleString(undefined, {minimumFractionDigits: 2})}`, styles: { fontStyle: 'bold', textColor: [239, 68, 68] } },
+                    { content: `$${r.RecaCtct.toLocaleString(undefined, {minimumFractionDigits: 2})}`, styles: { fontStyle: 'bold', textColor: [245, 158, 11] } },
+                    { content: `$${r.CredCtct.toLocaleString(undefined, {minimumFractionDigits: 2})}`, styles: { fontStyle: 'bold', textColor: [16, 185, 129] } },
+                    { content: `$${r.TotaCtct.toLocaleString(undefined, {minimumFractionDigits: 2})}`, styles: { fontStyle: 'bold', fillColor: [239, 246, 255] } }
+                ] : [
                     `${r.PeriCtct || ''}/${r.BimeCtct || ''}`,
                     r.FeveCtct ? new Date(r.FeveCtct).toLocaleDateString() : '-',
-                    `${r.DetaCtct || r.TipoTributo || ''}`,
+                    `${r.DetaCtct || r.DetailName || r.TipoTributo || ''}`,
                     `$${parseFloat(r.DebeCtct || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}`,
                     `$${parseFloat(r.RecaCtct || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}`,
                     `$${parseFloat(r.CredCtct || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}`,
@@ -434,7 +670,7 @@ const CuentaCorriente = () => {
         
         // If grouped, aggregate by period/bime
         if (isGrouped && !showQuotaDetail) {
-            const grouped = postgresData.reduce((acc, row) => {
+            const groupedMap = postgresData.reduce((acc, row) => {
                 const key = `${row.PeriCtct}-${row.BimeCtct}`;
                 const isPaid = (row.NumeAcpa && row.NumeAcpa != '0') || (row.numeacpa && row.numeacpa != '0');
                 
@@ -458,26 +694,65 @@ const CuentaCorriente = () => {
                 acc[key].totalCount += 1;
                 if (isPaid) acc[key].paidCount += 1;
                 
-                // Determine label: if some paid and some not -> Pagos Parciales
-                if (acc[key].paidCount > 0 && acc[key].paidCount < acc[key].totalCount) {
-                    acc[key].DetailName = `Pagos Parciales (${acc[key].paidCount}/${acc[key].totalCount})`;
-                } else if (acc[key].paidCount === acc[key].totalCount) {
-                    acc[key].DetailName = 'Pagado Total';
-                    acc[key].NumeAcpa = row.NumeAcpa; // Keep one ref
-                } else {
-                    acc[key].DetailName = 'Pendiente Total';
-                    acc[key].NumeAcpa = '0';
+                if (row.hasApremio) {
+                    acc[key].hasApremio = true;
+                    acc[key].NumeApre = row.NumeApre || row.numeapre || acc[key].NumeApre;
+                }
+                if (row.hasPlan) {
+                    acc[key].hasPlan = true;
+                    acc[key].plnpgocod = row.plnpgocod || acc[key].plnpgocod;
                 }
 
                 return acc;
             }, {});
-            displayData = Object.values(grouped);
+            
+            // Filter out Apremio/Plan icons for groups that are already fully paid
+            displayData = Object.values(groupedMap).map(group => {
+                const isActuallyPaid = group.TotaCtct <= 0.10 && group.totalCount > 0;
+                if (isActuallyPaid) {
+                    return { ...group, hasApremio: false, hasPlan: false };
+                }
+                
+                // Determine label: if some paid and some not -> Pagos Parciales
+                if (group.paidCount > 0 && group.paidCount < group.totalCount) {
+                    group.DetailName = `Pagos Parciales (${group.paidCount}/${group.totalCount})`;
+                } else if (group.paidCount === group.totalCount) {
+                    group.DetailName = 'Pagado Total';
+                } else {
+                    group.DetailName = 'Pendiente Total';
+                    group.NumeAcpa = '0';
+                }
+                return group;
+            });
         }
 
         const rows = [];
         let currentPeriod = null;
         let currentBime = null;
         let periodTotals = { debe: 0, reca: 0, haber: 0, total: 0 };
+
+        let compareLegacyData = legacyData;
+        if (isGrouped && !showQuotaDetail) {
+            const mappedGroupLegacy = legacyData.reduce((acc, row) => {
+                let p = parseInt(row.PeriCtct);
+                let b = parseInt(row.BimeCtct);
+                
+                if (onlyDebt && p <= 2018) {
+                    p = 2018;
+                    b = 99;
+                }
+
+                const key = `${p}-${b}`;
+                if (!acc[key]) {
+                    acc[key] = { ...row, PeriCtct: p, BimeCtct: b, DebeCtct: 0, RecaCtct: 0, CredCtct: 0 };
+                }
+                acc[key].DebeCtct += parseFloat(row.DebeCtct || 0);
+                acc[key].RecaCtct += parseFloat(row.RecaCtct || 0);
+                acc[key].CredCtct += parseFloat(row.CredCtct || 0);
+                return acc;
+            }, {});
+            compareLegacyData = Object.values(mappedGroupLegacy);
+        }
 
         displayData.forEach((row, idx) => {
             // Check for period change for subtotals
@@ -495,8 +770,8 @@ const CuentaCorriente = () => {
             periodTotals.haber += parseFloat(row.CredCtct || 0);
             periodTotals.total += parseFloat(row.TotaCtct || 0);
 
-            // Comparison logic
-            const legacyMatch = legacyData.find(l => l.PeriCtct === row.PeriCtct && l.BimeCtct === row.BimeCtct);
+            // Comparison logic against appropriately grouped legacy data
+            const legacyMatch = compareLegacyData.find(l => l.PeriCtct === row.PeriCtct && l.BimeCtct === row.BimeCtct);
             const isMismatchDebe = legacyMatch && Math.abs(parseFloat(legacyMatch.DebeCtct) - row.DebeCtct) > 0.1;
             const isMismatchReca = legacyMatch && Math.abs(parseFloat(legacyMatch.RecaCtct) - (row.RecaCtct || 0)) > 1.0;
 
@@ -507,8 +782,20 @@ const CuentaCorriente = () => {
                     <td style={{ fontSize: '0.8rem', opacity: 0.8 }}>
                         <div style={{ fontWeight: 'bold', color: 'var(--primary)' }}>{row.DetailName || row.TipoTributo}</div>
                     </td>
-                    <td style={{ textAlign: 'center' }}>{row.hasApremio ? <CheckCircle2 size={16} color="#ef4444" /> : '-'}</td>
-                    <td style={{ textAlign: 'center' }}>{row.hasPlan ? <CheckCircle2 size={16} color="#3b82f6" /> : '-'}</td>
+                    <td style={{ textAlign: 'center' }}>
+                        {row.hasApremio ? (
+                            <span title={`Apremio: ${row.NumeApre || row.numeapre || 'Sí'}`} style={{ cursor: 'help' }}>
+                                <CheckCircle2 size={16} color="#ef4444" />
+                            </span>
+                        ) : '-'}
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                        {row.hasPlan ? (
+                            <span title={`Plan: ${row.plnpgocod || row.CodiFapa || 'Sí'}`} style={{ cursor: 'help' }}>
+                                <CheckCircle2 size={16} color="#3b82f6" />
+                            </span>
+                        ) : '-'}
+                    </td>
                     <td style={{ color: isMismatchDebe ? '#fca5a5' : '#ef4444', fontWeight: isMismatchDebe ? 'bold' : 'normal' }}>
                         ${row.DebeCtct.toFixed(2)}
                     </td>
@@ -667,6 +954,7 @@ const CuentaCorriente = () => {
                                 placeholder="Nro. Cuenta" 
                                 value={account}
                                 onChange={(e) => setAccount(e.target.value)}
+                                onFocus={(e) => e.target.select()}
                             />
                         ) : (
                             <>
@@ -682,7 +970,10 @@ const CuentaCorriente = () => {
                                             setPersonSearchResults([]);
                                         }
                                     }}
-                                    onFocus={() => { if (personSearchResults.length > 0) setShowPersonDropdown(true); }}
+                                    onFocus={(e) => { 
+                                        e.target.select();
+                                        if (personSearchResults.length > 0) setShowPersonDropdown(true); 
+                                    }}
                                     style={{ minWidth: '280px' }}
                                 />
                                 {isSearchingPerson && <div className="loader-mini"></div>}
@@ -1014,27 +1305,45 @@ const CuentaCorriente = () => {
                     <div className="modal-content" onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
                             <h3>Consulta SQL MariaDB (Legacy)</h3>
-                            <button onClick={() => setShowSqlMariaModal(false)}>&times;</button>
+                            <button className="close-btn" onClick={() => setShowSqlMariaModal(false)}>&times;</button>
                         </div>
+
+                        <div style={{ padding: '1rem', background: 'rgba(239, 68, 68, 0.1)', color: '#fca5a5', borderBottom: '1px solid rgba(255,255,255,0.1)', fontSize: '0.9rem' }}>
+                            <strong style={{ color: '#ef4444', display: 'block', marginBottom: '0.5rem' }}>⚠️ Atención: Elementos faltantes para la lectura de MariaDB</strong>
+                            Faltan restaurar las siguientes entidades en el servidor de MariaDB para que se puedan traer los datos de la cuenta corriente Legacy:
+                            <ul style={{ marginTop: '0.5rem', paddingLeft: '1.5rem', color: '#f8fafc' }}>
+                                <li style={{ marginBottom: '0.2rem' }}><strong>Base de datos <code>recaudacion</code>:</strong> Tablas <code>oficina</code>, <code>ctacte</code>, <code>concepto</code>.</li>
+                                <li><strong>Base de datos <code>recahisto</code>:</strong> Tabla <code>histoctacte</code> (Opcional, recomendada para historial completo anterior a cortes).</li>
+                            </ul>
+                        </div>
+
                         <pre className="sql-code">
-{`-- 1. Preparar tabla temporal
-CREATE TEMPORARY TABLE tmp_ctacte_historica LIKE ctacte;
+{`-- 1. Preparar tabla temporal en memoria
+CREATE TEMPORARY TABLE tmp_ctacteboleto (
+    PeriCtct int, BimeCtct int, CuotDefa int, FeveCtct date, 
+    DebeCtct decimal(15,2), RecaCtct decimal(15,2), NumeApre int, CodiFapa int,
+    PeriInfo int, CodiConc char(8), NumeAcpa int, FeenAcpa date, MoviCtct int
+) ENGINE=Memory;
 
--- 2. Insertar de tabla actual
-INSERT INTO tmp_ctacte_historica (...) 
-SELECT ... FROM ctacte 
-WHERE CodiOfic = '\${selectedOffice}' AND CuenCtct = '\${account}';
+-- 2. Consolidar deuda por Tributo/Concepto/Periodo
+INSERT INTO tmp_ctacteboleto (...)
+SELECT PeriCtct, BimeCtct, MAX(CuotDefa), MAX(FeveCtct), 
+       SUM(IFNULL(DebeCtct, 0)) - SUM(IFNULL(CredCtct, 0)), 
+       0, MAX(NumeApre), MAX(CodiFapa), PeriInfo, CodiConc, MAX(NumeAcpa), MAX(FeenAcpa), 0
+FROM ctacte
+WHERE CodiOfic = '${selectedOffice}' AND CuenCtct = '${account}'
+GROUP BY PeriCtct, BimeCtct, PeriInfo, CodiConc
+HAVING (SUM(DebeCtct) - SUM(CredCtct)) > 0.01;
 
--- 3. Insertar de archivo histórico (si aplica)
-INSERT IGNORE INTO tmp_ctacte_historica (...) 
-SELECT ... FROM recahisto.histoctacte 
-WHERE CodiOfic = '${selectedOffice}' AND CuenCtct = '${account}';
+-- 3. Calcular Recargos (Interés Municipal 3% por mes o fracción)
+UPDATE tmp_ctacteboleto
+SET RecaCtct = DebeCtct * (CEIL(DATEDIFF(CURDATE(), FeveCtct) / 30) * 0.03)
+WHERE CURDATE() > FeveCtct;
 
--- 4. Consulta final con joins
-SELECT tmp.*, c.DetaConc, tt.TpoTribNom 
-FROM tmp_ctacte_historica tmp
-LEFT JOIN concepto c ON tmp.CodiConc = c.CodiConc
-LEFT JOIN tipotributo tt ON tmp.CodiOfic = tt.TpoTribCod
+-- 4. Consulta Final con Detalle de Conceptos
+SELECT tmp.*, c.DetaConc, (tmp.NumeApre > 0) as hasApremio
+FROM tmp_ctacteboleto tmp
+LEFT JOIN concepto c ON c.PeriInfo = tmp.PeriInfo AND c.CodiConc = tmp.CodiConc
 ORDER BY tmp.PeriCtct DESC, tmp.BimeCtct DESC;`}
                         </pre>
                     </div>
@@ -1053,17 +1362,18 @@ ORDER BY tmp.PeriCtct DESC, tmp.BimeCtct DESC;`}
     cc.ctactecod, gc.genctaancta as "PeriCtct", gc.genctanrocta as "BimeCtct", 
     cc.ctactefchalta, gc.genctafchvto as "FeveCtct", 
     ${showQuotaDetail ? 'gcd.genctadetimp' : 'gc.genctaimpcta'} as "DebeCtct",
-    ${showQuotaDetail ? 'trf.trfdsc' : 'tt.tpotribnom'} as "DetailName", 
+    gc.genctacednro as "NumeApre",
+    cc.cabpgoctactecod as "NumeAcpa",
+    cc.plnpgocod,
     tt.tpotribnom as "TipoTributo",
     p.pernom as "Titular"
 FROM public.generacioncuota gc
 ${showQuotaDetail ? 'LEFT JOIN public.generacioncuotadetalle gcd ON gc.genctacod = gcd.genctadetcod' : ''}
-${showQuotaDetail ? 'LEFT JOIN public.tarifa trf ON gcd.genctadettar = trf.trfcod' : ''}
 LEFT JOIN public.cuentacorriente cc ON cc.genctacod = gc.genctacod
 INNER JOIN public.tributo t ON gc.genctatribcod = t.tribcod
 INNER JOIN public.tipotributo tt ON t.tpotribcod = tt.tpotribcod
 INNER JOIN public.persona p ON gc.genctapercod = p.percod 
-WHERE ${searchBy === 'person' ? `gc.genctapercod = '${account}'` : `t.tbecod = '${account}'`}
+WHERE ${searchBy === 'person' ? `gc.genctapercod = (SELECT percod FROM persona WHERE ...)` : `t.tbecod = '${account}'`}
 AND tt.tpotribcod = '${selectedOffice}'
 ${onlyDebt ? 'AND (cc.cabpgoctactecod IS NULL OR cc.cabpgoctactecod = 0)' : ''}
 ORDER BY gc.genctaancta DESC, gc.genctanrocta DESC;`}

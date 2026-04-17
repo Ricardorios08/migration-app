@@ -5,8 +5,13 @@ const mariaDB = require('./db/maria');
 const postgresDB = require('./db/postgres');
 const ctacteRoutes = require('./routes/ctacte');
 const excelRoutes = require('./routes/excelTools');
+const infogovRoutes = require('./routes/infogov');
+const explorerRoutes = require('./routes/explorer');
 
 dotenv.config();
+
+// Fix for BigInt serialization
+BigInt.prototype.toJSON = function() { return this.toString() };
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -16,6 +21,8 @@ app.use(express.json());
 
 app.use('/api/ctacte', ctacteRoutes);
 app.use('/api/excel', excelRoutes);
+app.use('/api/infogov', infogovRoutes);
+app.use('/api/explorer', explorerRoutes);
 
 // Health check / Connection test
 app.get('/api/test-connections', async (req, res) => {

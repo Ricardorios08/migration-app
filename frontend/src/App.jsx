@@ -3,6 +3,8 @@ import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import CuentaCorriente from './views/CuentaCorriente';
 import ComerciosExcel from './views/ComerciosExcel';
+import PersonaSearch from './views/PersonaSearch';
+import TableExplorer from './views/TableExplorer';
 
 function App() {
   const [view, setView] = useState('dashboard');
@@ -50,6 +52,10 @@ function App() {
             </div>
           ) : view === 'ctacte' ? (
             <CuentaCorriente />
+          ) : view === 'persona' ? (
+            <PersonaSearch />
+          ) : view === 'explorer' ? (
+            <TableExplorer />
           ) : (
             <ComerciosExcel />
           )}
