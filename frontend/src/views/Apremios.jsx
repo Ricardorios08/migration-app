@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Search, CheckCircle2, AlertCircle, Filter, Database, ArrowRight, FileText, X, Database as DatabaseIcon } from 'lucide-react';
+import { 
+    Search, FileText, Download, CheckCircle2, AlertCircle, 
+    ArrowRight, Clipboard, X, Eye, Info, CreditCard, 
+    History, LayoutGrid, Filter, Database, HelpCircle
+} from 'lucide-react';
 import API_BASE_URL from '../config';
 
 const Apremios = () => {
@@ -18,6 +22,17 @@ const Apremios = () => {
     const [total, setTotal] = useState(0);
 
     const [offices, setOffices] = useState([]);
+
+    // Cta-Cte Modal States
+    const [showCtaCteModal, setShowCtaCteModal] = useState(false);
+    const [ctaCtePerson, setCtaCtePerson] = useState(null);
+    const [ctaCteOffices, setCtaCteOffices] = useState([]);
+    const [activeCtaCteOffice, setActiveCtaCteOffice] = useState(null);
+    const [ctaCteData, setCtaCteData] = useState({ legacy: [], postgres: [] });
+    const [ctaCteLoading, setCtaCteLoading] = useState(false);
+    const [ctaCteTab, setCtaCteTab] = useState('debt');
+    const [showManualModal, setShowManualModal] = useState(false);
+    const [manualContent, setManualContent] = useState('');
 
     useEffect(() => {
         // Fetch offices for filtering
@@ -54,6 +69,90 @@ const Apremios = () => {
             console.error('Error fetching pending ids:', err);
         } finally {
             setCopyLoading(false);
+        }
+    };
+
+    const handleOpenCtaCte = async (percod, name) => {
+        setCtaCtePerson({ percod, name });
+        setShowCtaCteModal(true);
+        setCtaCteLoading(true);
+        setCtaCteOffices([]);
+        setActiveCtaCteOffice(null);
+        setCtaCteData({ legacy: [], postgres: [] });
+
+        try {
+            // Get all accounts associated with this percod
+            const res = await fetch(`${API_BASE_URL}/api/ctacte/search-person?q=${percod}`);
+            const data = await res.json();
+            
+            // Find the person and group their accounts by office
+            const person = data.find(p => p.percod === percod);
+            if (person && person.accounts && person.accounts.length > 0) {
+                const grouped = person.accounts.reduce((acc, curr) => {
+                    if (!acc[curr.officeId]) {
+                        acc[curr.officeId] = {
+                            id: curr.officeId,
+                            name: curr.officeName.trim(),
+                            accountIds: []
+                        };
+                    }
+                    acc[curr.officeId].accountIds.push(curr.account);
+                    return acc;
+                }, {});
+
+                const offices = Object.values(grouped);
+                setCtaCteOffices(offices);
+                setActiveCtaCteOffice(offices[0]);
+                fetchCtaCteData(percod, offices[0].id, offices[0].accountIds);
+            }
+        } catch (err) {
+            console.error('Error resolving human-readable offices:', err);
+        } finally {
+            setCtaCteLoading(false);
+        }
+    };
+
+    const fetchCtaCteData = async (percod, officeId, accountIds) => {
+        if (!accountIds || accountIds.length === 0) return;
+        setCtaCteLoading(true);
+        
+        try {
+            // Construct query string for multiple accounts
+            const accParams = accountIds.map(id => `account=${id}`).join('&');
+            const commonParams = `officeId=${officeId}&${accParams}&onlyDebt=${ctaCteTab === 'debt'}`;
+
+            const [resLegacy, resPostgres] = await Promise.all([
+                fetch(`${API_BASE_URL}/api/ctacte/legacy/search?${commonParams}`),
+                fetch(`${API_BASE_URL}/api/ctacte/postgres/search?${commonParams}`)
+            ]);
+            
+            const legacy = await resLegacy.json();
+            const postgres = await resPostgres.json();
+            setCtaCteData({ legacy, postgres });
+        } catch (err) {
+            console.error('Error fetching CtaCte data:', err);
+        } finally {
+            setCtaCteLoading(false);
+        }
+    };
+
+    // Auto-refresh CtaCte when tab or office changes
+    useEffect(() => {
+        if (showCtaCteModal && ctaCtePerson && activeCtaCteOffice) {
+            fetchCtaCteData(ctaCtePerson.percod, activeCtaCteOffice.id, activeCtaCteOffice.accountIds);
+        }
+    }, [ctaCteTab, activeCtaCteOffice, showCtaCteModal]);
+
+    const openManual = async () => {
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/docs/migration-logic`);
+            const data = await response.json();
+            if (response.ok) {
+                setManualContent(data.content);
+                setShowManualModal(true);
+            }
+        } catch (err) {
+            console.error('Error fetching manual:', err);
         }
     };
 
@@ -133,17 +232,42 @@ const Apremios = () => {
                         </select>
 
                         <button type="submit" className="btn-primary" disabled={loading}>
-                            <Search size={18} />
-                            Actualizar
+                            {loading ? <div className="spinner-mini"></div> : <Search size={18} />}
+                            {loading ? 'Procesando...' : 'Actualizar'}
                         </button>
                     </form>
 
-                    <button className="btn-secondary" onClick={handleOpenCopyModal} title="Copiar lista de IDs pendientes">
-                        <FileText size={18} />
+                    <button 
+                        className="btn-secondary" 
+                        onClick={openManual}
+                        title="Ver Manual de Lógica de Composición de Deuda"
+                        style={{ background: 'rgba(37, 99, 235, 0.1)', color: '#2563eb', border: '1px solid rgba(37, 99, 235, 0.2)' }}
+                    >
+                        <HelpCircle size={18} />
+                        Manual de Lógica
+                    </button>
+
+                    <button 
+                        className="btn-secondary" 
+                        onClick={handleOpenCopyModal} 
+                        disabled={copyLoading}
+                        title="Copiar lista de IDs pendientes"
+                    >
+                        {copyLoading ? <div className="spinner-mini"></div> : <FileText size={18} />}
                         Exportar IDs
                     </button>
                 </div>
             </div>
+
+            {loading && (
+                <div className="processing-overlay">
+                    <div className="processing-content">
+                        <div className="spinner-large"></div>
+                        <p>Analizando bases de datos...</p>
+                        <small>Comparando 200,000+ registros</small>
+                    </div>
+                </div>
+            )}
 
             {/* QUICK STATS DASHBOARD */}
             <div className="stats-dashboard">
@@ -244,7 +368,25 @@ const Apremios = () => {
                                     <tr key={idx} className={item.isMigrated ? 'row-migrated' : 'row-pending'}>
                                         <td style={{ minWidth: '180px' }}>
                                             <div style={{ fontWeight: 'bold' }}>{item.legacy.numeapre}</div>
-                                            <div style={{ fontSize: '0.75rem', opacity: 0.8 }}>{item.legacy.tituapre}</div>
+                                            <div style={{ fontWeight: 500, fontSize: '0.9rem' }}>{item.legacy.tituapre}</div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                                                <div style={{ fontSize: '0.8rem', color: '#2563eb', fontWeight: 500 }}>
+                                                    {item.postgres?.pernom || 'Sin vinculación'}
+                                                </div>
+                                                {item.postgres?.cedpercod && (
+                                                    <button 
+                                                        className="btn-icon" 
+                                                        onClick={() => handleOpenCtaCte(item.postgres.cedpercod, item.postgres.pernom)}
+                                                        title="Ver Cuenta Corriente"
+                                                    >
+                                                        <Eye size={14} />
+                                                    </button>
+                                                )}
+                                            </div>
+                                            <div style={{ fontSize: '0.75rem', opacity: 0.6, marginTop: '2px' }}>
+                                                Cta: {item.legacy.cuenctct} 
+                                                {item.postgres?.cedpercod && ` • Percod: ${item.postgres.cedpercod}`}
+                                            </div>
                                             <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>
                                                 Emisión: {item.legacy.feemapre ? new Date(item.legacy.feemapre).toLocaleDateString() : '-'}
                                             </div>
@@ -254,7 +396,10 @@ const Apremios = () => {
                                             <small style={{ opacity: 0.6 }}>Ofic: {item.legacy.codiofic}</small>
                                         </td>
                                         <td>
-                                            <div style={{ fontSize: '0.8rem' }}>Rem: {item.legacy.codireca}</div>
+                                            <div style={{ fontSize: '0.86rem' }}>Rem: {item.legacy.codireca}</div>
+                                            <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginBottom: '4px' }}>
+                                                Rec: {item.legacy.recaudadordeta || 'N/A'}
+                                            </div>
                                             <div style={{ fontSize: '0.8rem', fontWeight: item.legacy.codiinju > 0 ? 500 : 'normal' }}>
                                                 Inst: {item.legacy.instanciadeta || item.legacy.codiinju}
                                             </div>
@@ -271,7 +416,21 @@ const Apremios = () => {
                                             <>
                                                 <td>
                                                     <div style={{ fontWeight: 500 }}>{item.postgres.cednro}</div>
-                                                    <div style={{ fontSize: '0.75rem', color: '#2563eb' }}>{item.postgres.cedtexto}</div>
+                                                    <div style={{ fontSize: '0.75rem', color: '#2563eb', marginBottom: '4px' }}>{item.postgres.cedtexto}</div>
+                                                    <div style={{ display: 'flex', gap: '8px', fontSize: '0.7rem', flexWrap: 'wrap', marginBottom: '4px' }}>
+                                                        <span title="Estado">Est: <strong>{item.postgres.cedestado}</strong></span>
+                                                        <span title="Etapa Cobertura">Etp: <strong>{item.postgres.cedetapa}</strong></span>
+                                                        {item.postgres.ultima_instancia && (
+                                                            <span style={{ color: '#10b981', fontWeight: 'bold' }}>
+                                                                • {item.postgres.ultima_instancia.trim()}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    {item.postgres.recaudador_nome && (
+                                                        <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>
+                                                            Rec: <strong>{item.postgres.recaudador_nome.trim()}</strong>
+                                                        </div>
+                                                    )}
                                                 </td>
                                                 <td>{item.postgres.cedfchalt ? new Date(item.postgres.cedfchalt).toLocaleDateString() : '-'}</td>
                                                 <td className="amount">
@@ -358,6 +517,141 @@ const Apremios = () => {
                                         </button>
                                     </div>
                                 </>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* CUENTA CORRIENTE MODAL */}
+            {showCtaCteModal && (
+                <div className="modal-overlay">
+                    <div className="modal-content modal-lg">
+                        <div className="modal-header">
+                            <div>
+                                <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <CreditCard size={20} color="#2563eb" />
+                                    Cuenta Corriente: {ctaCtePerson?.name}
+                                </h3>
+                                <p style={{ fontSize: '0.8rem', opacity: 0.7, margin: '4px 0 0 28px' }}>Percod: {ctaCtePerson?.percod}</p>
+                            </div>
+                            <button className="btn-icon" onClick={() => setShowCtaCteModal(false)}>
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        <div className="modal-body" style={{ maxHeight: 'calc(90vh - 100px)', overflowY: 'auto' }}>
+                            {/* OFFICE TABS */}
+                            <div className="office-tabs">
+                                {ctaCteOffices.map(office => (
+                                    <button 
+                                        key={office.id}
+                                        className={`office-tab ${activeCtaCteOffice?.id === office.id ? 'active' : ''}`}
+                                        onClick={() => setActiveCtaCteOffice(office)}
+                                    >
+                                        {office.name}
+                                    </button>
+                                ))}
+                                {ctaCteOffices.length === 0 && !ctaCteLoading && (
+                                    <div style={{ padding: '1rem', color: 'var(--text-dim)' }}>
+                                        No se encontraron oficinas para este contribuyente.
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* DEBT/MOVEMENTS TOGGLE */}
+                            <div className="toggle-container" style={{ marginBottom: '1.5rem' }}>
+                                <button 
+                                    className={`toggle-btn ${ctaCteTab === 'debt' ? 'active' : ''}`}
+                                    onClick={() => setCtaCteTab('debt')}
+                                >
+                                    Deuda Pendiente
+                                </button>
+                                <button 
+                                    className={`toggle-btn ${ctaCteTab === 'movements' ? 'active' : ''}`}
+                                    onClick={() => setCtaCteTab('movements')}
+                                >
+                                    Todos los Movimientos
+                                </button>
+                            </div>
+
+                            {ctaCteLoading ? (
+                                <div style={{ textAlign: 'center', padding: '4rem' }}>
+                                    <div className="spinner-large"></div>
+                                    <p style={{ marginTop: '1rem', color: 'var(--text-dim)' }}>Cargando datos de cuenta...</p>
+                                </div>
+                            ) : (
+                                <div className="cta-cte-grid">
+                                    <div className="cta-cte-side">
+                                        <div className="side-header legacy">MariaDB (Legacy)</div>
+                                        <div className="table-container-mini">
+                                            <table className="mini-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Periodo</th>
+                                                        <th>Boleto</th>
+                                                        <th>Concepto</th>
+                                                        <th>Debe</th>
+                                                        <th>Total</th>
+                                                        <th>F. Pago</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {ctaCteData.legacy.map((row, i) => (
+                                                        <tr key={i}>
+                                                            <td>{row.PeriCtct}/{row.BimeCtct}</td>
+                                                            <td style={{ opacity: 0.7, fontSize: '0.75rem' }}>#{row.NumeBole}</td>
+                                                            <td>{row.DetaCtct || row.CodiConc}</td>
+                                                            <td className="amount">${parseFloat(row.DebeCtct || 0).toFixed(2)}</td>
+                                                            <td className="amount" style={{ fontWeight: 'bold' }}>
+                                                                ${parseFloat(row.TotaCtct || row.DebeCtct || 0).toFixed(2)}
+                                                            </td>
+                                                            <td style={{ fontSize: '0.75rem', color: row.FechPago ? '#10b981' : '#94a3b8' }}>
+                                                                {row.FechPago ? new Date(row.FechPago).toLocaleDateString() : 'Pend.'}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                    {ctaCteData.legacy.length === 0 && (
+                                                        <tr><td colSpan="6" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-dim)' }}>Sin registros</td></tr>
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+
+                                    <div className="cta-cte-side">
+                                        <div className="side-header postgres">PostgreSQL</div>
+                                        <div className="table-container-mini">
+                                            <table className="mini-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Periodo</th>
+                                                        <th>Concepto</th>
+                                                        <th>Debe</th>
+                                                        <th>Surg.</th>
+                                                        <th>Total</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {ctaCteData.postgres.map((row, i) => (
+                                                        <tr key={i}>
+                                                            <td>{row.peri_dsc || `${row.peri_cod}/${row.subperi_cod}`}</td>
+                                                            <td>{row.tpotribnom}</td>
+                                                            <td className="amount">${parseFloat(row.mov_imp_o || 0).toFixed(2)}</td>
+                                                            <td className="amount">${parseFloat(row.rec_imp || 0).toFixed(2)}</td>
+                                                            <td className="amount" style={{ fontWeight: 'bold' }}>
+                                                                ${(parseFloat(row.mov_imp_o || 0) + parseFloat(row.rec_imp || 0)).toFixed(2)}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                    {ctaCteData.postgres.length === 0 && (
+                                                        <tr><td colSpan="5" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-dim)' }}>Sin registros</td></tr>
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
                             )}
                         </div>
                     </div>
@@ -570,7 +864,204 @@ const Apremios = () => {
                     border-color: #2563eb;
                     box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
                 }
+
+                /* Loading States */
+                .processing-overlay {
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background: rgba(15, 23, 42, 0.6);
+                    backdrop-filter: blur(8px);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    z-index: 2000;
+                }
+                .processing-content {
+                    background: var(--glass);
+                    border: 1px solid var(--glass-border);
+                    padding: 2.5rem 4rem;
+                    border-radius: 1.5rem;
+                    text-align: center;
+                    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+                }
+                .processing-content p {
+                    margin-top: 1.5rem;
+                    font-size: 1.1rem;
+                    font-weight: 500;
+                    color: white;
+                }
+                .processing-content small {
+                    display: block;
+                    margin-top: 0.5rem;
+                    color: var(--text-dim);
+                    letter-spacing: 0.05em;
+                }
+
+                .spinner-mini {
+                    width: 18px;
+                    height: 18px;
+                    border: 2px solid rgba(255, 255, 255, 0.2);
+                    border-top-color: white;
+                    border-radius: 50%;
+                    animation: spin 0.8s linear infinite;
+                }
+
+                .spinner-large {
+                    width: 50px;
+                    height: 50px;
+                    border: 4px solid rgba(37, 99, 235, 0.1);
+                    border-top-color: #2563eb;
+                    border-radius: 50%;
+                    animation: spin 1s linear infinite;
+                    margin: 0 auto;
+                }
+
+                @keyframes spin {
+                    to { transform: rotate(360deg); }
+                }
+
+                /* Cta-Cte Modal Specifics */
+                .modal-lg {
+                    max-width: 1200px;
+                    width: 95%;
+                }
+
+                .office-tabs {
+                    display: flex;
+                    gap: 8px;
+                    padding: 4px;
+                    background: rgba(0,0,0,0.1);
+                    border-radius: 12px;
+                    margin-bottom: 1.5rem;
+                    overflow-x: auto;
+                }
+                .office-tab {
+                    padding: 8px 16px;
+                    border-radius: 8px;
+                    border: none;
+                    background: transparent;
+                    color: var(--text-dim);
+                    cursor: pointer;
+                    white-space: nowrap;
+                    font-size: 0.85rem;
+                    transition: all 0.2s;
+                }
+                .office-tab.active {
+                    background: white;
+                    color: #2563eb;
+                    font-weight: 600;
+                    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+                }
+
+                .cta-cte-grid {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 24px;
+                    height: 500px;
+                }
+                .cta-cte-side {
+                    display: flex;
+                    flex-direction: column;
+                    background: rgba(255,255,255,0.03);
+                    border-radius: 12px;
+                    border: 1px solid var(--glass-border);
+                    overflow: hidden;
+                }
+                .side-header {
+                    padding: 8px 16px;
+                    font-size: 0.75rem;
+                    font-weight: bold;
+                    text-transform: uppercase;
+                    letter-spacing: 0.05em;
+                    color: white;
+                }
+                .side-header.legacy { background: #991b1b; }
+                .side-header.postgres { background: #1e40af; }
+
+                .table-container-mini {
+                    flex: 1;
+                    overflow-y: auto;
+                    padding: 4px;
+                }
+                .mini-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    font-size: 0.8rem;
+                }
+                .mini-table th {
+                    text-align: left;
+                    padding: 8px;
+                    border-bottom: 1px solid var(--glass-border);
+                    color: var(--text-dim);
+                    font-weight: 500;
+                }
+                .mini-table td {
+                    padding: 8px;
+                    border-bottom: 1px solid rgba(255,255,255,0.02);
+                }
+
+                .toggle-container {
+                    display: flex;
+                    gap: 4px;
+                    background: rgba(0,0,0,0.1);
+                    padding: 4px;
+                    border-radius: 8px;
+                    width: fit-content;
+                }
+                .toggle-btn {
+                    padding: 6px 16px;
+                    font-size: 0.8rem;
+                    border-radius: 6px;
+                    border: none;
+                    background: transparent;
+                    color: var(--text-dim);
+                    cursor: pointer;
+                }
+                .toggle-btn.active {
+                    background: #2563eb;
+                    color: white;
+                }
+
+                .btn-icon {
+                    background: rgba(37, 99, 235, 0.1);
+                    border: 1px solid rgba(37, 99, 235, 0.2);
+                    color: #2563eb;
+                    padding: 6px;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    transition: all 0.2s;
+                }
+                .btn-icon:hover {
+                    background: #2563eb;
+                    color: white;
+                    transform: translateY(-1px);
+                }
             `}} />
+            {/* Modal Manual de Lógica */}
+            {showManualModal && (
+                <div className="cta-cte-modal-overlay">
+                    <div className="cta-cte-modal-content" style={{ width: '80%', maxWidth: '800px', maxHeight: '80vh' }}>
+                        <div className="cta-cte-modal-header">
+                            <h3>Manual de Lógica de Composición de Deuda</h3>
+                            <button onClick={() => setShowManualModal(false)} className="cta-cte-modal-close">&times;</button>
+                        </div>
+                        <div className="cta-cte-modal-body" style={{ background: '#1a1d21', color: '#e0e0e0', padding: '30px', overflowY: 'auto' }}>
+                            <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'Inter, sans-serif', fontSize: '14px', lineHeight: '1.6' }}>
+                                {manualContent}
+                            </pre>
+                        </div>
+                        <div className="cta-cte-modal-footer">
+                            <button onClick={() => setShowManualModal(false)} className="btn-secondary">Cerrar</button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

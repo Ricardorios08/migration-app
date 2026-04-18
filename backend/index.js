@@ -26,6 +26,23 @@ app.use('/api/infogov', infogovRoutes);
 app.use('/api/explorer', explorerRoutes);
 app.use('/api/apremios', apremiosRoutes);
 
+// Endpoint to serve migration logic documentation
+app.get('/api/docs/migration-logic', (req, res) => {
+    try {
+        const fs = require('fs');
+        const path = require('path');
+        const filePath = path.join(__dirname, 'migration_logic_doc.md');
+        if (fs.existsSync(filePath)) {
+            const content = fs.readFileSync(filePath, 'utf8');
+            res.json({ content });
+        } else {
+            res.status(404).json({ error: 'Manual no encontrado' });
+        }
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // Health check / Connection test
 app.get('/api/test-connections', async (req, res) => {
     let result = {

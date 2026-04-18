@@ -18,6 +18,8 @@ const CuentaCorriente = () => {
     const [showSqlPgModal, setShowSqlPgModal] = useState(false);
     const [error, setError] = useState(null);
     const [postgresError, setPostgresError] = useState(null);
+    const [showManualModal, setShowManualModal] = useState(false);
+    const [manualContent, setManualContent] = useState('');
 
     const [showSubtotals, setShowSubtotals] = useState(false);
     const [isGrouped, setIsGrouped] = useState(true);
@@ -270,9 +272,25 @@ const CuentaCorriente = () => {
         return rows;
     };
 
+    const openManual = async () => {
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/docs/migration-logic`);
+            const data = await response.json();
+            if (response.ok) {
+                setManualContent(data.content);
+                setShowManualModal(true);
+            }
+        } catch (err) {
+            console.error('Error fetching manual:', err);
+        }
+    };
+
     const DataRow = ({ row }) => (
         <tr>
-            <td style={{ whiteSpace: 'nowrap' }}>{row.PeriCtct}/{row.BimeCtct}</td>
+            <td style={{ whiteSpace: 'nowrap' }}>
+                {row.PeriCtct}/{row.BimeCtct}
+                {row.NumeBole && <div style={{ fontSize: '0.7rem', opacity: 0.6 }}>#{row.NumeBole}</div>}
+            </td>
             <td style={{ whiteSpace: 'nowrap' }}>{new Date(row.FeveCtct).toLocaleDateString()}</td>
             <td style={{ fontSize: '0.8rem', opacity: 0.8 }} title={row.DetaCtct}>
                 <div style={{ fontWeight: 'bold', color: 'var(--primary)' }}>{row.TipoTributo || ''}</div>
@@ -297,14 +315,14 @@ const CuentaCorriente = () => {
             <td style={{ color: '#10b981' }}>${parseFloat(row.CredCtct || 0).toFixed(2)}</td>
             <td style={{ fontWeight: 'bold' }}>${parseFloat(row.TotaCtct || 0).toFixed(2)}</td>
             <td>
-                <div className={`status-pill ${row.NumeAcpa && row.NumeAcpa != '0' ? 'P' : 'D'}`}>
-                    {row.NumeAcpa && row.NumeAcpa != '0' ? 'Pagado' : 'Deuda'}
+                <div className={`status-pill ${row.FechPago || (row.NumeAcpa && row.NumeAcpa != '0') ? 'P' : 'D'}`}>
+                    {row.FechPago || (row.NumeAcpa && row.NumeAcpa != '0') ? 'Pagado' : 'Deuda'}
                 </div>
-                {row.NumeAcpa && row.NumeAcpa != '0' && (
+                {(row.FechPago || (row.NumeAcpa && row.NumeAcpa != '0')) && (
                     <div style={{ fontSize: '0.7rem', marginTop: '2px', opacity: 0.7 }}>
-                        Ref: {row.NumeAcpa}
-                        {row.FechaPago && row.FechaPago !== '0000-00-00' && (
-                            <div style={{ fontWeight: 'bold' }}>F. Pago: {new Date(row.FechaPago).toLocaleDateString()}</div>
+                        {row.NumeAcpa && row.NumeAcpa != '0' && <span>Ref: {row.NumeAcpa}</span>}
+                        {row.FechPago && (
+                            <div style={{ fontWeight: 'bold', color: '#10b981' }}>F. Pago: {new Date(row.FechPago).toLocaleDateString()}</div>
                         )}
                     </div>
                 )}
@@ -1143,6 +1161,15 @@ const CuentaCorriente = () => {
                     >
                         SQL Postgres
                     </button>
+
+                    <button 
+                        type="button" 
+                        className="btn-sql" 
+                        onClick={openManual}
+                        style={{ background: 'rgba(37, 99, 235, 0.1)', color: '#2563eb', border: '1px solid rgba(37, 99, 235, 0.2)' }}
+                    >
+                        Manual de Lógica
+                    </button>
                 </form>
             </div>
 
@@ -1760,6 +1787,25 @@ ORDER BY gc.genctaancta DESC, gc.genctanrocta DESC;`}
                     letter-spacing: 0.05rem;
                 }
             `}</style>
+            {/* Modal Manual de Lógica */}
+            {showManualModal && (
+                <div className="modal-overlay" onClick={() => setShowManualModal(false)}>
+                    <div className="modal-content" style={{ width: '80%', maxWidth: '800px', maxHeight: '80vh' }} onClick={e => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h3>Manual de Lógica de Composición de Deuda</h3>
+                            <button onClick={() => setShowManualModal(false)} className="close-btn">&times;</button>
+                        </div>
+                        <div className="modal-body" style={{ background: '#1a1d21', color: '#e0e0e0', padding: '30px', overflowY: 'auto' }}>
+                            <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'Inter, sans-serif', fontSize: '14px', lineHeight: '1.6' }}>
+                                {manualContent}
+                            </pre>
+                        </div>
+                        <div className="modal-footer" style={{ marginTop: 0, paddingTop: '15px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                            <button onClick={() => setShowManualModal(false)} className="btn btn-pdf" style={{ background: '#475569' }}>Cerrar</button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

@@ -151,9 +151,11 @@ router.get('/compare', async (req, res) => {
         console.log('[COMPARE] Fetching apremios from MariaDB...');
         let mariaQuery = `
             SELECT a.NumeApre, a.FeemApre, a.TotaApre, a.CuenCtct, a.CodiOfic, a.TituApre,
-                   a.CodiReca, a.CodiInju, a.EstaApre, ea.DetaEsap as EstadoDeta,
+                   a.CodiReca, r.DetaReca as RecaudadorDeta, 
+                   a.CodiInju, a.EstaApre, ea.DetaEsap as EstadoDeta,
                    a.CapiApre, a.RecaApre, ij.DetaInju as InstanciaDeta
             FROM recaudacion.apremio a
+            LEFT JOIN recaudacion.recaudador r ON a.CodiReca = r.CodiReca
             LEFT JOIN recaudacion.estadoapremio ea ON a.EstaApre = ea.CodiEsap
             LEFT JOIN recaudacion.instjudi ij ON a.CodiInju = ij.CodiInju
         `;
@@ -194,9 +196,22 @@ router.get('/compare', async (req, res) => {
         // 3. Search in Postgres cedula table
         // cedid in postgres corresponds to numeapre in mariadb
         const pgQuery = `
-            SELECT cedid, cednro, cedestado, cedimptot, cedfchalt, cedtexto
-            FROM public.cedula
-            WHERE cedid = ANY($1)
+            SELECT c.cedid, c.cednro, c.cedestado, c.cedetapa, c.cedimptot, c.cedfchalt, c.cedtexto,
+                   c.cedpercod, TRIM(p.pernom) as pernom,
+                   (SELECT t.tipcedinsdsc 
+                    FROM public.cedinstancia ci 
+                    JOIN public.tipcedinstancia t ON ci.tipcedinscod = t.tipcedinscod 
+                    WHERE ci.cednro = c.cednro 
+                    ORDER BY ci.cedinsfec DESC, ci.cedinscod DESC 
+                    LIMIT 1) as ultima_instancia,
+                   (SELECT r.recnom 
+                    FROM public.cedinstancia ci 
+                    JOIN public.recaudador r ON ci.cedinsnro = r.reccod
+                    WHERE ci.cednro = c.cednro AND ci.tipcedinscod = '1' 
+                    LIMIT 1) as recaudador_nome
+            FROM public.cedula c
+            LEFT JOIN public.persona p ON c.cedpercod = p.percod
+            WHERE c.cedid = ANY($1)
         `;
         const pgRes = await postgresDB.query(pgQuery, [numeApreList]);
         
@@ -221,6 +236,7 @@ router.get('/compare', async (req, res) => {
                     codiofic: ma.CodiOfic,
                     tituapre: ma.TituApre,
                     codireca: ma.CodiReca,
+                    recaudadordeta: ma.RecaudadorDeta,
                     codiinju: ma.CodiInju,
                     instanciadeta: ma.InstanciaDeta,
                     estaapre: ma.EstaApre,
