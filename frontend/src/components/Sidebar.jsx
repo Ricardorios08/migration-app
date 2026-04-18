@@ -1,4 +1,4 @@
-import { LayoutDashboard, Database, FileText, ChevronRight, ChevronLeft, PanelLeftClose, PanelLeftOpen, User, Search } from 'lucide-react';
+import { LayoutDashboard, Database, FileText, ChevronRight, ChevronLeft, PanelLeftClose, PanelLeftOpen, User, Search, Scale } from 'lucide-react';
 
 const Sidebar = ({ currentView, setView, collapsed, setCollapsed }) => {
   return (
@@ -32,6 +32,15 @@ const Sidebar = ({ currentView, setView, collapsed, setCollapsed }) => {
         >
           <FileText size={20} />
           {!collapsed && <span>Cta-Cte</span>}
+          {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
+        </div>
+        <div
+          className={`menu-item ${currentView === 'apremios' ? 'active' : ''}`}
+          onClick={() => setView('apremios')}
+          title={collapsed ? "Apremios" : ""}
+        >
+          <Scale size={20} />
+          {!collapsed && <span>Apremios</span>}
           {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
         </div>
         <div

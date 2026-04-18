@@ -5,6 +5,7 @@ import CuentaCorriente from './views/CuentaCorriente';
 import ComerciosExcel from './views/ComerciosExcel';
 import PersonaSearch from './views/PersonaSearch';
 import TableExplorer from './views/TableExplorer';
+import Apremios from './views/Apremios';
 
 function App() {
   const [view, setView] = useState('dashboard');
@@ -56,6 +57,8 @@ function App() {
             <PersonaSearch />
           ) : view === 'explorer' ? (
             <TableExplorer />
+          ) : view === 'apremios' ? (
+            <Apremios />
           ) : (
             <ComerciosExcel />
           )}

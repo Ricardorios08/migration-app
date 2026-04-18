@@ -7,6 +7,7 @@ const ctacteRoutes = require('./routes/ctacte');
 const excelRoutes = require('./routes/excelTools');
 const infogovRoutes = require('./routes/infogov');
 const explorerRoutes = require('./routes/explorer');
+const apremiosRoutes = require('./routes/apremios');
 
 dotenv.config();
 
@@ -23,6 +24,7 @@ app.use('/api/ctacte', ctacteRoutes);
 app.use('/api/excel', excelRoutes);
 app.use('/api/infogov', infogovRoutes);
 app.use('/api/explorer', explorerRoutes);
+app.use('/api/apremios', apremiosRoutes);
 
 // Health check / Connection test
 app.get('/api/test-connections', async (req, res) => {
