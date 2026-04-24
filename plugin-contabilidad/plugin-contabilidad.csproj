@@ -1,0 +1,166 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{BD9F57F1-5DC5-4BA2-98E8-95491B487716}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AssemblyName>plugin-contabilidad</AssemblyName>
+    <TargetFrameworkVersion>v4.6.1</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <RootNamespace>InfoGov</RootNamespace>
+    <TargetFrameworkProfile />
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="infogov-core">
+      <HintPath>lib\infogov-core.dll</HintPath>
+    </Reference>
+    <Reference Include="infogov-metro">
+      <HintPath>lib\infogov-metro.dll</HintPath>
+    </Reference>
+    <Reference Include="infogov-resources">
+      <HintPath>lib\infogov-resources.dll</HintPath>
+    </Reference>
+    <Reference Include="plugin-infogov">
+      <HintPath>lib\plugin-infogov.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="AssemblyInfo.cs" />
+    <Compile Include="FabricaExpertos.cs" />
+    <Compile Include="FabricaVentanas.cs" />
+    <Compile Include="Modulo.cs" />
+    <Compile Include="ModuloContabilidad.cs" />
+    <Compile Include="Pnames.cs" />
+    <Compile Include="Rnames.cs" />
+    <Compile Include="Wnames.cs" />
+    <Compile Include="Entidades\Asiento.cs" />
+    <Compile Include="Entidades\Debito.cs" />
+    <Compile Include="Entidades\ManualCuentaContable.cs" />
+    <Compile Include="Entidades\MoviBanco.cs" />
+    <Compile Include="Entidades\ParamComiBancarias.cs" />
+    <Compile Include="Entidades\ParametroCierreEjercicio.cs" />
+    <Compile Include="Entidades\ParametroInicioEjercicio.cs" />
+    <Compile Include="Entidades\TipoAsiento.cs" />
+    <Compile Include="Entidades\TipoCuentaContable.cs" />
+    <Compile Include="Entidades\TipoMoviBanco.cs" />
+    <Compile Include="Expertos\ExpAsiento.cs" />
+    <Compile Include="Expertos\ExpDebitos.cs" />
+    <Compile Include="Expertos\ExpDebitosvsRetenciones.cs" />
+    <Compile Include="Expertos\ExpDevengado.cs" />
+    <Compile Include="Expertos\ExpGenerarBalanceMensual.cs" />
+    <Compile Include="Expertos\ExpLibroDiario.cs" />
+    <Compile Include="Expertos\ExpLibroMayorGeneral.cs" />
+    <Compile Include="Expertos\ExpManualCuentaContable.cs" />
+    <Compile Include="Expertos\ExpPagosPresupuestos.cs" />
+    <Compile Include="Expertos\ExpParamComiBancarias.cs" />
+    <Compile Include="Expertos\ExpParametroCierreEjercicio.cs" />
+    <Compile Include="Expertos\ExpParametroInicioEjercicio.cs" />
+    <Compile Include="Expertos\ExpTipoAsiento.cs" />
+    <Compile Include="Expertos\ExpTipoCuentaContable.cs" />
+    <Compile Include="Properties\Settings.cs" />
+    <Compile Include="Reportes\DebitosVsRetenciones\DTODebitosvsRetenciones.cs" />
+    <Compile Include="Reportes\DebitosVsRetenciones\irepDebitosvsRetenciones.cs" />
+    <Compile Include="Reportes\DevitosVsRetenciones\repDebitosVsRetenciones.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Reportes\LibroMayorGeneral\DTOLibroMayorGeneral.cs" />
+    <Compile Include="Reportes\LibroMayorGeneral\DTOLibroMayorGeneralDeta.cs" />
+    <Compile Include="Reportes\LibroMayorGeneral\irepLibroDiario.cs" />
+    <Compile Include="Reportes\LibroMayorGeneral\irepLibroMayorGeneral.cs" />
+    <Compile Include="Reportes\LibroMayorGeneral\repLibroDiario.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Reportes\LibroMayorGeneral\repLibroMayorGeneral.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Reportes\Subdiarios\Devengados\DTOSubDevengados.cs" />
+    <Compile Include="Reportes\Subdiarios\Devengados\DTOSubDevengadosDeta.cs" />
+    <Compile Include="Reportes\Subdiarios\Devengados\irepSubDevengados.cs" />
+    <Compile Include="Reportes\Subdiarios\Devengados\repSubDevengados.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Reportes\Subdiarios\PagosPresupuestarios\DTOPagosPresupuestarios.cs" />
+    <Compile Include="Reportes\Subdiarios\PagosPresupuestarios\DTOPagosPresupuestariosDeta.cs" />
+    <Compile Include="Reportes\Subdiarios\PagosPresupuestarios\irepPagosPresupuestarios.cs" />
+    <Compile Include="Reportes\Subdiarios\PagosPresupuestarios\repPagosPresupuestarios.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Ventanas\detailManualCuentaContable.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Ventanas\detailParametroCierreEjercicio.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Ventanas\detailParametroInicioEjercicio.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Ventanas\detailTipoAsiento.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Ventanas\detailTipoCuentaContable.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Ventanas\frmCruzarDebitos.cs" />
+    <Compile Include="Ventanas\frmGenerarBalanceMensual.cs" />
+    <Compile Include="Ventanas\frmParamComiBancRecaudadores.cs" />
+    <Compile Include="Ventanas\frmParamComiBancTesoreria.cs" />
+    <Compile Include="Ventanas\frmRevertirAsiento.cs" />
+    <Compile Include="Ventanas\gridManualCuentaContable.cs" />
+    <Compile Include="Ventanas\gridParametroCierreEjercicio.cs" />
+    <Compile Include="Ventanas\gridParametroInicioEjercicio.cs" />
+    <Compile Include="Ventanas\gridTipoAsiento.cs" />
+    <Compile Include="Ventanas\gridTipoCuentaContable.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Reportes\DebitosVsRetenciones\irepDebitosvsRetenciones.resx" />
+    <EmbeddedResource Include="Reportes\DevitosVsRetenciones\repDebitosVsRetenciones.resx" />
+    <EmbeddedResource Include="Reportes\LibroMayorGeneral\irepLibroMayorGeneral.resx" />
+    <EmbeddedResource Include="Reportes\LibroMayorGeneral\repLibroDiario.resx" />
+    <EmbeddedResource Include="Reportes\LibroMayorGeneral\repLibroMayorGeneral.resx" />
+    <EmbeddedResource Include="Reportes\Subdiarios\Devengados\irepSubDevengados.resx" />
+    <EmbeddedResource Include="Reportes\Subdiarios\Devengados\repSubDevengados.resx" />
+    <EmbeddedResource Include="Reportes\Subdiarios\PagosPresupuestarios\irepPagosPresupuestarios.resx" />
+    <EmbeddedResource Include="Reportes\Subdiarios\PagosPresupuestarios\repPagosPresupuestarios.resx" />
+    <EmbeddedResource Include="Ventanas\detailManualCuentaContable.resx" />
+    <EmbeddedResource Include="Ventanas\detailParametroCierreEjercicio.resx" />
+    <EmbeddedResource Include="Ventanas\detailParametroInicioEjercicio.resx" />
+    <EmbeddedResource Include="Ventanas\detailTipoAsiento.resx" />
+    <EmbeddedResource Include="Ventanas\detailTipoCuentaContable.resx" />
+    <EmbeddedResource Include="Ventanas\frmCruzarDebitos.resx" />
+    <EmbeddedResource Include="Ventanas\frmGenerarBalanceMensual.resx" />
+    <EmbeddedResource Include="Ventanas\frmParamComiBancRecaudadores.resx" />
+    <EmbeddedResource Include="Ventanas\frmParamComiBancTesoreria.resx" />
+    <EmbeddedResource Include="Ventanas\frmRevertirAsiento.resx" />
+    <EmbeddedResource Include="Ventanas\gridManualCuentaContable.resx" />
+    <EmbeddedResource Include="Ventanas\gridParametroCierreEjercicio.resx" />
+    <EmbeddedResource Include="Ventanas\gridParametroInicioEjercicio.resx" />
+    <EmbeddedResource Include="Ventanas\gridTipoAsiento.resx" />
+    <EmbeddedResource Include="Ventanas\gridTipoCuentaContable.resx" />
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>

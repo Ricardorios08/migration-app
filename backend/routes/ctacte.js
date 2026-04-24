@@ -6,7 +6,7 @@ const postgresDB = require('../db/postgres');
 // Get list of offices
 router.get('/offices', async (req, res) => {
     try {
-        const offices = await mariaDB.query('SELECT CodiOfic, DetaOfic FROM recaudacion.oficina ORDER BY CodiOfic');
+        const offices = await mariaDB.queryRemote('SELECT CodiOfic, DetaOfic FROM recaudacion2.oficina ORDER BY CodiOfic');
         const result = [...offices, { CodiOfic: 99, DetaOfic: 'CUIL/CUIT' }];
         res.json(result);
     } catch (err) {
@@ -124,9 +124,9 @@ router.get('/resolve-account/:account', async (req, res) => {
             pgRes.rows.forEach(r => officesFound.add(r.officeId.toString()));
         } else {
             // Default: Search by account in both DBs
-            conn = await mariaDB.getConnection();
+            conn = await mariaDB.getRemoteConnection();
             const mariaOffices = await conn.query(`
-                SELECT DISTINCT CodiOfic FROM recaudacion.ctacte WHERE CuenCtct = ?
+                SELECT DISTINCT CodiOfic FROM recaudacion2.ctacte WHERE CuenCtct = ?
             `, [account]);
             mariaOffices.forEach(r => officesFound.add(r.CodiOfic.toString()));
 
@@ -141,7 +141,7 @@ router.get('/resolve-account/:account', async (req, res) => {
 
             try {
                 const boletoOffices = await conn.query(`
-                    SELECT DISTINCT CodiOfic FROM recaudacion.boleto WHERE CuenCtct = ?
+                    SELECT DISTINCT CodiOfic FROM recaudacion2.boleto WHERE CuenCtct = ?
                 `, [account]);
                 boletoOffices.forEach(r => officesFound.add(r.CodiOfic.toString()));
             } catch (bErr) {
@@ -166,10 +166,10 @@ router.get('/resolve-account/:account', async (req, res) => {
         let officeNames = [];
 
         try {
-            if (!conn) conn = await mariaDB.getConnection();
+            if (!conn) conn = await mariaDB.getRemoteConnection();
             officeNames = await conn.query(`
                 SELECT CodiOfic as id, DetaOfic as name 
-                FROM recaudacion.oficina 
+                FROM recaudacion2.oficina 
                 WHERE CodiOfic IN (${ids.map(() => '?').join(',')})
             `, ids);
         } catch (mErr) {
@@ -196,8 +196,8 @@ router.get('/legacy/search', async (req, res) => {
     let conn;
 
     try {
-        conn = await mariaDB.getConnection();
-        await conn.query("USE recaudacion"); // Ensure database is selected
+        conn = await mariaDB.getRemoteConnection();
+        await conn.query("USE recaudacion2"); // Ensure database is selected
 
         // Normalize account to an array
         const accList = Array.isArray(account) ? account : (account ? [account.toString().trim()] : []);
@@ -208,207 +208,114 @@ router.get('/legacy/search', async (req, res) => {
             for (const acc of accList) {
                 console.log(`[DEBUG MariaDB] Emulating fnDeuda(office: ${officeId}, account: ${acc}, date: ${dateStr})`);
 
-                const sourceTable = officeId == 1 ? 'ctacte' : 'boleto';
-                const fieldPrefix = officeId == 1 ? 'Ctct' : 'Bole';
-                const accField = officeId == 1 ? 'CuenCtct' : 'CuenCtct';
-
-                await conn.query(`DROP TEMPORARY TABLE IF EXISTS tmp_ctacteboleto`);
-                await conn.query(`
-                    CREATE TEMPORARY TABLE tmp_ctacteboleto (
-                        PeriCtct int, BimeCtct int, CuotDefa int, FeveCtct date, 
-                        DebeCtct decimal(15,2), RecaCtct decimal(15,2), NumeApre int, CodiFapa int,
-                        PeriInfo int, CodiConc char(15), NumeAcpa int, FeenAcpa date, MoviCtct int,
-                        NumeBole int, DetaCtct varchar(100)
-                    ) ENGINE=Memory
-                `);
-
-                // Map fields based on source table
-                let selectQuery = "";
-                if (officeId == 1) {
-                    selectQuery = `
-                        SELECT PeriCtct, BimeCtct, MAX(CuotDefa), MAX(FeveCtct), 
-                               SUM(IFNULL(DebeCtct, 0)) - SUM(IFNULL(CredCtct, 0)), 
-                               0, MAX(NumeApre), MAX(CodiFapa), PeriInfo, CodiConc, MAX(NumeAcpa), MAX(FeenAcpa), 0,
-                               MAX(NumeBole), MAX(DetaCtct)
-                        FROM ctacte
-                        WHERE CodiOfic = ? AND CuenCtct = ?
-                        GROUP BY PeriCtct, BimeCtct, PeriInfo, CodiConc
-                        HAVING (SUM(IFNULL(DebeCtct, 0)) - SUM(IFNULL(CredCtct, 0))) > 0.01
-                    `;
-                } else {
-                    // Optimized search for Office 2, 4, 6, 7 using boleto + source liqu table
-                    let liquTable = "";
-                    if (officeId == 2) liquTable = "liqucome";
-                    else if (officeId == 4) liquTable = "liquceme";
-                    else if (officeId == 6) liquTable = "liqupubl";
-                    else if (officeId == 7) liquTable = "liquante";
-
-                    if (liquTable) {
-                        selectQuery = `
-                            SELECT b.PeriBole as PeriCtct, IFNULL(l.BimeLiqu, 1) as BimeCtct, b.CuotDefa, b.FeveBole as FeveCtct, 
-                                   b.TotaBole as DebeCtct, 0 as RecaCtct, 
-                                   IFNULL(ba.NumeApre, 0) as NumeApre, b.CodiFapa, 
-                                   b.CodiTili as PeriInfo, IFNULL(l.CodiConc, '') as CodiConc, 0 as NumeAcpa, 
-                                   (SELECT p.FeenAcpa FROM pago p WHERE p.PeriBole = b.PeriBole AND p.NumeBole = b.NumeBole AND p.CodiOfic = b.CodiOfic AND p.CuenCtct = b.CuenCtct LIMIT 1) as FeenAcpa, 
-                                   0 as MoviCtct, b.NumeBole,
-                                   '' as DetaCtct
-                            FROM boleto b
-                            LEFT JOIN ${liquTable} l ON l.PeriBole = b.PeriBole AND l.NumeBole = b.NumeBole
-                            LEFT JOIN boleapre ba ON ba.PeriBole = b.PeriBole AND ba.NumeBole = b.NumeBole
-                            WHERE b.CodiOfic = ? AND b.CuenCtct = ? 
-                            AND b.EstaBole NOT IN ('Pagado', 'De baja', 'Anulado')
-                            AND NOT EXISTS (SELECT 1 FROM pago p WHERE p.PeriBole = b.PeriBole AND p.NumeBole = b.NumeBole AND p.CodiOfic = b.CodiOfic AND p.CuenCtct = b.CuenCtct)
-                        `;
-                    } else {
-                        // Generic fallback for other offices
-                        selectQuery = `
-                            SELECT b.PeriBole as PeriCtct, 1 as BimeCtct, b.CuotDefa, b.FeveBole as FeveCtct, 
-                                   b.TotaBole as DebeCtct, 0 as RecaCtct, 
-                                   IFNULL(ba.NumeApre, 0) as NumeApre, b.CodiFapa, 
-                                   b.CodiTili as PeriInfo, b.NumeLiqu as CodiConc, 0 as NumeAcpa, 
-                                   (SELECT p.FeenAcpa FROM pago p WHERE p.PeriBole = b.PeriBole AND p.NumeBole = b.NumeBole AND p.CodiOfic = b.CodiOfic AND p.CuenCtct = b.CuenCtct LIMIT 1) as FeenAcpa, 
-                                   0 as MoviCtct, b.NumeBole,
-                                   'Concepto Gral' as DetaCtct
-                            FROM boleto b
-                            LEFT JOIN boleapre ba ON ba.PeriBole = b.PeriBole AND ba.NumeBole = b.NumeBole
-                            WHERE b.CodiOfic = ? AND b.CuenCtct = ? 
-                            AND b.EstaBole NOT IN ('Pagado', 'De baja', 'Anulado')
-                            AND NOT EXISTS (SELECT 1 FROM pago p WHERE p.PeriBole = b.PeriBole AND p.NumeBole = b.NumeBole AND p.CodiOfic = b.CodiOfic AND p.CuenCtct = b.CuenCtct)
-                        `;
-                    }
-                }
-
-                await conn.query(`
-                    INSERT INTO tmp_ctacteboleto (PeriCtct, BimeCtct, CuotDefa, FeveCtct, DebeCtct, RecaCtct, NumeApre, CodiFapa, PeriInfo, CodiConc, NumeAcpa, FeenAcpa, MoviCtct, NumeBole, DetaCtct)
-                    ${selectQuery}
-                `, [officeId, acc]);
-
-                await conn.query(`
-                    UPDATE tmp_ctacteboleto
-                    SET RecaCtct = DebeCtct * (CEIL(DATEDIFF(?, FeveCtct) / 30) * 0.03)
-                    WHERE ? > FeveCtct
-                `, [dateStr, dateStr]);
-
+                // Single SELECT query to calculate everything without temp tables
                 const debtQuery = `
                     SELECT 
-                        tmp.PeriCtct, tmp.BimeCtct, tmp.CuotDefa, tmp.FeveCtct, 
-                        IFNULL(tmp.DetaCtct, IFNULL(c.DetaConc, 'Sin Concepto')) as DetaCtct, 
-                        tmp.DebeCtct as DebeCtct, 
-                        IFNULL(tmp.RecaCtct, 0) as RecaCtct, 
-                        (tmp.DebeCtct + IFNULL(tmp.RecaCtct, 0)) as TotaCtct,
-                        tmp.NumeAcpa,
-                        tmp.FeenAcpa as FechaPago,
-                        tmp.NumeBole,
-                        tmp.NumeApre,
-                        tmp.CodiFapa,
-                        (tmp.NumeApre > 0) as hasApremio,
-                        (tmp.CodiFapa > 0) as hasPlan
-                    FROM tmp_ctacteboleto tmp
-                    LEFT JOIN concepto c ON c.PeriInfo = tmp.PeriInfo AND c.CodiConc = tmp.CodiConc
-                    ORDER BY tmp.PeriCtct DESC, tmp.BimeCtct DESC, tmp.MoviCtct DESC
+                        t.PeriCtct, t.BimeCtct, MAX(t.CuotDefa) as CuotDefa, MAX(t.FeveCtct) as FeveCtct, 
+                        IFNULL(c.DetaConc, MAX(t.DetaCtct)) as DetaCtct, 
+                        SUM(IFNULL(t.DebeCtct, 0)) - SUM(IFNULL(t.CredCtct, 0)) as DebeCtct, 
+                        IF(MAX(t.FeveCtct) < ?, 
+                           (SUM(IFNULL(t.DebeCtct, 0)) - SUM(IFNULL(t.CredCtct, 0))) * CEIL(DATEDIFF(?, MAX(t.FeveCtct)) / 30) * 0.03, 
+                           0) as RecaCtct,
+                        MAX(t.NumeAcpa) as NumeAcpa,
+                        MAX(t.FeenAcpa) as FechaPago,
+                        MAX(t.NumeBole) as NumeBole,
+                        MAX(t.NumeApre) as NumeApre,
+                        MAX(t.CodiFapa) as CodiFapa,
+                        (MAX(t.NumeApre) > 0) as hasApremio,
+                        (MAX(t.CodiFapa) > 0) as hasPlan
+                    FROM recaudacion2.ctacte t
+                    LEFT JOIN concepto c ON c.PeriInfo = t.PeriInfo AND c.CodiConc = t.CodiConc
+                    WHERE t.CodiOfic = ? AND t.CuenCtct = ?
+                    GROUP BY t.PeriCtct, t.BimeCtct, t.PeriInfo, t.CodiConc
+                    HAVING (SUM(IFNULL(t.DebeCtct, 0)) - SUM(IFNULL(t.CredCtct, 0))) > 0.01
+                    ORDER BY t.PeriCtct DESC, t.BimeCtct DESC
                 `;
-                const results = await conn.query(debtQuery);
-                allResults.push(...results);
+
+                const results = await conn.query(debtQuery, [dateStr, dateStr, officeId, acc]);
+                
+                // Map results to add TotaCtct and ensure numeric types
+                const formatted = results.map(r => ({
+                    ...r,
+                    DebeCtct: parseFloat(r.DebeCtct || 0),
+                    RecaCtct: parseFloat(r.RecaCtct || 0),
+                    TotaCtct: parseFloat(r.DebeCtct || 0) + parseFloat(r.RecaCtct || 0),
+                    hasApremio: !!r.hasApremio,
+                    hasPlan: !!r.hasPlan
+                }));
+                
+                allResults.push(...formatted);
             }
             res.json(allResults);
         } else {
-            // 2. Optimized Historical View (Standard + Archive)
-            if (type === 'optimized') {
-                const accPlaceholders = accList.map(() => '?').join(',');
-                const fealCorteFilter = fealCorte ? 'AND FealCtct <= ?' : '';
+            // Unified Historical View using direct SELECT/UNION to avoid temp tables
+            const accPlaceholders = accList.map(() => '?').join(',');
+            const fealCorteFilter = fealCorte ? 'AND FealCtct <= ?' : '';
+            const mainParams = [officeId, ...accList];
+            if (fealCorte) mainParams.push(fealCorte);
 
-                await conn.query(`DROP TEMPORARY TABLE IF EXISTS tmp_ctacte_historica`);
-                await conn.query(`
-                    CREATE TEMPORARY TABLE tmp_ctacte_historica (
-                        PeriCtct int, BimeCtct int, CuotDefa int, FeveCtct date, 
-                        DetaCtct char(150), DebeCtct decimal(15,2), CredCtct decimal(15,2),
-                        RecaCtct decimal(15,2), NumeApre int, CodiFapa int,
-                        PeriInfo int, CodiConc char(8), NumeAcpa int,
-                        FechaPago date,
-                        INDEX (PeriInfo, CodiConc)
-                    ) ENGINE=Memory
-                `);
-
-                const mainParams = [officeId, ...accList];
-                if (fealCorte) mainParams.push(fealCorte);
-
-                const qMain = `
-                    INSERT INTO tmp_ctacte_historica (PeriCtct, BimeCtct, CuotDefa, FeveCtct, DetaCtct, DebeCtct, CredCtct, RecaCtct, NumeApre, CodiFapa, PeriInfo, CodiConc, NumeAcpa, FechaPago)
-                    SELECT PeriCtct, BimeCtct, CuotDefa, FeveCtct, DetaCtct, DebeCtct, CredCtct, 0, NumeApre, CodiFapa, PeriInfo, CodiConc, NumeAcpa, FeenAcpa
-                    FROM ${officeId == 1 ? 'ctacte' : 'boleto'}
+            const histQuery = `
+                SELECT 
+                    tmp.PeriCtct, tmp.BimeCtct, tmp.CuotDefa, tmp.FeveCtct, 
+                    IFNULL(c.DetaConc, tmp.DetaCtct) as DetaCtct, 
+                    tmp.DebeCtct, tmp.CredCtct, 
+                    0 as RecaCtct,
+                    (tmp.DebeCtct - tmp.CredCtct) as TotaCtct,
+                    tmp.NumeAcpa,
+                    tmp.FechaPago,
+                    tmp.NumeApre,
+                    tmp.CodiFapa,
+                    (tmp.NumeApre > 0) as hasApremio,
+                    (tmp.CodiFapa > 0) as hasPlan,
+                    tmp.PeriInfo, tmp.CodiConc
+                FROM (
+                    SELECT PeriCtct, BimeCtct, CuotDefa, FeveCtct, DetaCtct, DebeCtct, CredCtct, NumeApre, CodiFapa, PeriInfo, CodiConc, NumeAcpa, FeenAcpa as FechaPago
+                    FROM recaudacion2.ctacte
                     WHERE CodiOfic = ? AND CuenCtct IN (${accPlaceholders}) ${fealCorteFilter}
-                `;
-                console.log('[DEBUG MariaDB] Historial Main:', qMain, mainParams);
-                await conn.query(qMain, mainParams);
+                    UNION ALL
+                    SELECT PeriCtct, BimeCtct, CuotDefa, FeveCtct, DetaCtct, DebeCtct, CredCtct, NumeApre, CodiFapa, PeriInfo, CodiConc, NumeAcpa, FeenAcpa as FechaPago
+                    FROM recahisto.histoctacte
+                    WHERE CodiOfic = ? AND CuenCtct IN (${accPlaceholders}) ${fealCorteFilter}
+                ) tmp
+                LEFT JOIN concepto c ON c.PeriInfo = tmp.PeriInfo AND c.CodiConc = tmp.CodiConc
+                ORDER BY tmp.PeriCtct DESC, tmp.BimeCtct DESC, tmp.FeveCtct DESC
+                LIMIT 2000
+            `;
+            
+            const results = await conn.query(histQuery, [...mainParams, ...mainParams]);
 
-                if (officeId == 1) {
-                    try {
-                        const qHisto = `
-                            INSERT IGNORE INTO tmp_ctacte_historica (PeriCtct, BimeCtct, CuotDefa, FeveCtct, DetaCtct, DebeCtct, CredCtct, RecaCtct, NumeApre, CodiFapa, PeriInfo, CodiConc, NumeAcpa, FechaPago)
-                            SELECT PeriCtct, BimeCtct, CuotDefa, FeveCtct, DetaCtct, DebeCtct, CredCtct, 0, NumeApre, CodiFapa, PeriInfo, CodiConc, NumeAcpa, FeenAcpa
-                            FROM recahisto.histoctacte
-                            WHERE CodiOfic = ? AND CuenCtct IN (${accPlaceholders}) ${fealCorteFilter}
-                        `;
-                        console.log('[DEBUG MariaDB] Historial Archive:', qHisto, mainParams);
-                        await conn.query(qHisto, mainParams);
-                    } catch (err) {
-                        console.log("Historical archive (recahisto) not available.");
+            const referenceDate = toDate ? new Date(toDate) : new Date();
+            const mappedResults = results.map(row => {
+                let reca = parseFloat(row.recaCtct || row.RecaCtct || 0);
+                const isPaid = row.numeAcpa && row.numeAcpa > 0 || row.NumeAcpa && row.NumeAcpa > 0;
+                const debe = parseFloat(row.debeCtct || row.DebeCtct || 0);
+
+                // If not paid and has no recargo yet, calculate manually (3% monthly)
+                if (!isPaid && reca === 0 && row.FeveCtct) {
+                    const dueDate = new Date(row.FeveCtct);
+                    if (referenceDate > dueDate) {
+                        const diffTime = Math.abs(referenceDate - dueDate);
+                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                        reca = debe * Math.ceil(diffDays / 30) * 0.03;
                     }
                 }
 
-                const resultsQuery = `
-                    SELECT 
-                        tmp.PeriCtct, tmp.BimeCtct, tmp.CuotDefa, tmp.FeveCtct, 
-                        IFNULL(c.DetaConc, tmp.DetaCtct) as DetaCtct, 
-                        tmp.DebeCtct, tmp.CredCtct, 
-                        tmp.RecaCtct,
-                        (tmp.DebeCtct + tmp.RecaCtct - tmp.CredCtct) as TotaCtct,
-                        tmp.NumeAcpa,
-                        tmp.FechaPago,
-                        tmp.NumeApre,
-                        tmp.CodiFapa,
-                        (tmp.NumeApre > 0) as hasApremio,
-                        (tmp.CodiFapa > 0) as hasPlan
-                    FROM tmp_ctacte_historica tmp
-                    LEFT JOIN concepto c ON c.PeriInfo = tmp.PeriInfo AND c.CodiConc = tmp.CodiConc
-                    ORDER BY tmp.PeriCtct DESC, tmp.BimeCtct DESC, tmp.FeveCtct DESC
-                    LIMIT 2000
-                `;
-                const results = await conn.query(resultsQuery);
+                const haber = parseFloat(row.credCtct || row.CredCtct || 0);
 
-                const referenceDate = toDate ? new Date(toDate) : new Date();
-                const mappedResults = results.map(row => {
-                    let reca = parseFloat(row.recaCtct || row.RecaCtct || 0);
-                    const isPaid = row.numeAcpa && row.numeAcpa > 0 || row.NumeAcpa && row.NumeAcpa > 0;
-                    const debe = parseFloat(row.debeCtct || row.DebeCtct || 0);
+                return {
+                    ...row,
+                    DebeCtct: debe,
+                    RecaCtct: reca,
+                    TotaCtct: isPaid ? 0 : (debe + reca - haber),
+                    hasApremio: parseInt(row.numeApre || row.NumeApre || 0) > 0,
+                    hasPlan: parseInt(row.codiFapa || row.CodiFapa || 0) > 0
+                };
+            });
 
-                    // If not paid and has no recargo yet, calculate manually (3% monthly)
-                    if (!isPaid && reca === 0 && row.FeveCtct) {
-                        const dueDate = new Date(row.FeveCtct);
-                        if (referenceDate > dueDate) {
-                            const diffTime = Math.abs(referenceDate - dueDate);
-                            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                            reca = debe * Math.ceil(diffDays / 30) * 0.03;
-                        }
-                    }
-
-                    const haber = parseFloat(row.credCtct || row.CredCtct || 0);
-
-                    return {
-                        ...row,
-                        DebeCtct: debe,
-                        RecaCtct: reca,
-                        TotaCtct: isPaid ? 0 : (debe + reca - haber),
-                        hasApremio: parseInt(row.numeApre || row.NumeApre || 0) > 0,
-                        hasPlan: parseInt(row.codiFapa || row.CodiFapa || 0) > 0
-                    };
-                });
-
-                res.json(mappedResults);
-            }
+            res.json(mappedResults);
         }
     } catch (err) {
-        console.error('Error in complex search:', err);
+        console.error('Error in complex search (ctacte):', err);
         res.status(500).json({ error: err.message });
     } finally {
         if (conn) conn.release();
@@ -561,7 +468,9 @@ router.get('/new/search', async (req, res) => {
                 if (referenceDate > dueDate) {
                     const diffTime = Math.abs(referenceDate - dueDate);
                     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                    reca = debe * Math.ceil(diffDays / 30) * 0.03;
+                    // REVERTIDO A 0.001 PARA COINCIDIR CON CAPTURA DE RENTAS
+                    const tasaDiaria = 0.001; 
+                    reca = debe * tasaDiaria * diffDays;
                 }
             } else {
                 reca = parseFloat(row.recactct_stored || row.RecaCtct_stored || 0);

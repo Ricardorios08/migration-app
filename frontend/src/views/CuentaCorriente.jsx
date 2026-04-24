@@ -1721,10 +1721,9 @@ ORDER BY gc.genctaancta DESC, gc.genctanrocta DESC;`}
                 .comparison-table th {
                     text-align: left;
                     padding: 0.75rem;
-                    background: var(--glass);
+                    background: var(--surface);
                     color: var(--text-dim);
-                    position: sticky;
-                    top: 0;
+                    border-bottom: 2px solid var(--border);
                 }
 
                 .comparison-table td {

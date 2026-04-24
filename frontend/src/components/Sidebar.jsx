@@ -1,11 +1,10 @@
-import { LayoutDashboard, Database, FileText, ChevronRight, ChevronLeft, PanelLeftClose, PanelLeftOpen, User, Search, Scale } from 'lucide-react';
+import { LayoutDashboard, Database, FileText, ChevronRight, ChevronLeft, PanelLeftClose, PanelLeftOpen, User, Search, Scale, Code } from 'lucide-react';
 
 const Sidebar = ({ currentView, setView, collapsed, setCollapsed }) => {
   return (
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
       <div className="sidebar-header">
-        <Database size={24} color="#2563eb" />
-        {!collapsed && <span>MigrationTool</span>}
+        {!collapsed && <span>Migration Nomade</span>}
         <button
           className="collapse-toggle"
           onClick={() => setCollapsed(!collapsed)}
@@ -31,9 +30,29 @@ const Sidebar = ({ currentView, setView, collapsed, setCollapsed }) => {
           title={collapsed ? "Cuenta Corriente" : ""}
         >
           <FileText size={20} />
-          {!collapsed && <span>Cta-Cte</span>}
+          {!collapsed && <span>Cta-Cte (PRUEBA)</span>}
           {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
         </div>
+        <div
+          className={`menu-item ${currentView === 'ctacte_fn' ? 'active' : ''}`}
+          onClick={() => setView('ctacte_fn')}
+          title={collapsed ? "Cuenta Corriente (fn)" : ""}
+        >
+          <FileText size={20} color="#3b82f6" />
+          {!collapsed && <span style={{ color: '#3b82f6' }}>Cta-Cte (fn)</span>}
+          {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
+        </div>
+{/*
+        <div
+          className={`menu-item ${currentView === 'ctacte2' ? 'active' : ''}`}
+          onClick={() => setView('ctacte2')}
+          title={collapsed ? "Cta-Cte (fnDeuda)" : ""}
+        >
+          <Code size={20} color="#f59e0b" />
+          {!collapsed && <span style={{ color: '#f59e0b' }}>Cta-Cte (SP)</span>}
+          {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
+        </div>
+*/}
         <div
           className={`menu-item ${currentView === 'apremios' ? 'active' : ''}`}
           onClick={() => setView('apremios')}
@@ -41,6 +60,15 @@ const Sidebar = ({ currentView, setView, collapsed, setCollapsed }) => {
         >
           <Scale size={20} />
           {!collapsed && <span>Apremios</span>}
+          {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
+        </div>
+        <div
+          className={`menu-item ${currentView === 'comparison' ? 'active' : ''}`}
+          onClick={() => setView('comparison')}
+          title={collapsed ? "Compara Ctacte Listado" : ""}
+        >
+          <LayoutDashboard size={20} color="#10b981" />
+          {!collapsed && <span>Compara Ctacte Listado</span>}
           {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
         </div>
         <div

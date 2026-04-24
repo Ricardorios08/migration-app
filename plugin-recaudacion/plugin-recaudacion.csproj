@@ -1,0 +1,848 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{F4FE4DB4-F704-4C1D-A035-E991DEBE01CD}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AssemblyName>plugin-recaudacion</AssemblyName>
+    <TargetFrameworkVersion>v4.6.1</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <RootNamespace>InfoGov</RootNamespace>
+    <TargetFrameworkProfile />
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="infogov-core">
+      <HintPath>lib\infogov-core.dll</HintPath>
+    </Reference>
+    <Reference Include="infogov-metro">
+      <HintPath>lib\infogov-metro.dll</HintPath>
+    </Reference>
+    <Reference Include="infogov-resources">
+      <HintPath>lib\infogov-resources.dll</HintPath>
+    </Reference>
+    <Reference Include="plugin-catastro">
+      <HintPath>lib\plugin-catastro.dll</HintPath>
+    </Reference>
+    <Reference Include="plugin-infogov">
+      <HintPath>lib\plugin-infogov.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="AssemblyInfo.cs" />
+    <Compile Include="FabricaExpertos.cs" />
+    <Compile Include="FabricaVentanas.cs" />
+    <Compile Include="Modulo.cs" />
+    <Compile Include="ModuloRecaudacion.cs" />
+    <Compile Include="Pnames.cs" />
+    <Compile Include="Rnames.cs" />
+    <Compile Include="Wnames.cs" />
+    <Compile Include="ar\com\epagos\api\1solicitud_pago_recurrente_suscripcionCompletedEven.cs" />
+    <Compile Include="ar\com\epagos\api\ConfFormaPago.cs" />
+    <Compile Include="ar\com\epagos\api\CuentasCliente.cs" />
+    <Compile Include="ar\com\epagos\api\CuentasClientes.cs" />
+    <Compile Include="ar\com\epagos\api\DatosClienteCuentaRecurrente.cs" />
+    <Compile Include="ar\com\epagos\api\DatosClienteRecurrente.cs" />
+    <Compile Include="ar\com\epagos\api\DatosContracargo.cs" />
+    <Compile Include="ar\com\epagos\api\DatosContracargoRespuesta.cs" />
+    <Compile Include="ar\com\epagos\api\DatosContribuyenteObtenerPago.cs" />
+    <Compile Include="ar\com\epagos\api\DatosCredenciales.cs" />
+    <Compile Include="ar\com\epagos\api\DatosCredencialesPago.cs" />
+    <Compile Include="ar\com\epagos\api\DatosFormaPago.cs" />
+    <Compile Include="ar\com\epagos\api\DatosFormaPagoEntidades.cs" />
+    <Compile Include="ar\com\epagos\api\DatosFormaPagoObtenerPago.cs" />
+    <Compile Include="ar\com\epagos\api\DatosOperacionPago.cs" />
+    <Compile Include="ar\com\epagos\api\DatosPagadorObtenerPago.cs" />
+    <Compile Include="ar\com\epagos\api\DatosPagadorPago.cs" />
+    <Compile Include="ar\com\epagos\api\DatosPago.cs" />
+    <Compile Include="ar\com\epagos\api\DatosPagoRespuesta.cs" />
+    <Compile Include="ar\com\epagos\api\DatosPagosAdicionales.cs" />
+    <Compile Include="ar\com\epagos\api\DatosPagoTarjeta.cs" />
+    <Compile Include="ar\com\epagos\api\DatosRendicion.cs" />
+    <Compile Include="ar\com\epagos\api\DatosRendicionRespuesta.cs" />
+    <Compile Include="ar\com\epagos\api\DatosSuscripcion.cs" />
+    <Compile Include="ar\com\epagos\api\DatosTurno.cs" />
+    <Compile Include="ar\com\epagos\api\DetalleContracargo.cs" />
+    <Compile Include="ar\com\epagos\api\DetallePago.cs" />
+    <Compile Include="ar\com\epagos\api\DetalleRendicion.cs" />
+    <Compile Include="ar\com\epagos\api\DireccionTarjeta.cs" />
+    <Compile Include="ar\com\epagos\api\DomicilioPagador.cs" />
+    <Compile Include="ar\com\epagos\api\EPagos.cs" />
+    <Compile Include="ar\com\epagos\api\EstadoFormaPago.cs" />
+    <Compile Include="ar\com\epagos\api\FechaVencimiento.cs" />
+    <Compile Include="ar\com\epagos\api\generar_qr_vinculadoCompletedEventArgs.cs" />
+    <Compile Include="ar\com\epagos\api\generar_qr_vinculadoCompletedEventHandler.cs" />
+    <Compile Include="ar\com\epagos\api\IdentificacionPagador.cs" />
+    <Compile Include="ar\com\epagos\api\IdentificacionTarjeta.cs" />
+    <Compile Include="ar\com\epagos\api\LogosFormaPago.cs" />
+    <Compile Include="ar\com\epagos\api\MedioRecurrente.cs" />
+    <Compile Include="ar\com\epagos\api\obtener_contracargosCompletedEventArgs.cs" />
+    <Compile Include="ar\com\epagos\api\obtener_contracargosCompletedEventHandler.cs" />
+    <Compile Include="ar\com\epagos\api\obtener_cuentas_clienteCompletedEventArgs.cs" />
+    <Compile Include="ar\com\epagos\api\obtener_cuentas_clienteCompletedEventHandler.cs" />
+    <Compile Include="ar\com\epagos\api\obtener_entidades_pagoCompletedEventArgs.cs" />
+    <Compile Include="ar\com\epagos\api\obtener_entidades_pagoCompletedEventHandler.cs" />
+    <Compile Include="ar\com\epagos\api\obtener_pagosCompletedEventArgs.cs" />
+    <Compile Include="ar\com\epagos\api\obtener_pagosCompletedEventHandler.cs" />
+    <Compile Include="ar\com\epagos\api\obtener_pagos_adicionalesCompletedEventArgs.cs" />
+    <Compile Include="ar\com\epagos\api\obtener_pagos_adicionalesCompletedEventHandler.cs" />
+    <Compile Include="ar\com\epagos\api\obtener_rendicionesCompletedEventArgs.cs" />
+    <Compile Include="ar\com\epagos\api\obtener_rendicionesCompletedEventHandler.cs" />
+    <Compile Include="ar\com\epagos\api\obtener_tarjetas_clienteCompletedEventArgs.cs" />
+    <Compile Include="ar\com\epagos\api\obtener_tarjetas_clienteCompletedEventHandler.cs" />
+    <Compile Include="ar\com\epagos\api\obtener_tokenCompletedEventArgs.cs" />
+    <Compile Include="ar\com\epagos\api\obtener_tokenCompletedEventHandler.cs" />
+    <Compile Include="ar\com\epagos\api\OperacionPagoLote.cs" />
+    <Compile Include="ar\com\epagos\api\OperacionQR.cs" />
+    <Compile Include="ar\com\epagos\api\PagoLote.cs" />
+    <Compile Include="ar\com\epagos\api\PagosAdicionales.cs" />
+    <Compile Include="ar\com\epagos\api\pago_loteCompletedEventArgs.cs" />
+    <Compile Include="ar\com\epagos\api\pago_loteCompletedEventHandler.cs" />
+    <Compile Include="ar\com\epagos\api\RespuestaFormaPago.cs" />
+    <Compile Include="ar\com\epagos\api\RespuestaLote.cs" />
+    <Compile Include="ar\com\epagos\api\solicitud_pagoCompletedEventArgs.cs" />
+    <Compile Include="ar\com\epagos\api\solicitud_pagoCompletedEventHandler.cs" />
+    <Compile Include="ar\com\epagos\api\solicitud_pago_loteCompletedEventArgs.cs" />
+    <Compile Include="ar\com\epagos\api\solicitud_pago_loteCompletedEventHandler.cs" />
+    <Compile Include="ar\com\epagos\api\solicitud_pago_recurrenteCompletedEventArgs.cs" />
+    <Compile Include="ar\com\epagos\api\solicitud_pago_recurrenteCompletedEventHandler.cs" />
+    <Compile Include="ar\com\epagos\api\solicitud_pago_recurrente_suscripcionCompletedEven.cs" />
+    <Compile Include="ar\com\epagos\api\SuscripcionCliente.cs" />
+    <Compile Include="ar\com\epagos\api\TarjetasCliente.cs" />
+    <Compile Include="ar\com\epagos\api\TarjetasClientes.cs" />
+    <Compile Include="ar\com\epagos\api\TelefonoPagador.cs" />
+    <Compile Include="ar\com\epagos\api\TipoFormaPago.cs" />
+    <Compile Include="ar\com\epagos\api\TipoFormaPagoObtenerPago.cs" />
+    <Compile Include="ar\com\epagos\api\TipoLote.cs" />
+    <Compile Include="ar\com\epagos\api\TipoOperacion.cs" />
+    <Compile Include="ar\com\epagos\api\TipoOperacionRec.cs" />
+    <Compile Include="Entidades\AdministracionCorreos.cs" />
+    <Compile Include="Entidades\AdministracionCorreosGUAY.cs" />
+    <Compile Include="Entidades\AforoComeSM.cs" />
+    <Compile Include="Entidades\AsignacionOrdenLiqu.cs" />
+    <Compile Include="Entidades\BancoRecaudacion.cs" />
+    <Compile Include="Entidades\Beneficiario.cs" />
+    <Compile Include="Entidades\BoletoAsociado.cs" />
+    <Compile Include="Entidades\BoletoAsociadoMP.cs" />
+    <Compile Include="Entidades\BoletoCaja.cs" />
+    <Compile Include="Entidades\BoletoCajaMP.cs" />
+    <Compile Include="Entidades\BoletoGrupo.cs" />
+    <Compile Include="Entidades\BoletoGrupoMP.cs" />
+    <Compile Include="Entidades\ComposicionDetalle.cs" />
+    <Compile Include="Entidades\ComposicionDetalleMP.cs" />
+    <Compile Include="Entidades\Concepto.cs" />
+    <Compile Include="Entidades\Configuraciones.cs" />
+    <Compile Include="Entidades\ControlCajaGuay.cs" />
+    <Compile Include="Entidades\CuentaCome.cs" />
+    <Compile Include="Entidades\DebitoAutomatico.cs" />
+    <Compile Include="Entidades\DescuentosConcepto.cs" />
+    <Compile Include="Entidades\DetaCuentaCome.cs" />
+    <Compile Include="Entidades\DetalleBoleto.cs" />
+    <Compile Include="Entidades\DetalleBoletoMP.cs" />
+    <Compile Include="Entidades\DTOAcrePagoMP.cs" />
+    <Compile Include="Entidades\DTOAforo.cs" />
+    <Compile Include="Entidades\DTOCargaAforo.cs" />
+    <Compile Include="Entidades\DTOServInmu.cs" />
+    <Compile Include="Entidades\d_inmueble.cs" />
+    <Compile Include="Entidades\EmisionMailSM.cs" />
+    <Compile Include="Entidades\EmisionMasivaComercios.cs" />
+    <Compile Include="Entidades\EmisionMasivaComercioSM.cs" />
+    <Compile Include="Entidades\EmisionMasivaTasas.cs" />
+    <Compile Include="Entidades\EmisionMasivaTasasM.cs" />
+    <Compile Include="Entidades\EnteReca.cs" />
+    <Compile Include="Entidades\EnteRecaMP.cs" />
+    <Compile Include="Entidades\EnteRecaudador.cs" />
+    <Compile Include="Entidades\Excepcion.cs" />
+    <Compile Include="Entidades\Excepciones.cs" />
+    <Compile Include="Entidades\ExcepcionesComer.cs" />
+    <Compile Include="Entidades\Feriado.cs" />
+    <Compile Include="Entidades\FormaPago.cs" />
+    <Compile Include="Entidades\FormaPagoMP.cs" />
+    <Compile Include="Entidades\InteresRecargo.cs" />
+    <Compile Include="Entidades\LoteEpagos.cs" />
+    <Compile Include="Entidades\MailBole.cs" />
+    <Compile Include="Entidades\MailMasivoGuaymallen.cs" />
+    <Compile Include="Entidades\MailMasivoTunuyan.cs" />
+    <Compile Include="Entidades\Migraciones.cs" />
+    <Compile Include="Entidades\ModificarFormaPago.cs" />
+    <Compile Include="Entidades\ParametrosGenerales.cs" />
+    <Compile Include="Entidades\ParametrosRentas.cs" />
+    <Compile Include="Entidades\ResumenBoletoPagoMP.cs" />
+    <Compile Include="Entidades\ResumenBoletosAnuladosMP.cs" />
+    <Compile Include="Entidades\ResumenBoletosPagadosMP.cs" />
+    <Compile Include="Entidades\ResumenCajaMP.cs" />
+    <Compile Include="Entidades\ResumenFinalCajaMP.cs" />
+    <Compile Include="Entidades\ResumenFormaPagoMP.cs" />
+    <Compile Include="Entidades\ResumenTiposPagoMP.cs" />
+    <Compile Include="Entidades\ServiciosDerechosVarios.cs" />
+    <Compile Include="Entidades\ServicioVario.cs" />
+    <Compile Include="Entidades\Ticket.cs" />
+    <Compile Include="Entidades\TipoFacilidadPago.cs" />
+    <Compile Include="Entidades\TipoMovimientos.cs" />
+    <Compile Include="Entidades\TipoPago.cs" />
+    <Compile Include="Entidades\UsuarioFacilidad.cs" />
+    <Compile Include="Entidades\UsuarioOperador.cs" />
+    <Compile Include="Entidades\AforosDeudoresVarios\AforoDV.cs" />
+    <Compile Include="Entidades\AforosDeudoresVarios\AforoDVMG.cs" />
+    <Compile Include="Entidades\AforosDeudoresVarios\DeudorVario.cs" />
+    <Compile Include="Entidades\AforosDeudoresVarios\ServicioAforoDVMG.cs" />
+    <Compile Include="Entidades\AforosDeudoresVarios\ServicioAforoDVMGSeleccionado.cs" />
+    <Compile Include="Entidades\CuentaCorriente\ApreCtaCte.cs" />
+    <Compile Include="Entidades\CuentaCorriente\BoleApreCtaCte.cs" />
+    <Compile Include="Entidades\CuentaCorriente\CCComun.cs" />
+    <Compile Include="Entidades\CuentaCorriente\CCMaipu.cs" />
+    <Compile Include="Entidades\CuentaCorriente\CCMG.cs" />
+    <Compile Include="Entidades\CuentaCorriente\ComposicionApreCtaCte.cs" />
+    <Compile Include="Entidades\CuentaCorriente\CongeladoDetaMP.cs" />
+    <Compile Include="Entidades\CuentaCorriente\CongeladoMP.cs" />
+    <Compile Include="Entidades\CuentaCorriente\CtaCte.cs" />
+    <Compile Include="Entidades\CuentaCorriente\DatoBoleCtaCte.cs" />
+    <Compile Include="Entidades\CuentaCorriente\DetaBoleCtaCte.cs" />
+    <Compile Include="Entidades\CuentaCorriente\DetaCCMaipu.cs" />
+    <Compile Include="Entidades\CuentaCorriente\DetaFapaCtaCte.cs" />
+    <Compile Include="Entidades\CuentaCorriente\DetaPagoCtaCte.cs" />
+    <Compile Include="Entidades\CuentaCorriente\DTOCtaCte.cs" />
+    <Compile Include="Entidades\CuentaCorriente\DTODetallesCuentaReporteMP.cs" />
+    <Compile Include="Entidades\CuentaCorriente\EstadoSeleccion.cs" />
+    <Compile Include="Entidades\CuentaCorriente\FaciPagoCtaCte.cs" />
+    <Compile Include="Entidades\CuentaCorriente\InstApreCtaCte.cs" />
+    <Compile Include="Entidades\CuentaCorriente\OficinaCtacte.cs" />
+    <Compile Include="Entidades\CuentaCorriente\TipoResultadoCtaCte.cs" />
+    <Compile Include="Entidades\CuentaCorriente\TipoResumenMP.cs" />
+    <Compile Include="Entidades\DerechosVarios\BoletoEmitidoDerechoVarioMP.cs" />
+    <Compile Include="Entidades\DerechosVarios\DerechoVarioMP.cs" />
+    <Compile Include="Entidades\DerechosVarios\DerechoVarioPadreMP.cs" />
+    <Compile Include="Entidades\DerechosVarios\ServicioDerechoVarioMP.cs" />
+    <Compile Include="Entidades\DerechosVarios\SevicioDerechoVarioSeleccionadoMP.cs" />
+    <Compile Include="Entidades\EmisionBoleto\CuotasEB.cs" />
+    <Compile Include="Entidades\EmisionBoleto\DatosBoletoAnteMP.cs" />
+    <Compile Include="Entidades\EmisionBoleto\DatosBoletoCementerioMP.cs" />
+    <Compile Include="Entidades\EmisionBoleto\DatosBoletoComercioMP.cs" />
+    <Compile Include="Entidades\EmisionBoleto\DatosBoletoDeudVariMP.cs" />
+    <Compile Include="Entidades\EmisionBoleto\DatosBoletoInmuebleMP.cs" />
+    <Compile Include="Entidades\EmisionBoleto\DatosBoletoPubliMP.cs" />
+    <Compile Include="Entidades\EmisionBoleto\DatosBoletoTransitoMP.cs" />
+    <Compile Include="Entidades\EmisionBoleto\DetaBoleMP.cs" />
+    <Compile Include="Entidades\EmisionBoleto\EBMaipu.cs" />
+    <Compile Include="Entidades\EmisionBoleto\EmiBole.cs" />
+    <Compile Include="Entidades\PlanPago\CuotaPlan.cs" />
+    <Compile Include="Entidades\PlanPago\DetaFapaMP.cs" />
+    <Compile Include="Entidades\PlanPago\DTOFaciPagoMP.cs" />
+    <Compile Include="Entidades\PlanPago\PlanPago.cs" />
+    <Compile Include="Entidades\PlanPago\PlanPagoMP.cs" />
+    <Compile Include="Entidades\PlanPago\TipoFirmanteMP.cs" />
+    <Compile Include="Expertos\ExpAdministracionCorreos.cs" />
+    <Compile Include="Expertos\ExpAdministracionCorreosGUAY.cs" />
+    <Compile Include="Expertos\ExpAforoComeSM.cs" />
+    <Compile Include="Expertos\ExpAsignacionOrdenLiqu.cs" />
+    <Compile Include="Expertos\ExpBancoRecaudacion.cs" />
+    <Compile Include="Expertos\ExpBeneficiarios.cs" />
+    <Compile Include="Expertos\ExpBoletoCaja.cs" />
+    <Compile Include="Expertos\ExpBoletoCajaGuay.cs" />
+    <Compile Include="Expertos\ExpBoletoCajaMP.cs" />
+    <Compile Include="Expertos\ExpBoletoCajaRV.cs" />
+    <Compile Include="Expertos\ExpBoletoGrupo.cs" />
+    <Compile Include="Expertos\ExpBoletoGrupoMP.cs" />
+    <Compile Include="Expertos\ExpBoletoGrupoRV.cs" />
+    <Compile Include="Expertos\ExpCobranzaPorConcepto.cs" />
+    <Compile Include="Expertos\ExpConcepto.cs" />
+    <Compile Include="Expertos\ExpConfiguracion.cs" />
+    <Compile Include="Expertos\ExpControlCajaGuay.cs" />
+    <Compile Include="Expertos\ExpCuentaCome.cs" />
+    <Compile Include="Expertos\ExpDebitoAutomatico.cs" />
+    <Compile Include="Expertos\ExpDescuentoBonoSM.cs" />
+    <Compile Include="Expertos\ExpDescuentosConcepto.cs" />
+    <Compile Include="Expertos\ExpEmisionMasivaAntenasGUAY.cs" />
+    <Compile Include="Expertos\ExpEmisionMasivaCementerioGUAY.cs" />
+    <Compile Include="Expertos\ExpEmisionMasivaCementerioSM.cs" />
+    <Compile Include="Expertos\ExpEmisionMasivaComerciosGUAY.cs" />
+    <Compile Include="Expertos\ExpEmisionMasivaComercioSM.cs" />
+    <Compile Include="Expertos\ExpEmisionMasivaPublicidadGUAY.cs" />
+    <Compile Include="Expertos\ExpEmisionMasivaTasas.cs" />
+    <Compile Include="Expertos\ExpEmisionMasivaTasasM.cs" />
+    <Compile Include="Expertos\ExpEmisionMasivaTasasSM.cs" />
+    <Compile Include="Expertos\ExpEnteReca.cs" />
+    <Compile Include="Expertos\ExpEnviarMailMasivoTunuyan.cs" />
+    <Compile Include="Expertos\ExpEnvioMasivoEmailsSM.cs" />
+    <Compile Include="Expertos\ExpExcepcion.cs" />
+    <Compile Include="Expertos\ExpExcepciones.cs" />
+    <Compile Include="Expertos\ExpExcepcionesComer.cs" />
+    <Compile Include="Expertos\ExpFeriado.cs" />
+    <Compile Include="Expertos\ExpGeneracionArchivoBanelcoLink.cs" />
+    <Compile Include="Expertos\ExpImpresionTicket.cs" />
+    <Compile Include="Expertos\ExpIngresoCaja.cs" />
+    <Compile Include="Expertos\ExpIngresoMultiple.cs" />
+    <Compile Include="Expertos\ExpIngresoMultipleMP.cs" />
+    <Compile Include="Expertos\ExpIngresoMultipleRV.cs" />
+    <Compile Include="Expertos\ExpIngresoRecaExterno.cs" />
+    <Compile Include="Expertos\ExpInteresRecargo.cs" />
+    <Compile Include="Expertos\ExpMigraciones.cs" />
+    <Compile Include="Expertos\ExpModificarFormaPago.cs" />
+    <Compile Include="Expertos\ExpMultasTransitoGuay.cs" />
+    <Compile Include="Expertos\ExpPagosVarios.cs" />
+    <Compile Include="Expertos\ExpParametrosGenerales.cs" />
+    <Compile Include="Expertos\ExpParametrosRentas.cs" />
+    <Compile Include="Expertos\ExpReimpresionTicket.cs" />
+    <Compile Include="Expertos\ExpRepControlCajaGuay.cs" />
+    <Compile Include="Expertos\ExpServiciosDerechosVarios.cs" />
+    <Compile Include="Expertos\ExpServicioVario.cs" />
+    <Compile Include="Expertos\ExpTipoFacilidadPago.cs" />
+    <Compile Include="Expertos\ExpTipoMovimientos.cs" />
+    <Compile Include="Expertos\ExpTipoPago.cs" />
+    <Compile Include="Expertos\ExpUsuarioFacilidad.cs" />
+    <Compile Include="Expertos\ImpresoraPredeterminada.cs" />
+    <Compile Include="Expertos\AforosDeudoresVarios\ExpAforoDV.cs" />
+    <Compile Include="Expertos\AforosDeudoresVarios\ExpAforoDVMG.cs" />
+    <Compile Include="Expertos\AforosDeudoresVarios\ExpDeudorVario.cs" />
+    <Compile Include="Expertos\CuentaCorriente\ExpCCComun.cs" />
+    <Compile Include="Expertos\CuentaCorriente\ExpCCMaipu.cs" />
+    <Compile Include="Expertos\CuentaCorriente\ExpCCMG.cs" />
+    <Compile Include="Expertos\CuentaCorriente\ExpCuentaCorriente.cs" />
+    <Compile Include="Expertos\DerechosVarios\ExpDerechoVario.cs" />
+    <Compile Include="Expertos\DerechosVarios\ExpDerechoVarioMP.cs" />
+    <Compile Include="Expertos\DerechosVarios\ExpDerechoVarioPadreMP.cs" />
+    <Compile Include="Expertos\EmisionBoleto\ExpEBMaipu.cs" />
+    <Compile Include="Expertos\EmisionBoleto\ExpEmiBole.cs" />
+    <Compile Include="Expertos\PlanPago\ExpPlanPago.cs" />
+    <Compile Include="Expertos\PlanPago\ExpPlanPagoMP.cs" />
+    <Compile Include="Properties\Resources.cs" />
+    <Compile Include="Properties\Settings.cs" />
+    <Compile Include="Reportes\BoletoAntenaGuay\CuponAntena.cs" />
+    <Compile Include="Reportes\BoletoAntenaGuay\CuponAntenaAux.cs" />
+    <Compile Include="Reportes\BoletoAntenaGuay\CuponesAntena.cs" />
+    <Compile Include="Reportes\BoletoAntenaGuay\DTOBoletoAntenaGuay.cs" />
+    <Compile Include="Reportes\BoletoAntenaGuay\irepBoletoAntenaGuay.cs" />
+    <Compile Include="Reportes\BoletoAntenaGuay\irepBoletoAntenaGuay1.cs" />
+    <Compile Include="Reportes\BoletoCementerioGuay\CuponCementerio.cs" />
+    <Compile Include="Reportes\BoletoCementerioGuay\CuponCementerioAux.cs" />
+    <Compile Include="Reportes\BoletoCementerioGuay\CuponesCementerio.cs" />
+    <Compile Include="Reportes\BoletoCementerioGuay\DTOBoletoCementerioGuay.cs" />
+    <Compile Include="Reportes\BoletoCementerioGuay\DTOSubRubrosCeme.cs" />
+    <Compile Include="Reportes\BoletoCementerioGuay\irepBoletoComenterioGuay.cs" />
+    <Compile Include="Reportes\BoletoCementerioGuay\SubRubrosCementerio.cs" />
+    <Compile Include="Reportes\BoletoCementerioSM\CuponesBoleCemenSM.cs" />
+    <Compile Include="Reportes\BoletoCementerioSM\DifuntosSM.cs" />
+    <Compile Include="Reportes\BoletoCementerioSM\DTOBoletoCemenSM.cs" />
+    <Compile Include="Reportes\BoletoCementerioSM\irepBoletoCemenSM.cs" />
+    <Compile Include="Reportes\BoletoComercioGuay\CuponComercio.cs" />
+    <Compile Include="Reportes\BoletoComercioGuay\CuponComercioAux.cs" />
+    <Compile Include="Reportes\BoletoComercioGuay\DTOBoletoComercioGuay.cs" />
+    <Compile Include="Reportes\BoletoComercioGuay\DTOSubRubros.cs" />
+    <Compile Include="Reportes\BoletoComercioGuay\irepBoletoComercioGuay.cs" />
+    <Compile Include="Reportes\BoletoComercioGuay\irepBoletoComercioGuay1.cs" />
+    <Compile Include="Reportes\BoletoComercioSM\CuponesBoleComerSM.cs" />
+    <Compile Include="Reportes\BoletoComercioSM\DTOBoletoComerSM.cs" />
+    <Compile Include="Reportes\BoletoComercioSM\irepBoletoComerSM.cs" />
+    <Compile Include="Reportes\BoletoPublicidadGuay\CuponesPublicidad.cs" />
+    <Compile Include="Reportes\BoletoPublicidadGuay\CuponPublicidad.cs" />
+    <Compile Include="Reportes\BoletoPublicidadGuay\CuponPublicidadAux.cs" />
+    <Compile Include="Reportes\BoletoPublicidadGuay\DTOBoletoPublicidadGuay.cs" />
+    <Compile Include="Reportes\BoletoPublicidadGuay\irepBoletoPublicidadGuay.cs" />
+    <Compile Include="Reportes\BoletoRivadavia\CuponesRivadaviaInmu.cs" />
+    <Compile Include="Reportes\BoletoRivadavia\DTOBoletoRivadaviaInmu.cs" />
+    <Compile Include="Reportes\BoletoRivadavia\irepBoletoRivadaviaInmu.cs" />
+    <Compile Include="Reportes\BoletoSM\CuponesBoleInmuSM.cs" />
+    <Compile Include="Reportes\BoletoSM\DTOBoletoInmuSM.cs" />
+    <Compile Include="Reportes\BoletoSM\irepBoletoInmuSM.cs" />
+    <Compile Include="Reportes\Certificados\Maipu\CertificadoExencion\irepCertExenMP.cs" />
+    <Compile Include="Reportes\Certificados\Maipu\CertificadoExencion\repCertExenMP.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Reportes\Certificados\SanMartin\CertificadoExencion\irepCertExenSM.cs" />
+    <Compile Include="Reportes\Certificados\SanMartin\CertificadoExencion\repCertExenSM.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Reportes\CobranzaPorConcepto\DTOCobranzaPorConcepto.cs" />
+    <Compile Include="Reportes\CobranzaPorConcepto\irepCobranzaPorConcepto.cs" />
+    <Compile Include="Reportes\CobranzaPorConcepto\repCobranzaPorConcepto.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Reportes\ControlCajaGuay\DTOControlCajaGuay.cs" />
+    <Compile Include="Reportes\ControlCajaGuay\DTOEnteReca.cs" />
+    <Compile Include="Reportes\ControlCajaGuay\DTOPagos.cs" />
+    <Compile Include="Reportes\ControlCajaGuay\irepControlCajaGuay.cs" />
+    <Compile Include="Reportes\ControlCajaGuay\repControlCajaGuay.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Reportes\CuentaCorriente\DTOReporte.cs" />
+    <Compile Include="Reportes\CuentaCorriente\TipoReporte.cs" />
+    <Compile Include="Reportes\CuentaCorriente\Maipu\ReportesMP.cs" />
+    <Compile Include="Reportes\DebitoAutomatico\DTODebitoAutomatico.cs" />
+    <Compile Include="Reportes\DebitoAutomatico\repDebitoAutomatico.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Reportes\EmisionBoleto\DTOEmiBole.cs" />
+    <Compile Include="Reportes\EmisionBoleto\DTOEmiBoleDereVario.cs" />
+    <Compile Include="Reportes\EmisionBoleto\DTOImpresionPlanPago.cs" />
+    <Compile Include="Reportes\EmisionBoleto\IBoleto.cs" />
+    <Compile Include="Reportes\EmisionBoleto\TipoEB.cs" />
+    <Compile Include="Reportes\EmisionBoleto\Maipu\RepEBMP.cs" />
+    <Compile Include="Reportes\GeneracionArchivoBanelcoLink\DTOGeneracionArchivoBanelcoLink.cs" />
+    <Compile Include="Reportes\GeneracionArchivoBanelcoLink\irepGeneracionArchivoBanelcoLink.cs" />
+    <Compile Include="Reportes\GeneracionArchivoBanelcoLink\repGeneracionArchivoBanelcoLink.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Reportes\IngresoCaja\DTOIngresoCaja.cs" />
+    <Compile Include="Reportes\IngresoCaja\irepIngresoCaja.cs" />
+    <Compile Include="Reportes\IngresoCaja\MoviCaja.cs" />
+    <Compile Include="Reportes\IngresoCaja\repIngresoCaja.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Reportes\IngresoRecaExterno\DTOIngresoRecaExterno.cs" />
+    <Compile Include="Reportes\IngresoRecaExterno\irepIngresoRecaExterno.cs" />
+    <Compile Include="Reportes\IngresoRecaExterno\repIngresoRecaExterno.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Reportes\Maipu\DTORepCajaDiariaMP.cs" />
+    <Compile Include="Reportes\Maipu\DTORepMP.cs" />
+    <Compile Include="Reportes\Maipu\CajaDiaria\irepCDMP.cs" />
+    <Compile Include="Reportes\Maipu\CajaDiaria\RepCajaDiariaMP.cs" />
+    <Compile Include="Reportes\Maipu\CajaDiaria\repCDMP.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Reportes\Maipu\ConsultaBoleto\DTOConsultaBoletoMP.cs" />
+    <Compile Include="Reportes\Maipu\ConsultaBoleto\DTODetaBoleMP.cs" />
+    <Compile Include="Reportes\Maipu\ConsultaBoleto\DTOServiciosVariosMP.cs" />
+    <Compile Include="Reportes\Maipu\ConsultaBoleto\irepConsultaBoletoMP.cs" />
+    <Compile Include="Reportes\Maipu\ConsultaBoleto\RepCBMP.cs" />
+    <Compile Include="Reportes\Maipu\ConsultaBoleto\repConsultaBoletoMP.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Reportes\Maipu\ReimpresionPP\CuotaFapa.cs" />
+    <Compile Include="Reportes\Maipu\ReimpresionPP\DTOReimprimirFPMP.cs" />
+    <Compile Include="Reportes\Maipu\ReimpresionPP\irepReimpresionPPMP.cs" />
+    <Compile Include="Reportes\Maipu\ReimpresionPP\repReimpresionPPMP.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Reportes\MultasTransitoGuay\DTOMultasTransitoGuay.cs" />
+    <Compile Include="Reportes\MultasTransitoGuay\irepMultasTransitoGuay.cs" />
+    <Compile Include="Reportes\MultasTransitoGuay\repMultasTransitoGuay.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Reportes\PagosWeb\DTO_PagosVarios.cs" />
+    <Compile Include="Reportes\PagosWeb\DTO_PagosWeb_Detalle.cs" />
+    <Compile Include="Reportes\PagosWeb\irepPagosVarios.cs" />
+    <Compile Include="Reportes\PagosWeb\repPagosVarios.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Reportes\PlanillaDistribucion\DTOPlanillaDistribucionBoletos.cs" />
+    <Compile Include="Reportes\PlanillaDistribucion\irepPlanillaDistribucionBoletos.cs" />
+    <Compile Include="Reportes\RegistroCorreosWeb\DTORegistroCorreosWeb.cs" />
+    <Compile Include="Reportes\RegistroCorreosWeb\irepRegistroCorreosWeb.cs" />
+    <Compile Include="Reportes\RegistroCorreosWeb\repRegistroCorreosWeb.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Reportes\RegistroEnvioCorreos\DTORegistroEnvioCorreos.cs" />
+    <Compile Include="Reportes\RegistroEnvioCorreos\irepRegistroEnvioCorreos.cs" />
+    <Compile Include="Reportes\RegistroEnvioCorreos\irepRegistroEnvioCorreosTunuyan.cs" />
+    <Compile Include="Reportes\RegistroEnvioCorreos\repRegistroEnvioCorreos.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Reportes\SanMartin\DescuentoBono\irepDescuentoBonoSM.cs" />
+    <Compile Include="Reportes\SanMartin\DescuentoBono\repDescuentoBonoSM.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Reportes\Tasas\CuponAux.cs" />
+    <Compile Include="Reportes\Tasas\Cupones.cs" />
+    <Compile Include="Reportes\Tasas\CuponesComercio.cs" />
+    <Compile Include="Reportes\Tasas\CuponTasa.cs" />
+    <Compile Include="Reportes\Tasas\DTOTasasRepo.cs" />
+    <Compile Include="Reportes\Tasas\irepBoletoTasa.cs" />
+    <Compile Include="Reportes\Tasas\irepBoletoTasa1.cs" />
+    <Compile Include="Reportes\Tasas\SubRubrosComercio.cs" />
+    <Compile Include="Ventanas\detailAdministracionCorreos.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Ventanas\detailAdministracionCorreosGUAY.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Ventanas\detailAsignacionOrdenLiqu.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Ventanas\detailBancoRecaudacion.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Ventanas\detailConcepto.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Ventanas\detailDebitoAutomatico.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Ventanas\detailDescuentosConcepto.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Ventanas\detailExcepcion.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Ventanas\detailExcepciones.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Ventanas\detailExcepcionesComer.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Ventanas\detailFeriado.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Ventanas\detailInteresRecargo.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Ventanas\detailModificarFormaPago.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Ventanas\detailParametrosRentas.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Ventanas\detailServiciosDerechosVarios.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Ventanas\detailTipoFacilidadPago.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Ventanas\detailTipoMovimientos.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Ventanas\detailTipoPago.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Ventanas\detailUsuarioFacilidad.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Ventanas\dlgCargaAforoSM.cs" />
+    <Compile Include="Ventanas\frmAforoComeSM.cs" />
+    <Compile Include="Ventanas\frmBeneficiariosLicencias.cs" />
+    <Compile Include="Ventanas\frmConfiguraciones.cs" />
+    <Compile Include="Ventanas\frmControlCajaGuay.cs" />
+    <Compile Include="Ventanas\frmEmisionMasivaAntenaGUAY.cs" />
+    <Compile Include="Ventanas\frmEmisionMasivaAntenaGUAYIndividual.cs" />
+    <Compile Include="Ventanas\frmEmisionMasivaCementerioGUAY.cs" />
+    <Compile Include="Ventanas\frmEmisionMasivaCementerioSM.cs" />
+    <Compile Include="Ventanas\frmEmisionMasivaCementerioSMIndividual.cs" />
+    <Compile Include="Ventanas\frmEmisionMasivaComercioGUAY.cs" />
+    <Compile Include="Ventanas\frmEmisionMasivaComercioGUAYIndividual.cs" />
+    <Compile Include="Ventanas\frmEmisionMasivaComercioSM.cs" />
+    <Compile Include="Ventanas\frmEmisionMasivaComercioSMIndividual.cs" />
+    <Compile Include="Ventanas\frmEmisionMasivaPublicidadGUAY.cs" />
+    <Compile Include="Ventanas\frmEmisionMasivaTasas.cs" />
+    <Compile Include="Ventanas\frmEmisionMasivaTasasIndividual.cs" />
+    <Compile Include="Ventanas\frmEmisionMasivaTasasM.cs" />
+    <Compile Include="Ventanas\frmEmisionMasivaTasasSM.cs" />
+    <Compile Include="Ventanas\frmEnviarMailMasivoTasas.cs" />
+    <Compile Include="Ventanas\frmEnviarMailMasivoTunuyan.cs" />
+    <Compile Include="Ventanas\frmEnvioMasivoEmailsSM.cs" />
+    <Compile Include="Ventanas\frmIngresoBoletoCaja.cs" />
+    <Compile Include="Ventanas\frmIngresoBoletoCajaGuay.cs" />
+    <Compile Include="Ventanas\frmIngresoBoletoCajaMP.cs" />
+    <Compile Include="Ventanas\frmIngresoBoletoCajaRV.cs" />
+    <Compile Include="Ventanas\frmIngresoBoletoGrupo.cs" />
+    <Compile Include="Ventanas\frmIngresoBoletoGrupoMP.cs" />
+    <Compile Include="Ventanas\frmIngresoBoletoGrupoRV.cs" />
+    <Compile Include="Ventanas\frmMigraciones.cs" />
+    <Compile Include="Ventanas\frmMostrarFopa.cs" />
+    <Compile Include="Ventanas\frmMostrarFopaMP.cs" />
+    <Compile Include="Ventanas\frmMostrarIngresoMultiple.cs" />
+    <Compile Include="Ventanas\frmMostrarIngresoMultipleMP.cs" />
+    <Compile Include="Ventanas\frmMostrarIngresoMultipleRV.cs" />
+    <Compile Include="Ventanas\frmParametrosGenerales.cs" />
+    <Compile Include="Ventanas\frmPlanillaDistribucionBoletos.cs" />
+    <Compile Include="Ventanas\frmReimpresionTicket.cs" />
+    <Compile Include="Ventanas\frmReimpresionTicketMP.cs" />
+    <Compile Include="Ventanas\gridAdministracionCorreos.cs" />
+    <Compile Include="Ventanas\gridAdministracionCorreosGUAY.cs" />
+    <Compile Include="Ventanas\gridAsignacionOrdenLiqu.cs" />
+    <Compile Include="Ventanas\gridBancoRecaudacion.cs" />
+    <Compile Include="Ventanas\gridConcepto.cs" />
+    <Compile Include="Ventanas\gridDebitoAutomatico.cs" />
+    <Compile Include="Ventanas\gridDescuentosConcepto.cs" />
+    <Compile Include="Ventanas\gridExcepcion.cs" />
+    <Compile Include="Ventanas\gridExcepciones.cs" />
+    <Compile Include="Ventanas\gridExcepcionesComer.cs" />
+    <Compile Include="Ventanas\gridFeriado.cs" />
+    <Compile Include="Ventanas\gridInteresRecargo.cs" />
+    <Compile Include="Ventanas\gridModificarFormaPago.cs" />
+    <Compile Include="Ventanas\gridParametrosRentas.cs" />
+    <Compile Include="Ventanas\gridServiciosDerechosVarios.cs" />
+    <Compile Include="Ventanas\gridTipoFacilidadPago.cs" />
+    <Compile Include="Ventanas\gridTipoMovimientos.cs" />
+    <Compile Include="Ventanas\gridTipoPago.cs" />
+    <Compile Include="Ventanas\gridUsuarioFacilidad.cs" />
+    <Compile Include="Ventanas\mdlCajaMP.cs" />
+    <Compile Include="Ventanas\mdlCierreCajaMP.cs" />
+    <Compile Include="Ventanas\mdlGenerarEpagosQr.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Ventanas\mdlResultadoMailBole.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Ventanas\ucGenerarQR.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Ventanas\AforosDeudoresVarios\frmAforosDeudoresVarios.cs" />
+    <Compile Include="Ventanas\AforosDeudoresVarios\GridAforos\Malargue\gridAforoMG.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Ventanas\AforosDeudoresVarios\GridBuqueda\Malargue\gridBusquedaMG.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Ventanas\AforosDeudoresVarios\Herencia\BuscadorBase.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Ventanas\AforosDeudoresVarios\Herencia\IAforoDeudorVario.cs" />
+    <Compile Include="Ventanas\AforosDeudoresVarios\Herencia\IBuscador.cs" />
+    <Compile Include="Ventanas\AforosDeudoresVarios\Herencia\IExpAforoDV.cs" />
+    <Compile Include="Ventanas\AforosDeudoresVarios\Herencia\IGridAforos.cs" />
+    <Compile Include="Ventanas\AforosDeudoresVarios\Herencia\IGridBusqueda.cs" />
+    <Compile Include="Ventanas\AforosDeudoresVarios\Modals\mdlDeudorVario.cs" />
+    <Compile Include="Ventanas\AforosDeudoresVarios\Modals\Malargue\mdlServiciosAforosDVMG.cs" />
+    <Compile Include="Ventanas\CuentaCorriente\frmCuentaCorriente.cs" />
+    <Compile Include="Ventanas\CuentaCorriente\Details\Maipu\Modals\mdlDatosInmueble.cs" />
+    <Compile Include="Ventanas\CuentaCorriente\Grids\Comun\gridCCComun.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Ventanas\CuentaCorriente\Grids\Maipu\gridCCMaipu.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Ventanas\CuentaCorriente\Herencia\BuscadorBase.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Ventanas\CuentaCorriente\Herencia\IBuscador.cs" />
+    <Compile Include="Ventanas\CuentaCorriente\Herencia\IDetailCuentaCorriente.cs" />
+    <Compile Include="Ventanas\CuentaCorriente\Herencia\IGridCuentaCorriente.cs" />
+    <Compile Include="Ventanas\CuentaCorriente\Herencia\IReporte.cs" />
+    <Compile Include="Ventanas\CuentaCorriente\Modals\mdlReporte.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Ventanas\DerechosVarios\frmDerechosVarios.cs" />
+    <Compile Include="Ventanas\DerechosVarios\GridDerechos\Maipu\GridDerechosMaipu.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Ventanas\DerechosVarios\Herencia\BuscadorBase.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Ventanas\DerechosVarios\Herencia\IBuscador.cs" />
+    <Compile Include="Ventanas\DerechosVarios\Herencia\IDerechosVarios.cs" />
+    <Compile Include="Ventanas\DerechosVarios\Herencia\IEntidadDerechoVario.cs" />
+    <Compile Include="Ventanas\DerechosVarios\Herencia\IExpertoDerechoVario.cs" />
+    <Compile Include="Ventanas\DerechosVarios\Herencia\IPersonaDerechoVario.cs" />
+    <Compile Include="Ventanas\DerechosVarios\Modals\mdlServicios.cs" />
+    <Compile Include="Ventanas\DerechosVarios\Personas\Maipu\PersonaDereVMaipu.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Ventanas\Details\Comun\detailCCComun.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Ventanas\Details\Maipu\detailCCMaipu.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Ventanas\EmisionBoleto\frmEmisionBoleto.cs" />
+    <Compile Include="Ventanas\EmisionBoleto\Grids\Maipu\gridEBMaipu.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Ventanas\EmisionBoleto\Herencia\EmisionBoletoBase.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Ventanas\EmisionBoleto\Herencia\IDatosBoleto.cs" />
+    <Compile Include="Ventanas\EmisionBoleto\Herencia\IEmisionBoleto.cs" />
+    <Compile Include="Ventanas\EmisionBoleto\Herencia\IGridEmisionBoleto.cs" />
+    <Compile Include="Ventanas\EmisionBoleto\Herencia\IReporteBoleto.cs" />
+    <Compile Include="Ventanas\EmisionBoleto\Modals\mdlResumen.cs" />
+    <Compile Include="Ventanas\PlanPago\frmPlanPago.cs" />
+    <Compile Include="Ventanas\PlanPago\Details\Maipu\detailPPMP.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Ventanas\PlanPago\Footers\Maipu\footerPPMP.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Ventanas\PlanPago\Grids\Maipu\gridPPMP.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Ventanas\PlanPago\Herencia\BuscadorBasePP.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Ventanas\PlanPago\Herencia\IBuscadorPP.cs" />
+    <Compile Include="Ventanas\PlanPago\Herencia\IDetailPlanPago.cs" />
+    <Compile Include="Ventanas\PlanPago\Herencia\IExpertoPlanPago.cs" />
+    <Compile Include="Ventanas\PlanPago\Herencia\IFooterPlanPago.cs" />
+    <Compile Include="Ventanas\PlanPago\Herencia\IGridPlanPago.cs" />
+    <Compile Include="Ventanas\PlanPago\Herencia\IPlanPago.cs" />
+    <Compile Include="Ventanas\PlanPago\Herencia\IReportePP.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Properties\Resources.resx" />
+    <EmbeddedResource Include="Reportes\BoletoAntenaGuay\CuponesAntena.resx" />
+    <EmbeddedResource Include="Reportes\BoletoAntenaGuay\irepBoletoAntenaGuay.resx" />
+    <EmbeddedResource Include="Reportes\BoletoAntenaGuay\irepBoletoAntenaGuay1.resx" />
+    <EmbeddedResource Include="Reportes\BoletoCementerioGuay\CuponesCementerio.resx" />
+    <EmbeddedResource Include="Reportes\BoletoCementerioGuay\irepBoletoComenterioGuay.resx" />
+    <EmbeddedResource Include="Reportes\BoletoCementerioGuay\SubRubrosCementerio.resx" />
+    <EmbeddedResource Include="Reportes\BoletoCementerioSM\CuponesBoleCemenSM.resx" />
+    <EmbeddedResource Include="Reportes\BoletoCementerioSM\DifuntosSM.resx" />
+    <EmbeddedResource Include="Reportes\BoletoCementerioSM\irepBoletoCemenSM.resx" />
+    <EmbeddedResource Include="Reportes\BoletoComercioGuay\irepBoletoComercioGuay.resx" />
+    <EmbeddedResource Include="Reportes\BoletoComercioGuay\irepBoletoComercioGuay1.resx" />
+    <EmbeddedResource Include="Reportes\BoletoComercioSM\CuponesBoleComerSM.resx" />
+    <EmbeddedResource Include="Reportes\BoletoComercioSM\irepBoletoComerSM.resx" />
+    <EmbeddedResource Include="Reportes\BoletoPublicidadGuay\CuponesPublicidad.resx" />
+    <EmbeddedResource Include="Reportes\BoletoPublicidadGuay\irepBoletoPublicidadGuay.resx" />
+    <EmbeddedResource Include="Reportes\BoletoRivadavia\CuponesRivadaviaInmu.resx" />
+    <EmbeddedResource Include="Reportes\BoletoRivadavia\irepBoletoRivadaviaInmu.resx" />
+    <EmbeddedResource Include="Reportes\BoletoSM\CuponesBoleInmuSM.resx" />
+    <EmbeddedResource Include="Reportes\BoletoSM\irepBoletoInmuSM.resx" />
+    <EmbeddedResource Include="Reportes\Certificados\Maipu\CertificadoExencion\irepCertExenMP.resx" />
+    <EmbeddedResource Include="Reportes\Certificados\SanMartin\CertificadoExencion\irepCertExenSM.resx" />
+    <EmbeddedResource Include="Reportes\Certificados\SanMartin\CertificadoExencion\repCertExenSM.resx" />
+    <EmbeddedResource Include="Reportes\CobranzaPorConcepto\irepCobranzaPorConcepto.resx" />
+    <EmbeddedResource Include="Reportes\CobranzaPorConcepto\repCobranzaPorConcepto.resx" />
+    <EmbeddedResource Include="Reportes\ControlCajaGuay\irepControlCajaGuay.resx" />
+    <EmbeddedResource Include="Reportes\ControlCajaGuay\repControlCajaGuay.resx" />
+    <EmbeddedResource Include="Reportes\DebitoAutomatico\repDebitoAutomatico.resx" />
+    <EmbeddedResource Include="Reportes\GeneracionArchivoBanelcoLink\irepGeneracionArchivoBanelcoLink.resx" />
+    <EmbeddedResource Include="Reportes\GeneracionArchivoBanelcoLink\repGeneracionArchivoBanelcoLink.resx" />
+    <EmbeddedResource Include="Reportes\IngresoCaja\irepIngresoCaja.resx" />
+    <EmbeddedResource Include="Reportes\IngresoCaja\repIngresoCaja.resx" />
+    <EmbeddedResource Include="Reportes\IngresoRecaExterno\irepIngresoRecaExterno.resx" />
+    <EmbeddedResource Include="Reportes\IngresoRecaExterno\repIngresoRecaExterno.resx" />
+    <EmbeddedResource Include="Reportes\Maipu\CajaDiaria\irepCDMP.resx" />
+    <EmbeddedResource Include="Reportes\Maipu\CajaDiaria\repCDMP.resx" />
+    <EmbeddedResource Include="Reportes\Maipu\ConsultaBoleto\irepConsultaBoletoMP.resx" />
+    <EmbeddedResource Include="Reportes\Maipu\ConsultaBoleto\repConsultaBoletoMP.resx" />
+    <EmbeddedResource Include="Reportes\Maipu\ReimpresionPP\irepReimpresionPPMP.resx" />
+    <EmbeddedResource Include="Reportes\Maipu\ReimpresionPP\repReimpresionPPMP.resx" />
+    <EmbeddedResource Include="Reportes\MultasTransitoGuay\irepMultasTransitoGuay.resx" />
+    <EmbeddedResource Include="Reportes\MultasTransitoGuay\repMultasTransitoGuay.resx" />
+    <EmbeddedResource Include="Reportes\PagosWeb\irepPagosVarios.resx" />
+    <EmbeddedResource Include="Reportes\PagosWeb\repPagosVarios.resx" />
+    <EmbeddedResource Include="Reportes\PlanillaDistribucion\irepPlanillaDistribucionBoletos.resx" />
+    <EmbeddedResource Include="Reportes\RegistroCorreosWeb\irepRegistroCorreosWeb.resx" />
+    <EmbeddedResource Include="Reportes\RegistroCorreosWeb\repRegistroCorreosWeb.resx" />
+    <EmbeddedResource Include="Reportes\RegistroEnvioCorreos\irepRegistroEnvioCorreos.resx" />
+    <EmbeddedResource Include="Reportes\RegistroEnvioCorreos\irepRegistroEnvioCorreosTunuyan.resx" />
+    <EmbeddedResource Include="Reportes\RegistroEnvioCorreos\repRegistroEnvioCorreos.resx" />
+    <EmbeddedResource Include="Reportes\SanMartin\DescuentoBono\irepDescuentoBonoSM.resx" />
+    <EmbeddedResource Include="Reportes\SanMartin\DescuentoBono\repDescuentoBonoSM.resx" />
+    <EmbeddedResource Include="Reportes\Tasas\Cupones.resx" />
+    <EmbeddedResource Include="Reportes\Tasas\CuponesComercio.resx" />
+    <EmbeddedResource Include="Reportes\Tasas\irepBoletoTasa.resx" />
+    <EmbeddedResource Include="Reportes\Tasas\irepBoletoTasa1.resx" />
+    <EmbeddedResource Include="Reportes\Tasas\SubRubrosComercio.resx" />
+    <EmbeddedResource Include="Ventanas\detailAdministracionCorreos.resx" />
+    <EmbeddedResource Include="Ventanas\detailAdministracionCorreosGUAY.resx" />
+    <EmbeddedResource Include="Ventanas\detailAsignacionOrdenLiqu.resx" />
+    <EmbeddedResource Include="Ventanas\detailConcepto.resx" />
+    <EmbeddedResource Include="Ventanas\detailDebitoAutomatico.resx" />
+    <EmbeddedResource Include="Ventanas\detailDescuentosConcepto.resx" />
+    <EmbeddedResource Include="Ventanas\detailExcepcion.resx" />
+    <EmbeddedResource Include="Ventanas\detailExcepciones.resx" />
+    <EmbeddedResource Include="Ventanas\detailExcepcionesComer.resx" />
+    <EmbeddedResource Include="Ventanas\detailFeriado.resx" />
+    <EmbeddedResource Include="Ventanas\detailInteresRecargo.resx" />
+    <EmbeddedResource Include="Ventanas\detailModificarFormaPago.resx" />
+    <EmbeddedResource Include="Ventanas\detailParametrosRentas.resx" />
+    <EmbeddedResource Include="Ventanas\detailTipoMovimientos.resx" />
+    <EmbeddedResource Include="Ventanas\detailTipoPago.resx" />
+    <EmbeddedResource Include="Ventanas\detailUsuarioFacilidad.resx" />
+    <EmbeddedResource Include="Ventanas\dlgCargaAforoSM.resx" />
+    <EmbeddedResource Include="Ventanas\frmAforoComeSM.resx" />
+    <EmbeddedResource Include="Ventanas\frmBeneficiariosLicencias.resx" />
+    <EmbeddedResource Include="Ventanas\frmConfiguraciones.resx" />
+    <EmbeddedResource Include="Ventanas\frmControlCajaGuay.resx" />
+    <EmbeddedResource Include="Ventanas\frmEmisionMasivaAntenaGUAY.resx" />
+    <EmbeddedResource Include="Ventanas\frmEmisionMasivaAntenaGUAYIndividual.resx" />
+    <EmbeddedResource Include="Ventanas\frmEmisionMasivaCementerioGUAY.resx" />
+    <EmbeddedResource Include="Ventanas\frmEmisionMasivaCementerioSM.resx" />
+    <EmbeddedResource Include="Ventanas\frmEmisionMasivaCementerioSMIndividual.resx" />
+    <EmbeddedResource Include="Ventanas\frmEmisionMasivaComercioGUAY.resx" />
+    <EmbeddedResource Include="Ventanas\frmEmisionMasivaComercioGUAYIndividual.resx" />
+    <EmbeddedResource Include="Ventanas\frmEmisionMasivaComercioSM.resx" />
+    <EmbeddedResource Include="Ventanas\frmEmisionMasivaComercioSMIndividual.resx" />
+    <EmbeddedResource Include="Ventanas\frmEmisionMasivaPublicidadGUAY.resx" />
+    <EmbeddedResource Include="Ventanas\frmEmisionMasivaTasas.resx" />
+    <EmbeddedResource Include="Ventanas\frmEmisionMasivaTasasIndividual.resx" />
+    <EmbeddedResource Include="Ventanas\frmEmisionMasivaTasasM.resx" />
+    <EmbeddedResource Include="Ventanas\frmEmisionMasivaTasasSM.resx" />
+    <EmbeddedResource Include="Ventanas\frmEnviarMailMasivoTasas.resx" />
+    <EmbeddedResource Include="Ventanas\frmEnviarMailMasivoTunuyan.resx" />
+    <EmbeddedResource Include="Ventanas\frmEnvioMasivoEmailsSM.resx" />
+    <EmbeddedResource Include="Ventanas\frmIngresoBoletoCaja.resx" />
+    <EmbeddedResource Include="Ventanas\frmIngresoBoletoCajaGuay.resx" />
+    <EmbeddedResource Include="Ventanas\frmIngresoBoletoCajaMP.resx" />
+    <EmbeddedResource Include="Ventanas\frmIngresoBoletoCajaRV.resx" />
+    <EmbeddedResource Include="Ventanas\frmIngresoBoletoGrupo.resx" />
+    <EmbeddedResource Include="Ventanas\frmIngresoBoletoGrupoMP.resx" />
+    <EmbeddedResource Include="Ventanas\frmIngresoBoletoGrupoRV.resx" />
+    <EmbeddedResource Include="Ventanas\frmMigraciones.resx" />
+    <EmbeddedResource Include="Ventanas\frmMostrarFopa.resx" />
+    <EmbeddedResource Include="Ventanas\frmMostrarFopaMP.resx" />
+    <EmbeddedResource Include="Ventanas\frmMostrarIngresoMultiple.resx" />
+    <EmbeddedResource Include="Ventanas\frmParametrosGenerales.resx" />
+    <EmbeddedResource Include="Ventanas\frmPlanillaDistribucionBoletos.resx" />
+    <EmbeddedResource Include="Ventanas\frmReimpresionTicket.resx" />
+    <EmbeddedResource Include="Ventanas\gridAdministracionCorreos.resx" />
+    <EmbeddedResource Include="Ventanas\gridAdministracionCorreosGUAY.resx" />
+    <EmbeddedResource Include="Ventanas\gridAsignacionOrdenLiqu.resx" />
+    <EmbeddedResource Include="Ventanas\gridConcepto.resx" />
+    <EmbeddedResource Include="Ventanas\gridDebitoAutomatico.resx" />
+    <EmbeddedResource Include="Ventanas\gridDescuentosConcepto.resx" />
+    <EmbeddedResource Include="Ventanas\gridExcepcion.resx" />
+    <EmbeddedResource Include="Ventanas\gridExcepciones.resx" />
+    <EmbeddedResource Include="Ventanas\gridExcepcionesComer.resx" />
+    <EmbeddedResource Include="Ventanas\gridFeriado.resx" />
+    <EmbeddedResource Include="Ventanas\gridInteresRecargo.resx" />
+    <EmbeddedResource Include="Ventanas\gridModificarFormaPago.resx" />
+    <EmbeddedResource Include="Ventanas\gridParametrosRentas.resx" />
+    <EmbeddedResource Include="Ventanas\gridTipoPago.resx" />
+    <EmbeddedResource Include="Ventanas\gridUsuarioFacilidad.resx" />
+    <EmbeddedResource Include="Ventanas\mdlCajaMP.resx" />
+    <EmbeddedResource Include="Ventanas\mdlCierreCajaMP.resx" />
+    <EmbeddedResource Include="Ventanas\mdlGenerarEpagosQr.resx" />
+    <EmbeddedResource Include="Ventanas\mdlResultadoMailBole.resx" />
+    <EmbeddedResource Include="Ventanas\ucGenerarQR.resx" />
+    <EmbeddedResource Include="Ventanas\AforosDeudoresVarios\frmAforosDeudoresVarios.resx" />
+    <EmbeddedResource Include="Ventanas\AforosDeudoresVarios\GridAforos\Malargue\gridAforoMG.resx" />
+    <EmbeddedResource Include="Ventanas\AforosDeudoresVarios\GridBuqueda\Malargue\gridBusquedaMG.resx" />
+    <EmbeddedResource Include="Ventanas\AforosDeudoresVarios\Modals\mdlDeudorVario.resx" />
+    <EmbeddedResource Include="Ventanas\AforosDeudoresVarios\Modals\Malargue\mdlServiciosAforosDVMG.resx" />
+    <EmbeddedResource Include="Ventanas\CuentaCorriente\frmCuentaCorriente.resx" />
+    <EmbeddedResource Include="Ventanas\CuentaCorriente\Details\Maipu\Modals\mdlDatosInmueble.resx" />
+    <EmbeddedResource Include="Ventanas\CuentaCorriente\Grids\Comun\gridCCComun.resx" />
+    <EmbeddedResource Include="Ventanas\CuentaCorriente\Grids\Maipu\gridCCMaipu.resx" />
+    <EmbeddedResource Include="Ventanas\CuentaCorriente\Modals\mdlReporte.resx" />
+    <EmbeddedResource Include="Ventanas\DerechosVarios\frmDerechosVarios.resx" />
+    <EmbeddedResource Include="Ventanas\DerechosVarios\GridDerechos\Maipu\GridDerechosMaipu.resx" />
+    <EmbeddedResource Include="Ventanas\DerechosVarios\Modals\mdlServicios.resx" />
+    <EmbeddedResource Include="Ventanas\DerechosVarios\Personas\Maipu\PersonaDereVMaipu.resx" />
+    <EmbeddedResource Include="Ventanas\Details\Comun\detailCCComun.resx" />
+    <EmbeddedResource Include="Ventanas\Details\Maipu\detailCCMaipu.resx" />
+    <EmbeddedResource Include="Ventanas\EmisionBoleto\frmEmisionBoleto.resx" />
+    <EmbeddedResource Include="Ventanas\EmisionBoleto\Grids\Maipu\gridEBMaipu.resx" />
+    <EmbeddedResource Include="Ventanas\EmisionBoleto\Modals\mdlResumen.resx" />
+    <EmbeddedResource Include="Ventanas\PlanPago\frmPlanPago.resx" />
+    <EmbeddedResource Include="Ventanas\PlanPago\Details\Maipu\detailPPMP.resx" />
+    <EmbeddedResource Include="Ventanas\PlanPago\Footers\Maipu\footerPPMP.resx" />
+    <EmbeddedResource Include="Ventanas\PlanPago\Grids\Maipu\gridPPMP.resx" />
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>
