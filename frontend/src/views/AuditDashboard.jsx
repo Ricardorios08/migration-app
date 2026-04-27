@@ -97,8 +97,8 @@ const AuditDashboard = () => {
                     setGcList(state.gc);
                 }
 
-                if (state.status === 'idle') {
-                    fetch(`${API_BASE_URL}/api/dashboard/calculate`, { method: 'POST' });
+                if (state.status === 'idle' && state.summary.length === 0) {
+                    setLoading(false); 
                 }
 
                 if (state.status === 'ready') {
@@ -125,12 +125,42 @@ const AuditDashboard = () => {
         }).format(val);
     };
 
-    if (loading && summary.length === 0) return (
+    const handleRefresh = async () => {
+        if (auditStatus === 'calculating') return;
+        try {
+            setAuditStatus('calculating');
+            await fetch(`${API_BASE_URL}/api/dashboard/calculate?force=true`, { method: 'POST' });
+        } catch (err) {
+            console.error("Error triggering refresh:", err);
+        }
+    };
+
+    if (loading && summary.length === 0 && auditStatus !== 'idle') return (
         <div className="view-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: '1.5rem' }}>
             <div className="spinner"></div>
             <div style={{ color: 'var(--text-dim)', textAlign: 'center' }}>
-                <h3 style={{ color: '#fff', marginBottom: '0.5rem' }}>Iniciando Auditoría Masiva</h3>
-                <p>Estamos procesando millones de registros entre MariaDB y PostgreSQL.<br />Esto puede tardar unos segundos...</p>
+                <h3 style={{ color: '#fff', marginBottom: '0.5rem' }}>Procesando Auditoría Masiva</h3>
+                <p>Estamos analizando millones de registros en tiempo real.<br />Esto puede tardar unos segundos...</p>
+            </div>
+        </div>
+    );
+
+    if (summary.length === 0 && auditStatus === 'idle') return (
+        <div className="view-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: '1.5rem' }}>
+            <div style={{ background: 'rgba(37, 99, 235, 0.1)', padding: '2rem', borderRadius: '24px', border: '1px solid rgba(37, 99, 235, 0.2)', textAlign: 'center', maxWidth: '500px' }}>
+                <LayoutDashboard size={48} color="var(--primary)" style={{ marginBottom: '1.5rem' }} />
+                <h2 style={{ color: '#fff', marginBottom: '1rem' }}>Auditoría de Conciliación</h2>
+                <p style={{ color: 'var(--text-dim)', marginBottom: '2rem', lineHeight: '1.6' }}>
+                    Este panel permite comparar la integridad de la deuda entre MariaDB y PostgreSQL. 
+                    Debido a la gran cantidad de datos, el cálculo debe iniciarse manualmente.
+                </p>
+                <button 
+                    onClick={handleRefresh}
+                    className="btn btn-primary"
+                    style={{ padding: '1rem 2rem', fontSize: '1rem', fontWeight: 'bold', borderRadius: '12px' }}
+                >
+                    Iniciar Auditoría General
+                </button>
             </div>
         </div>
     );
@@ -141,15 +171,6 @@ const AuditDashboard = () => {
     const globalDiff = Math.abs(totalMariaDebt - totalPgDebt);
     const diffPercent = totalMariaDebt > 0 ? (globalDiff / totalMariaDebt) * 100 : 0;
 
-    const handleRefresh = async () => {
-        if (auditStatus === 'calculating') return;
-        try {
-            setAuditStatus('calculating');
-            await fetch(`${API_BASE_URL}/api/dashboard/calculate?force=true`, { method: 'POST' });
-        } catch (err) {
-            console.error("Error triggering refresh:", err);
-        }
-    };
 
     return (
         <div className="view-container" style={{ padding: '2rem', background: '#0a0b10', overflowY: 'auto', height: '100%' }}>

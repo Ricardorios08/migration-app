@@ -123,39 +123,43 @@ router.get('/resolve-account/:account', async (req, res) => {
             const pgRes = await require('../db/postgres').query(pgQuery, [account]);
             pgRes.rows.forEach(r => officesFound.add(r.officeId.toString()));
         } else {
-            // Default: Search by account in both DBs
-            conn = await mariaDB.getRemoteConnection();
-            const mariaOffices = await conn.query(`
-                SELECT DISTINCT CodiOfic FROM recaudacion2.ctacte WHERE CuenCtct = ?
-            `, [account]);
-            mariaOffices.forEach(r => officesFound.add(r.CodiOfic.toString()));
+            // Default: Search by account in both DBs using space-padded variants (0-8 spaces)
+            const variants = [];
+            for (let i = 0; i <= 8; i++) {
+                variants.push(account.padStart(i, ' '));
+            }
+            const uniqueVariants = [...new Set(variants)];
+            const inPlaceholders = uniqueVariants.map(() => '?').join(',');
 
+            conn = await mariaDB.getRemoteConnection();
+            
+            // Search in CtaCte (Main)
+            try {
+                const mariaOffices = await conn.query(`
+                    SELECT DISTINCT CodiOfic FROM recaudacion2.ctacte WHERE CuenCtct IN (${inPlaceholders})
+                `, uniqueVariants);
+                mariaOffices.forEach(r => officesFound.add(r.CodiOfic.toString()));
+            } catch (e) { console.error("MariaDB resolve error:", e.message); }
+
+            // Search in Historical
             try {
                 const histoOffices = await conn.query(`
-                    SELECT DISTINCT CodiOfic FROM recahisto.histoctacte WHERE CuenCtct = ?
-                `, [account]);
+                    SELECT DISTINCT CodiOfic FROM recahisto.histoctacte WHERE CuenCtct IN (${inPlaceholders})
+                `, uniqueVariants);
                 histoOffices.forEach(r => officesFound.add(r.CodiOfic.toString()));
-            } catch (hErr) {
-                console.log("Historical archive (recahisto) not available during account resolution.");
-            }
+            } catch (hErr) { /* Silent fail */ }
 
+            // Search in Postgres
             try {
-                const boletoOffices = await conn.query(`
-                    SELECT DISTINCT CodiOfic FROM recaudacion2.boleto WHERE CuenCtct = ?
-                `, [account]);
-                boletoOffices.forEach(r => officesFound.add(r.CodiOfic.toString()));
-            } catch (bErr) {
-                console.log("Boleto table not available during account resolution.");
-            }
-
-            const pgQuery = `
-                SELECT DISTINCT tt.tpotribcod as "officeId"
-                FROM public.tributo t
-                JOIN public.tipotributo tt ON t.tpotribcod = tt.tpotribcod
-                WHERE t.tbecod = $1
-            `;
-            const pgRes = await require('../db/postgres').query(pgQuery, [account]);
-            pgRes.rows.forEach(r => officesFound.add(r.officeId.toString()));
+                const pgQuery = `
+                    SELECT DISTINCT tt.tpotribcod as "officeId"
+                    FROM public.tributo t
+                    JOIN public.tipotributo tt ON t.tpotribcod = tt.tpotribcod
+                    WHERE t.tbecod = ANY($1)
+                `;
+                const pgRes = await require('../db/postgres').query(pgQuery, [uniqueVariants]);
+                pgRes.rows.forEach(r => officesFound.add(r.officeId.toString()));
+            } catch (pErr) { console.error("Postgres resolve error:", pErr.message); }
         }
 
         if (officesFound.size === 0) {
@@ -229,7 +233,7 @@ router.get('/legacy/search', async (req, res) => {
                     WHERE t.CodiOfic = ? AND t.CuenCtct = ?
                     GROUP BY t.PeriCtct, t.BimeCtct, t.PeriInfo, t.CodiConc
                     HAVING (SUM(IFNULL(t.DebeCtct, 0)) - SUM(IFNULL(t.CredCtct, 0))) > 0.01
-                    ORDER BY t.PeriCtct DESC, t.BimeCtct DESC
+                    ORDER BY t.PeriCtct DESC, t.BimeCtct ASC
                 `;
 
                 const results = await conn.query(debtQuery, [dateStr, dateStr, officeId, acc]);
@@ -278,7 +282,7 @@ router.get('/legacy/search', async (req, res) => {
                     WHERE CodiOfic = ? AND CuenCtct IN (${accPlaceholders}) ${fealCorteFilter}
                 ) tmp
                 LEFT JOIN concepto c ON c.PeriInfo = tmp.PeriInfo AND c.CodiConc = tmp.CodiConc
-                ORDER BY tmp.PeriCtct DESC, tmp.BimeCtct DESC, tmp.FeveCtct DESC
+                ORDER BY tmp.PeriCtct DESC, tmp.BimeCtct ASC, tmp.FeveCtct ASC
                 LIMIT 2000
             `;
             
@@ -395,7 +399,7 @@ router.get('/new/search', async (req, res) => {
                 WHERE ${searchType === 'person' ? 'gc.genctapercod = $1' : `t.tbecod IN (${placeholders})`}
                 AND tt.tpotribcod = $${searchType === 'person' ? '2' : accountList.length + 1}
                 ${onlyDebt === 'true' ? 'AND (cc.cabpgoctactecod IS NULL OR cc.cabpgoctactecod = 0)' : ''}
-                ORDER BY gc.genctaancta DESC, gc.genctanrocta DESC, gcd.genctadetlin ASC
+                ORDER BY gc.genctaancta DESC, gc.genctanrocta ASC, gcd.genctadetlin ASC
                 LIMIT 4000
             `;
         } else {
@@ -438,7 +442,7 @@ router.get('/new/search', async (req, res) => {
                 WHERE ${searchType === 'person' ? 'gc.genctapercod = $1' : `t.tbecod IN (${placeholders})`}
                 AND tt.tpotribcod = $${searchType === 'person' ? '2' : accountList.length + 1}
                 ${onlyDebt === 'true' ? 'AND (cc.cabpgoctactecod IS NULL OR cc.cabpgoctactecod = 0)' : ''}
-                ORDER BY gc.genctaancta DESC, gc.genctanrocta DESC
+                ORDER BY gc.genctaancta DESC, gc.genctanrocta ASC
                 LIMIT 2000
             `;
         }

@@ -236,6 +236,11 @@ const ComparisonReport = () => {
                                             >
                                                 {row.cuenta.toString().startsWith('#') ? '' : '#'}{row.cuenta}
                                             </div>
+                                            {row.accountName && (
+                                                <div style={{ fontSize: '0.8rem', color: '#fbbf24', fontWeight: 'bold', marginTop: '2px' }}>
+                                                    {row.accountName}
+                                                </div>
+                                            )}
                                             <div style={{ fontSize: '0.75rem', opacity: 0.7 }}>{row.nombre}</div>
                                         </td>
                                         <td style={{ padding: '1rem', fontSize: '0.85rem' }}>

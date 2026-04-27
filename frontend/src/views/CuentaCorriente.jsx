@@ -32,6 +32,9 @@ const CuentaCorriente = () => {
     const [foundOffices, setFoundOffices] = useState([]);
     const [isResolvingOffices, setIsResolvingOffices] = useState(false);
     const [pdfBlobUrl, setPdfBlobUrl] = useState(null);
+    const [personAccounts, setPersonAccounts] = useState([]); // All accounts for the selected person
+    const [selectedAccountFilter, setSelectedAccountFilter] = useState('all');
+    const [accountFilter, setAccountFilter] = useState('all'); // Filter for person search results
 
     // Person search autocomplete
     const [personSearchText, setPersonSearchText] = useState('');
@@ -144,6 +147,7 @@ const CuentaCorriente = () => {
 
         // Auto-resolve offices from the person's accounts
         if (person.accounts && person.accounts.length > 0) {
+            setPersonAccounts(person.accounts);
             const uniqueOffices = [];
             const seen = new Set();
             person.accounts.forEach(a => {
@@ -156,6 +160,10 @@ const CuentaCorriente = () => {
             if (uniqueOffices.length > 0) {
                 setSelectedOffice(uniqueOffices[0].id.toString());
             }
+            setSelectedAccountFilter('all');
+        } else {
+            setPersonAccounts([]);
+            setSelectedAccountFilter('all');
         }
     };
 
@@ -163,8 +171,7 @@ const CuentaCorriente = () => {
         if (!legacyData || legacyData.length === 0) return null;
 
         let displayData = legacyData;
-
-        // If grouped, aggregate by period/bime just like Postgres
+        // Grouping Logic...
         if (isGrouped && !showQuotaDetail) {
             const groupedMap = legacyData.reduce((acc, row) => {
                 let p = parseInt(row.PeriCtct);
@@ -355,10 +362,15 @@ const CuentaCorriente = () => {
         setLegacyData([]);
         setPostgresData([]);
 
+        // Determine which account(s) to search
+        const finalAccountToSearch = (searchBy === 'person' && selectedAccountFilter !== 'all') 
+            ? selectedAccountFilter 
+            : account;
+
         // 1. Fetch PostgreSQL Data (New System)
         let pgData = [];
         try {
-            let pgUrl = `${API_BASE_URL}/api/ctacte/new/search?officeId=${selectedOffice}&account=${account}&searchType=${searchBy}&percod=${account}&toDate=${toDate}&onlyDebt=${onlyDebt}&showQuotaDetail=${showQuotaDetail}`;
+            let pgUrl = `${API_BASE_URL}/api/ctacte/new/search?officeId=${selectedOffice}&account=${finalAccountToSearch}&searchType=${selectedAccountFilter !== 'all' ? 'account' : searchBy}&percod=${account}&toDate=${toDate}&onlyDebt=${onlyDebt}&showQuotaDetail=${showQuotaDetail}`;
             const pgRes = await fetch(pgUrl);
             const pgResult = await pgRes.json();
             
@@ -375,7 +387,7 @@ const CuentaCorriente = () => {
 
         // 2. Determine accounts and THEIR OFFICES for MariaDB
         let queryGroups = [];
-        if (searchBy === 'person' && pgData.length > 0) {
+        if (searchBy === 'person' && selectedAccountFilter === 'all' && pgData.length > 0) {
             const groups = pgData.reduce((acc, r) => {
                 const offId = r.officeId || 1;
                 if (!acc[offId]) acc[offId] = new Set();
@@ -388,7 +400,7 @@ const CuentaCorriente = () => {
                 accounts: Array.from(set)
             }));
         } else {
-            queryGroups = [{ office: selectedOffice || 1, accounts: [account] }];
+            queryGroups = [{ office: selectedOffice || 1, accounts: [finalAccountToSearch] }];
         }
 
         // 3. Fetch MariaDB Data (Legacy System) - independent, non-blocking
@@ -686,6 +698,11 @@ const CuentaCorriente = () => {
 
         let displayData = postgresData;
         
+        // Apply local filter if not 'all'
+        if (accountFilter !== 'all') {
+            displayData = displayData.filter(d => d.CuenCtct?.toString().trim() === accountFilter);
+        }
+
         // If grouped, aggregate by period/bime
         if (isGrouped && !showQuotaDetail) {
             const groupedMap = postgresData.reduce((acc, row) => {
@@ -908,7 +925,6 @@ const CuentaCorriente = () => {
                         <Info size={20} color="var(--primary)" />
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
                             <div style={{ fontWeight: 'bold', fontSize: '1.2rem' }}>
-                                {ownerNameFallback} {ownerData?.PersonId && <span style={{ opacity: 0.6, fontSize: '0.9rem' }}>({ownerData.PersonId})</span>}
                                 {postgresData.length > 0 && searchBy === 'person' && (
                                     <span style={{ marginLeft: '10px', color: '#10b981', fontSize: '1rem', background: 'rgba(16, 185, 129, 0.1)', padding: '2px 8px', borderRadius: '4px' }}>
                                         <strong>Cta:</strong> {[...new Set(postgresData.map(d => d.CuenCtct))].join(', ')}
@@ -1049,7 +1065,11 @@ const CuentaCorriente = () => {
                         <Filter size={18} color={foundOffices.length > 1 ? '#fbbf24' : 'currentColor'} />
                         <select 
                             value={selectedOffice} 
-                            onChange={(e) => setSelectedOffice(e.target.value)}
+                            onChange={(e) => {
+                                setSelectedOffice(e.target.value);
+                                // If person search, maybe reset account filter to all if not in this office
+                                setSelectedAccountFilter('all');
+                            }}
                             style={{ background: 'transparent', border: 'none', color: 'white', padding: '0.5rem', width: '180px' }}
                         >
                             {foundOffices.length > 0 ? (
@@ -1062,6 +1082,25 @@ const CuentaCorriente = () => {
                         </select>
                         {foundOffices.length > 1 && <span className="badge-warning">!</span>}
                     </div>
+
+                    {searchBy === 'person' && personAccounts.length > 0 && (
+                        <div className="input-group" style={{ border: '1px solid var(--primary)' }}>
+                            <FileText size={18} color="var(--primary)" />
+                            <select 
+                                value={selectedAccountFilter} 
+                                onChange={(e) => setSelectedAccountFilter(e.target.value)}
+                                style={{ background: 'transparent', border: 'none', color: 'white', padding: '0.5rem', width: '180px' }}
+                            >
+                                <option value="all">Todas las Cuentas</option>
+                                {personAccounts
+                                    .filter(a => a.officeId.toString() === selectedOffice)
+                                    .map(a => (
+                                        <option key={a.account} value={a.account}>{a.account}</option>
+                                    ))
+                                }
+                            </select>
+                        </div>
+                    )}
 
                     <div className="input-group">
                         <Calendar size={18} />

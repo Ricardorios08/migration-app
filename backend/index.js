@@ -28,6 +28,9 @@ app.use('/api/infogov', infogovRoutes);
 app.use('/api/explorer', explorerRoutes);
 app.use('/api/apremios', apremiosRoutes);
 app.use('/api/dashboard', require('./routes/dashboard'));
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/audit', require('./routes/audit'));
+app.use('/api/audit-snapshot', require('./routes/auditSnapshot'));
 
 // Endpoint to serve migration logic documentation
 app.get('/api/docs/migration-logic', (req, res) => {

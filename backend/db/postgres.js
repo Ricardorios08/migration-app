@@ -9,9 +9,9 @@ const pool = new Pool({
   password: process.env.PG_PASS,
   port: parseInt(process.env.PG_PORT || "5432"),
   database: process.env.PG_DATABASE || 'postgres',
-  max: 5,
+  max: 10,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+  connectionTimeoutMillis: 15000,
 });
 
 module.exports = {

@@ -227,7 +227,7 @@ router.get('/legacy/search', async (req, res) => {
                     WHERE t.CodiOfic = ? AND t.CuenCtct = ?
                     GROUP BY t.PeriCtct, t.BimeCtct, t.PeriInfo, t.CodiConc
                     HAVING (SUM(IFNULL(t.DebeCtct, 0)) - SUM(IFNULL(t.CredCtct, 0))) > 0.01
-                    ORDER BY t.PeriCtct DESC, t.BimeCtct DESC
+                    ORDER BY t.PeriCtct DESC, t.BimeCtct ASC
                 `;
 
                 const results = await conn.query(debtQuery, [dateStr, dateStr, officeId, acc]);
@@ -276,7 +276,7 @@ router.get('/legacy/search', async (req, res) => {
                     WHERE CodiOfic = ? AND CuenCtct IN (${accPlaceholders}) ${fealCorteFilter}
                 ) tmp
                 LEFT JOIN concepto c ON c.PeriInfo = tmp.PeriInfo AND c.CodiConc = tmp.CodiConc
-                ORDER BY tmp.PeriCtct DESC, tmp.BimeCtct DESC, tmp.FeveCtct DESC
+                ORDER BY tmp.PeriCtct DESC, tmp.BimeCtct ASC, tmp.FeveCtct ASC
                 LIMIT 2000
             `;
             
@@ -311,7 +311,7 @@ router.get('/new/search', async (req, res) => {
             INNER JOIN public.tipotributo tt ON t.tpotribcod = tt.tpotribcod
             LEFT JOIN public.cabecerapagoctacte pgo ON cc.cabpgoctactecod = pgo.cabpgoctactecod
             WHERE t.tbecod IN (${placeholders}) AND tt.tpotribcod = $${accountList.length + 1}
-            ORDER BY gc.genctaancta DESC, gc.genctanrocta DESC
+            ORDER BY gc.genctaancta DESC, gc.genctanrocta ASC
         `;
         const result = await postgresDB.query(query, [...accountList, officeId]);
         res.json(result.rows);
