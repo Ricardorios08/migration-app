@@ -31,25 +31,29 @@ const Sidebar = ({ currentView, setView, collapsed, setCollapsed, user, onLogout
       </div>
 
       <nav className="sidebar-menu">
-        <div
-          className={`menu-item ${currentView === 'dashboard' ? 'active' : ''}`}
-          onClick={() => setView('dashboard')}
-          title={collapsed ? "Dashboard" : ""}
-        >
-          <LayoutDashboard size={20} />
-          {!collapsed && <span>Dashboard</span>}
-          {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
-        </div>
-        
-        <div
-          className={`menu-item ${currentView === 'ctacte' ? 'active' : ''}`}
-          onClick={() => setView('ctacte')}
-          title={collapsed ? "Cuenta Corriente" : ""}
-        >
-          <FileText size={20} />
-          {!collapsed && <span>Cta-Cte (PRUEBA)</span>}
-          {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
-        </div>
+        {user?.rol !== 'municipalidad' && (
+          <>
+            <div
+              className={`menu-item ${currentView === 'dashboard' ? 'active' : ''}`}
+              onClick={() => setView('dashboard')}
+              title={collapsed ? "Dashboard" : ""}
+            >
+              <LayoutDashboard size={20} />
+              {!collapsed && <span>Dashboard</span>}
+              {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
+            </div>
+            
+            <div
+              className={`menu-item ${currentView === 'ctacte' ? 'active' : ''}`}
+              onClick={() => setView('ctacte')}
+              title={collapsed ? "Cuenta Corriente" : ""}
+            >
+              <FileText size={20} />
+              {!collapsed && <span>Cta-Cte (PRUEBA)</span>}
+              {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
+            </div>
+          </>
+        )}
 
         <div
           className={`menu-item ${currentView === 'ctacte_fn' ? 'active' : ''}`}
@@ -61,67 +65,71 @@ const Sidebar = ({ currentView, setView, collapsed, setCollapsed, user, onLogout
           {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
         </div>
 
-        <div
-          className={`menu-item ${currentView === 'apremios' ? 'active' : ''}`}
-          onClick={() => setView('apremios')}
-          title={collapsed ? "Apremios" : ""}
-        >
-          <Scale size={20} />
-          {!collapsed && <span>Apremios</span>}
-          {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
-        </div>
+        {user?.rol !== 'municipalidad' && (
+          <>
+            <div
+              className={`menu-item ${currentView === 'apremios' ? 'active' : ''}`}
+              onClick={() => setView('apremios')}
+              title={collapsed ? "Apremios" : ""}
+            >
+              <Scale size={20} />
+              {!collapsed && <span>Apremios</span>}
+              {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
+            </div>
 
-        <div
-          className={`menu-item ${currentView === 'comparison' ? 'active' : ''}`}
-          onClick={() => setView('comparison')}
-          title={collapsed ? "Compara Ctacte Listado" : ""}
-        >
-          <LayoutDashboard size={20} color="#10b981" />
-          {!collapsed && <span>Compara Ctacte Listado</span>}
-          {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
-        </div>
+            <div
+              className={`menu-item ${currentView === 'comparison' ? 'active' : ''}`}
+              onClick={() => setView('comparison')}
+              title={collapsed ? "Compara Ctacte Listado" : ""}
+            >
+              <LayoutDashboard size={20} color="#10b981" />
+              {!collapsed && <span>Compara Ctacte Listado</span>}
+              {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
+            </div>
 
-        <div
-          className={`menu-item ${currentView === 'integrity' ? 'active' : ''}`}
-          onClick={() => setView('integrity')}
-          title={collapsed ? "Auditoría Masiva (Snapshots)" : ""}
-        >
-          <ShieldCheck size={20} color="#7c4dff" />
-          {!collapsed && <span style={{ color: '#7c4dff' }}>Auditoría Masiva (Snapshots)</span>}
-          {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
-        </div>
+            <div
+              className={`menu-item ${currentView === 'integrity' ? 'active' : ''}`}
+              onClick={() => setView('integrity')}
+              title={collapsed ? "Auditoría Masiva (Snapshots)" : ""}
+            >
+              <ShieldCheck size={20} color="#7c4dff" />
+              {!collapsed && <span style={{ color: '#7c4dff' }}>Auditoría Masiva (Snapshots)</span>}
+              {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
+            </div>
 
-        <div
-          className={`menu-item ${currentView === 'persona' ? 'active' : ''}`}
-          onClick={() => setView('persona')}
-          title={collapsed ? "Persona (InfoGov)" : ""}
-        >
-          <User size={20} />
-          {!collapsed && <span>Persona (InfoGov)</span>}
-          {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
-        </div>
+            <div
+              className={`menu-item ${currentView === 'persona' ? 'active' : ''}`}
+              onClick={() => setView('persona')}
+              title={collapsed ? "Persona (InfoGov)" : ""}
+            >
+              <User size={20} />
+              {!collapsed && <span>Persona (InfoGov)</span>}
+              {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
+            </div>
 
-        <div
-          className={`menu-item ${currentView === 'explorer' ? 'active' : ''}`}
-          onClick={() => setView('explorer')}
-          title={collapsed ? "Explorador" : ""}
-        >
-          <Search size={20} />
-          {!collapsed && <span>Explorador</span>}
-          {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
-        </div>
+            <div
+              className={`menu-item ${currentView === 'explorer' ? 'active' : ''}`}
+              onClick={() => setView('explorer')}
+              title={collapsed ? "Explorador" : ""}
+            >
+              <Search size={20} />
+              {!collapsed && <span>Explorador</span>}
+              {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
+            </div>
 
-        <div
-          className={`menu-item ${currentView === 'excel' ? 'active' : ''}`}
-          onClick={() => setView('excel')}
-          title={collapsed ? "Excel Comercios" : ""}
-        >
-          <LayoutDashboard size={20} style={{ color: '#10b981' }} />
-          {!collapsed && <span>Excel Comercios</span>}
-          {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
-        </div>
+            <div
+              className={`menu-item ${currentView === 'excel' ? 'active' : ''}`}
+              onClick={() => setView('excel')}
+              title={collapsed ? "Excel Comercios" : ""}
+            >
+              <LayoutDashboard size={20} style={{ color: '#10b981' }} />
+              {!collapsed && <span>Excel Comercios</span>}
+              {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
+            </div>
 
-        <div className="sidebar-separator" style={{ height: '1px', background: 'var(--border)', margin: '1rem 0' }}></div>
+            <div className="sidebar-separator" style={{ height: '1px', background: 'var(--border)', margin: '1rem 0' }}></div>
+          </>
+        )}
 
         {/* User Specific Items */}
         {user?.rol === 'admin' && (
@@ -159,15 +167,17 @@ const Sidebar = ({ currentView, setView, collapsed, setCollapsed, user, onLogout
           </>
         )}
 
-        <div
-          className={`menu-item ${currentView === 'profile' ? 'active' : ''}`}
-          onClick={() => setView('profile')}
-          title={collapsed ? "Mi Perfil" : ""}
-        >
-          <UserCircle size={20} />
-          {!collapsed && <span>Mi Perfil</span>}
-          {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
-        </div>
+        {user?.rol !== 'municipalidad' && (
+          <div
+            className={`menu-item ${currentView === 'profile' ? 'active' : ''}`}
+            onClick={() => setView('profile')}
+            title={collapsed ? "Mi Perfil" : ""}
+          >
+            <UserCircle size={20} />
+            {!collapsed && <span>Mi Perfil</span>}
+            {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
+          </div>
+        )}
 
         <div
           className="menu-item logout-item"

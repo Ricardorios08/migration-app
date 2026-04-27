@@ -88,6 +88,7 @@ const UserManagement = () => {
                             onChange={(e) => setRol(e.target.value)}
                         >
                             <option value="usuario">Usuario</option>
+                            <option value="municipalidad">Municipalidad</option>
                             <option value="admin">Administrador</option>
                             <option value="superadmin">Super Administrador</option>
                         </select>

@@ -33,7 +33,11 @@ function App() {
       // Verify token with backend
       axios.get(`${API_URL}/auth/me`)
         .then(res => {
-          setUser(res.data.user);
+          const userData = res.data.user;
+          setUser(userData);
+          if (userData.rol === 'municipalidad') {
+            setView('ctacte_fn');
+          }
         })
         .catch(err => {
           console.error('Invalid token', err);
@@ -49,7 +53,11 @@ function App() {
 
   const handleLogin = (userData) => {
     setUser(userData);
-    setView('dashboard');
+    if (userData.rol === 'municipalidad') {
+      setView('ctacte_fn');
+    } else {
+      setView('dashboard');
+    }
   };
 
   const handleLogout = () => {

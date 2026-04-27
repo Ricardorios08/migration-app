@@ -394,6 +394,11 @@ p { color: var(--text-dim); line-height: 1.6; }
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
 }
 
+select.input-field option {
+  background-color: #1e293b;
+  color: white;
+}
+
 .btn {
   display: inline-flex;
   align-items: center;
