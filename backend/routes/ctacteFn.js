@@ -23,11 +23,11 @@ router.get('/legacy/search', async (req, res) => {
             let nameQuery = "";
             let nameParams = [acc];
             
-            if (officeId == '13') { // Antenas
+            if (officeId == '7' || officeId == '13') { // Antenas (7 in remote, 13 in local/old)
                 nameQuery = "SELECT RazoCome as name FROM antena WHERE CodiCome = ?";
             } else if (officeId == '2') { // Comercio
                 nameQuery = "SELECT RazoCome as name FROM comercio WHERE CodiCome = ?";
-            } else if (officeId == '3') { // Publicidad
+            } else if (officeId == '6' || officeId == '3') { // Publicidad (6 in remote, 3 in local/old)
                 nameQuery = "SELECT RazoCome as name FROM publicidad WHERE CodiCome = ?";
             } else if (officeId == '4') { // Cementerio
                 nameQuery = "SELECT RazoCome as name FROM cementerio WHERE CodiCome = ?";
@@ -391,11 +391,11 @@ router.get('/report/comparison', async (req, res) => {
         let accountNameMap = {};
         if (accList.length > 0) {
             let nameQuery = "";
-            if (offId === 13) { // Antenas
+            if (offId === 7 || offId === 13) { // Antenas
                 nameQuery = `SELECT CodiCome as acc, RazoCome as name FROM antena WHERE CodiCome IN (${placeholders})`;
             } else if (offId === 2) { // Comercio
                 nameQuery = `SELECT CodiCome as acc, RazoCome as name FROM comercio WHERE CodiCome IN (${placeholders})`;
-            } else if (offId === 3) { // Publicidad
+            } else if (offId === 6 || offId === 3) { // Publicidad
                 nameQuery = `SELECT CodiCome as acc, RazoCome as name FROM publicidad WHERE CodiCome IN (${placeholders})`;
             } else if (offId === 4) { // Cementerio
                 nameQuery = `SELECT CodiCome as acc, RazoCome as name FROM cementerio WHERE CodiCome IN (${placeholders})`;
@@ -456,6 +456,7 @@ router.get('/report/comparison', async (req, res) => {
 
             return {
                 cuenta: acc,
+                accountName: accountNameMap[acc] || null,
                 officeId: officeId,
                 percod: pInfo.percod,
                 nombre: pInfo.nombre,

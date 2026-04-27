@@ -123,43 +123,61 @@ router.get('/resolve-account/:account', async (req, res) => {
             const pgRes = await require('../db/postgres').query(pgQuery, [account]);
             pgRes.rows.forEach(r => officesFound.add(r.officeId.toString()));
         } else {
-            // Default: Search by account in both DBs using space-padded variants (0-8 spaces)
+            // HIGH PERFORMANCE RESOLUTION: Force MariaDB to use (CodiOfic, CuenCtct) index
             const variants = [];
-            for (let i = 0; i <= 8; i++) {
+            for (let i = 0; i <= 11; i++) {
                 variants.push(account.padStart(i, ' '));
             }
             const uniqueVariants = [...new Set(variants)];
             const inPlaceholders = uniqueVariants.map(() => '?').join(',');
 
-            conn = await mariaDB.getRemoteConnection();
-            
-            // Search in CtaCte (Main)
-            try {
-                const mariaOffices = await conn.query(`
-                    SELECT DISTINCT CodiOfic FROM recaudacion2.ctacte WHERE CuenCtct IN (${inPlaceholders})
-                `, uniqueVariants);
-                mariaOffices.forEach(r => officesFound.add(r.CodiOfic.toString()));
-            } catch (e) { console.error("MariaDB resolve error:", e.message); }
+            // We test the most common offices (1-30) individually to hit the index
+            const officesToTest = Array.from({length: 30}, (_, i) => i + 1);
 
-            // Search in Historical
+            // 1. Search in REMOTE MariaDB (CtaCte)
             try {
-                const histoOffices = await conn.query(`
-                    SELECT DISTINCT CodiOfic FROM recahisto.histoctacte WHERE CuenCtct IN (${inPlaceholders})
-                `, uniqueVariants);
-                histoOffices.forEach(r => officesFound.add(r.CodiOfic.toString()));
-            } catch (hErr) { /* Silent fail */ }
+                const remoteConn = await mariaDB.getRemoteConnection();
+                for (const off of officesToTest) {
+                    const res = await remoteConn.query(`
+                        SELECT DISTINCT CodiOfic FROM recaudacion2.ctacte 
+                        WHERE CodiOfic = ? AND CuenCtct IN (${inPlaceholders}) 
+                        LIMIT 1
+                    `, [off, ...uniqueVariants]);
+                    if (res.length > 0) {
+                        officesFound.add(res[0].CodiOfic.toString());
+                    }
+                }
+                remoteConn.release();
+            } catch (e) { }
 
-            // Search in Postgres
+            // 2. Search in LOCAL MariaDB (CtaCte)
             try {
-                const pgQuery = `
+                const localConn = await mariaDB.getConnection();
+                for (const off of officesToTest) {
+                    const res = await localConn.query(`
+                        SELECT DISTINCT CodiOfic FROM recaudacion.ctacte 
+                        WHERE CodiOfic = ? AND CuenCtct IN (${inPlaceholders}) 
+                        LIMIT 1
+                    `, [off, ...uniqueVariants]);
+                    if (res.length > 0) {
+                        officesFound.add(res[0].CodiOfic.toString());
+                    }
+                }
+                localConn.release();
+            } catch (e) { }
+
+            // 3. Search in Postgres
+            try {
+                const pgRes = await require('../db/postgres').query(`
                     SELECT DISTINCT tt.tpotribcod as "officeId"
                     FROM public.tributo t
                     JOIN public.tipotributo tt ON t.tpotribcod = tt.tpotribcod
                     WHERE t.tbecod = ANY($1)
-                `;
-                const pgRes = await require('../db/postgres').query(pgQuery, [uniqueVariants]);
-                pgRes.rows.forEach(r => officesFound.add(r.officeId.toString()));
-            } catch (pErr) { console.error("Postgres resolve error:", pErr.message); }
+                `, [uniqueVariants]);
+                pgRes.rows.forEach(r => {
+                    officesFound.add(r.officeId.toString());
+                });
+            } catch (pErr) { }
         }
 
         if (officesFound.size === 0) {
