@@ -5,7 +5,7 @@ import { API_URL } from '../config';
 
 const TableExplorer = () => {
     const [engine, setEngine] = useState('maria');
-    const [db, setDb] = useState('recaudacion2');
+    const [db, setDb] = useState(import.meta.env.VITE_MARIA_DB_NAME || 'recaudacion2');
     const [tables, setTables] = useState([]);
     const [selectedTable, setSelectedTable] = useState(null);
     const [data, setData] = useState([]);
@@ -20,7 +20,7 @@ const TableExplorer = () => {
         { id: 'municipiov1', name: 'MunicipioV1', color: '#10b981' },
         { id: 'personal3', name: 'Personal3', color: '#ec4899' },
         { id: 'recahisto', name: 'RecaHisto', color: '#8b5cf6' },
-        { id: 'recaudacion2', name: 'Recaudación', color: '#6366f1' }
+        { id: import.meta.env.VITE_MARIA_DB_NAME || 'recaudacion2', name: 'Recaudación', color: '#6366f1' }
     ] : [
         { id: 'public', name: 'PostgreSQL', color: '#336791' }
     ];
@@ -99,7 +99,7 @@ const TableExplorer = () => {
                             <button 
                                 className={`btn ${engine === 'maria' ? 'btn-primary' : ''}`}
                                 style={{ fontSize: '0.75rem', padding: '0.4rem 1rem' }}
-                                onClick={() => { setEngine('maria'); setDb('recaudacion2'); }}
+                                onClick={() => { setEngine('maria'); setDb(import.meta.env.VITE_MARIA_DB_NAME || 'recaudacion2'); }}
                             >
                                 MariaDB
                             </button>

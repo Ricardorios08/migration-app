@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const mariaDB = require('../db/maria');
+
+const DB_NAME = process.env.MARIA_DB_NAME || 'recaudacion2';
 const postgresDB = require('../db/postgres');
 
 const { calculateLegacyInterest } = require('../utils/interestUtils');
@@ -12,7 +14,7 @@ router.get('/legacy/search', async (req, res) => {
 
     try {
         conn = await mariaDB.getRemoteConnection();
-        await conn.query("USE recaudacion");
+        await conn.query(`USE ${DB_NAME}`);
 
         const accList = Array.isArray(account) ? account : (account ? [account.toString().trim()] : []);
         const queryDate = toDate || new Date().toISOString().split('T')[0];
@@ -293,7 +295,7 @@ router.get('/report/comparison', async (req, res) => {
 
     try {
         conn = await mariaDB.getRemoteConnection();
-        await conn.query("USE recaudacion");
+        await conn.query(`USE ${DB_NAME}`);
 
         const offId = parseInt(officeId);
         const pNum = parseInt(page);

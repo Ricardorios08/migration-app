@@ -1,9 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const mariaDB = require('../db/maria');
+
+const DB_NAME = process.env.MARIA_DB_NAME || 'recaudacion2';
 const postgres = require('../db/postgres');
 
-const ALLOWED_MARIA_DBS = ['infogov', 'contpres', 'municipiov1', 'personal3', 'recahisto', 'recaudacion', 'recaudacion2'];
+const ALLOWED_MARIA_DBS = ['infogov', 'contpres', 'municipiov1', 'personal3', 'recahisto', 'recaudacion', 'recaudacion2', DB_NAME];
 
 // List tables in a specific database/schema
 router.get('/:engine/:db/tables', async (req, res) => {

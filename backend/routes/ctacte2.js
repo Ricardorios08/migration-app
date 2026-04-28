@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const mariaDB = require('../db/maria');
+
+const DB_NAME = process.env.MARIA_DB_NAME || 'recaudacion2';
 const postgresDB = require('../db/postgres');
 
 // Get list of offices
@@ -197,7 +199,7 @@ router.get('/legacy/search', async (req, res) => {
 
     try {
         conn = await mariaDB.getRemoteConnection();
-        await conn.query("USE recaudacion");
+        await conn.query(`USE ${DB_NAME}`);
 
         // Normalize account to an array
         const accList = Array.isArray(account) ? account : (account ? [account.toString().trim()] : []);

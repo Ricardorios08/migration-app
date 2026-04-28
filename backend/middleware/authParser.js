@@ -12,16 +12,10 @@ const authParser = (req, res, next) => {
             if (!err) {
                 req.user = user;
             }
-            // Run the rest of the request within the async context containing the user's role
-            requestContext.run(new Map([['role', req.user?.rol || 'default']]), () => {
-                next();
-            });
-        });
-    } else {
-        // No token provided, proceed with default role
-        requestContext.run(new Map([['role', 'default']]), () => {
             next();
         });
+    } else {
+        next();
     }
 };
 

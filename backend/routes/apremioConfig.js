@@ -2,10 +2,12 @@ const express = require('express');
 const router = express.Router();
 const maria = require('../db/maria');
 
+const DB_NAME = process.env.MARIA_DB_NAME || 'recaudacion2';
+
 // GET /apremio-config/paraapre
 router.get('/paraapre', async (req, res) => {
     try {
-        await maria.query('USE recaudacion');
+        await maria.query(`USE ${DB_NAME}`);
         const rows = await maria.query('SELECT * FROM paraapre');
         res.json(rows);
     } catch (err) {
@@ -17,7 +19,7 @@ router.get('/paraapre', async (req, res) => {
 // GET /apremio-config/instjudi
 router.get('/instjudi', async (req, res) => {
     try {
-        await maria.query('USE recaudacion');
+        await maria.query(`USE ${DB_NAME}`);
         const rows = await maria.query('SELECT * FROM instjudi ORDER BY CodiInju');
         res.json(rows);
     } catch (err) {
@@ -29,7 +31,7 @@ router.get('/instjudi', async (req, res) => {
 // GET /apremio-config/escaapre
 router.get('/escaapre', async (req, res) => {
     try {
-        await maria.query('USE recaudacion');
+        await maria.query(`USE ${DB_NAME}`);
         const rows = await maria.query('SELECT * FROM escaapre ORDER BY CodiPaap, CodiEsap');
         res.json(rows);
     } catch (err) {
@@ -42,7 +44,7 @@ router.get('/escaapre', async (req, res) => {
 router.get('/boleapre-sample', async (req, res) => {
     try {
         const limit = Math.min(parseInt(req.query.limit) || 10, 50);
-        await maria.query('USE recaudacion');
+        await maria.query(`USE ${DB_NAME}`);
         const rows = await maria.query(`SELECT * FROM boleapre WHERE CoadBoap > 0 LIMIT ?`, [limit]);
         res.json(rows);
     } catch (err) {
@@ -55,7 +57,7 @@ router.get('/boleapre-sample', async (req, res) => {
 router.get('/debt', async (req, res) => {
     try {
         const { numeApre, cuenCtct } = req.query;
-        await maria.query('USE recaudacion');
+        await maria.query(`USE ${DB_NAME}`);
         
         let sql = '';
         let params = [];

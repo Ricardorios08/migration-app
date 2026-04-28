@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const mariaDB = require('../db/maria');
+
+const DB_NAME = process.env.MARIA_DB_NAME || 'recaudacion2';
 const postgresDB = require('../db/postgres');
 
 // Get list of offices
@@ -135,8 +137,9 @@ router.get('/resolve-account/:account', async (req, res) => {
             const officesToTest = Array.from({length: 30}, (_, i) => i + 1);
 
             // 1. Search in REMOTE MariaDB (CtaCte)
+            let remoteConn;
             try {
-                const remoteConn = await mariaDB.getRemoteConnection();
+                remoteConn = await mariaDB.getRemoteConnection();
                 for (const off of officesToTest) {
                     const res = await remoteConn.query(`
                         SELECT DISTINCT CodiOfic FROM ctacte 
@@ -147,15 +150,19 @@ router.get('/resolve-account/:account', async (req, res) => {
                         officesFound.add(res[0].CodiOfic.toString());
                     }
                 }
-                remoteConn.release();
-            } catch (e) { }
+            } catch (e) {
+                console.error('[RESOLVE] Remote MariaDB error:', e.message);
+            } finally {
+                if (remoteConn) remoteConn.release();
+            }
 
             // 2. Search in LOCAL MariaDB (CtaCte)
+            let localConn;
             try {
-                const localConn = await mariaDB.getConnection();
+                localConn = await mariaDB.getConnection();
                 for (const off of officesToTest) {
                     const res = await localConn.query(`
-                        SELECT DISTINCT CodiOfic FROM recaudacion.ctacte 
+                        SELECT DISTINCT CodiOfic FROM ${DB_NAME}.ctacte 
                         WHERE CodiOfic = ? AND CuenCtct IN (${inPlaceholders}) 
                         LIMIT 1
                     `, [off, ...uniqueVariants]);
@@ -163,8 +170,11 @@ router.get('/resolve-account/:account', async (req, res) => {
                         officesFound.add(res[0].CodiOfic.toString());
                     }
                 }
-                localConn.release();
-            } catch (e) { }
+            } catch (e) {
+                console.error('[RESOLVE] Local MariaDB error:', e.message);
+            } finally {
+                if (localConn) localConn.release();
+            }
 
             // 3. Search in Postgres
             try {
@@ -219,7 +229,7 @@ router.get('/legacy/search', async (req, res) => {
 
     try {
         conn = await mariaDB.getRemoteConnection();
-        await conn.query("USE recaudacion"); // Ensure database is selected
+        await conn.query(`USE ${DB_NAME}`); // Ensure database is selected
 
         // Normalize account to an array
         const accList = Array.isArray(account) ? account : (account ? [account.toString().trim()] : []);

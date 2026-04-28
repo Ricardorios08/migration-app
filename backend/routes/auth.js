@@ -112,6 +112,30 @@ router.delete('/users/:id', authenticateToken, isAdmin, async (req, res) => {
     }
 });
 
+router.put('/users/:id', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { password, rol } = req.body;
+        
+        // Check if user exists and isn't Ricardo
+        const users = await userDb.query('SELECT nombre_usuario FROM user WHERE id = ?', [id]);
+        if (users.length === 0) return res.status(404).json({ error: 'Usuario no encontrado' });
+        if (users[0].nombre_usuario === 'Ricardo' && req.user.nombre_usuario !== 'Ricardo') {
+            return res.status(403).json({ error: 'No se puede modificar a este admin' });
+        }
+
+        if (password) {
+            const hashedPass = await bcrypt.hash(password, 10);
+            await userDb.query('UPDATE user SET password = ?, rol = ? WHERE id = ?', [hashedPass, rol, id]);
+        } else {
+            await userDb.query('UPDATE user SET rol = ? WHERE id = ?', [rol, id]);
+        }
+        res.json({ message: 'OK' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // Logs (Superadmin only)
 router.get('/logs', authenticateToken, isSuperAdmin, (req, res) => {
     try {

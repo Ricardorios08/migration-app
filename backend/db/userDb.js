@@ -10,7 +10,10 @@ const pool = mariadb.createPool({
      password: process.env.MARIA_PASS,
      port: parseInt(process.env.MARIA_PORT || "3306"),
      database: 'user',
-     connectionLimit: 5
+     connectionLimit: 10,
+     connectTimeout: 10000,
+     acquireTimeout: 10000,
+     allowPublicKeyRetrieval: true
 });
 
 module.exports = {

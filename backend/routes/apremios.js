@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const mariaDB = require('../db/maria');
+
+const DB_NAME = process.env.MARIA_DB_NAME || 'recaudacion2';
 const postgresDB = require('../db/postgres');
 
 // Cache for PG IDs to avoid frequent large fetches
@@ -34,14 +36,14 @@ router.get('/stats', async (req, res) => {
         const pgTotal = pgIds.length;
 
         console.log('[STATS] Fetching MariaDB total...');
-        const mariaTotalRes = await conn.query('SELECT COUNT(*) as total FROM recaudacion.apremio');
+        const mariaTotalRes = await conn.query(`SELECT COUNT(*) as total FROM ${DB_NAME}.apremio`);
         const mariaTotal = parseInt(mariaTotalRes[0].total);
 
         console.log('[STATS] Fetching MariaDB stats by estado...');
         const estadoStatsRes = await conn.query(`
             SELECT a.EstaApre, ea.DetaEsap as name, COUNT(*) as value
-            FROM recaudacion.apremio a
-            LEFT JOIN recaudacion.estadoapremio ea ON a.EstaApre = ea.CodiEsap
+            FROM ${DB_NAME}.apremio a
+            LEFT JOIN ${DB_NAME}.estadoapremio ea ON a.EstaApre = ea.CodiEsap
             GROUP BY a.EstaApre, ea.DetaEsap
             ORDER BY value DESC
             LIMIT 10
@@ -93,7 +95,7 @@ router.get('/pending-ids', async (req, res) => {
 
         const pendingRes = await conn.query(`
             SELECT a.NumeApre 
-            FROM recaudacion.apremio a 
+            FROM ${DB_NAME}.apremio a 
             LEFT JOIN tmp_migrated_ids_export t ON a.NumeApre = t.numeapre 
             WHERE t.numeapre IS NULL
             ORDER BY a.NumeApre ASC
@@ -154,10 +156,10 @@ router.get('/compare', async (req, res) => {
                    a.CodiReca, r.DetaReca as RecaudadorDeta, 
                    a.CodiInju, a.EstaApre, ea.DetaEsap as EstadoDeta,
                    a.CapiApre, a.RecaApre, ij.DetaInju as InstanciaDeta
-            FROM recaudacion.apremio a
-            LEFT JOIN recaudacion.recaudador r ON a.CodiReca = r.CodiReca
-            LEFT JOIN recaudacion.estadoapremio ea ON a.EstaApre = ea.CodiEsap
-            LEFT JOIN recaudacion.instjudi ij ON a.CodiInju = ij.CodiInju
+            FROM ${DB_NAME}.apremio a
+            LEFT JOIN ${DB_NAME}.recaudador r ON a.CodiReca = r.CodiReca
+            LEFT JOIN ${DB_NAME}.estadoapremio ea ON a.EstaApre = ea.CodiEsap
+            LEFT JOIN ${DB_NAME}.instjudi ij ON a.CodiInju = ij.CodiInju
         `;
 
         if (useStatusFilter) {
@@ -248,7 +250,7 @@ router.get('/compare', async (req, res) => {
         });
 
         // Get total count for pagination
-        let countQuery = 'SELECT COUNT(*) as total FROM recaudacion.apremio a ';
+        let countQuery = `SELECT COUNT(*) as total FROM ${DB_NAME}.apremio a `;
         
         if (useStatusFilter) {
             if (status === 'migrated') {
