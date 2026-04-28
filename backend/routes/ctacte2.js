@@ -6,7 +6,7 @@ const postgresDB = require('../db/postgres');
 // Get list of offices
 router.get('/offices', async (req, res) => {
     try {
-        const offices = await mariaDB.queryRemote('SELECT CodiOfic, DetaOfic FROM recaudacion2.oficina ORDER BY CodiOfic');
+        const offices = await mariaDB.queryRemote('SELECT CodiOfic, DetaOfic FROM oficina ORDER BY CodiOfic');
         const result = [...offices, { CodiOfic: 99, DetaOfic: 'CUIL/CUIT' }];
         res.json(result);
     } catch (err) {
@@ -126,7 +126,7 @@ router.get('/resolve-account/:account', async (req, res) => {
             // Default: Search by account in both DBs
             conn = await mariaDB.getRemoteConnection();
             const mariaOffices = await conn.query(`
-                SELECT DISTINCT CodiOfic FROM recaudacion2.ctacte WHERE CuenCtct = ?
+                SELECT DISTINCT CodiOfic FROM ctacte WHERE CuenCtct = ?
             `, [account]);
             mariaOffices.forEach(r => officesFound.add(r.CodiOfic.toString()));
 
@@ -141,7 +141,7 @@ router.get('/resolve-account/:account', async (req, res) => {
 
             try {
                 const boletoOffices = await conn.query(`
-                    SELECT DISTINCT CodiOfic FROM recaudacion2.boleto WHERE CuenCtct = ?
+                    SELECT DISTINCT CodiOfic FROM boleto WHERE CuenCtct = ?
                 `, [account]);
                 boletoOffices.forEach(r => officesFound.add(r.CodiOfic.toString()));
             } catch (bErr) {
@@ -169,7 +169,7 @@ router.get('/resolve-account/:account', async (req, res) => {
             if (!conn) conn = await mariaDB.getRemoteConnection();
             officeNames = await conn.query(`
                 SELECT CodiOfic as id, DetaOfic as name 
-                FROM recaudacion2.oficina 
+                FROM oficina 
                 WHERE CodiOfic IN (${ids.map(() => '?').join(',')})
             `, ids);
         } catch (mErr) {
@@ -197,7 +197,7 @@ router.get('/legacy/search', async (req, res) => {
 
     try {
         conn = await mariaDB.getRemoteConnection();
-        await conn.query("USE recaudacion2");
+        await conn.query("USE recaudacion");
 
         // Normalize account to an array
         const accList = Array.isArray(account) ? account : (account ? [account.toString().trim()] : []);
@@ -222,7 +222,7 @@ router.get('/legacy/search', async (req, res) => {
                         MAX(t.CodiFapa) as CodiFapa,
                         (MAX(t.NumeApre) > 0) as hasApremio,
                         (MAX(t.CodiFapa) > 0) as hasPlan
-                    FROM recaudacion2.ctacte t
+                    FROM ctacte t
                     LEFT JOIN concepto c ON c.PeriInfo = t.PeriInfo AND c.CodiConc = t.CodiConc
                     WHERE t.CodiOfic = ? AND t.CuenCtct = ?
                     GROUP BY t.PeriCtct, t.BimeCtct, t.PeriInfo, t.CodiConc
@@ -268,7 +268,7 @@ router.get('/legacy/search', async (req, res) => {
                     (tmp.CodiFapa > 0) as hasPlan
                 FROM (
                     SELECT PeriCtct, BimeCtct, CuotDefa, FeveCtct, DetaCtct, DebeCtct, CredCtct, NumeApre, CodiFapa, PeriInfo, CodiConc, NumeAcpa, FeenAcpa as FechaPago
-                    FROM recaudacion2.ctacte
+                    FROM ctacte
                     WHERE CodiOfic = ? AND CuenCtct IN (${accPlaceholders}) ${fealCorteFilter}
                     UNION ALL
                     SELECT PeriCtct, BimeCtct, CuotDefa, FeveCtct, DetaCtct, DebeCtct, CredCtct, NumeApre, CodiFapa, PeriInfo, CodiConc, NumeAcpa, FeenAcpa as FechaPago

@@ -65,6 +65,16 @@ const Sidebar = ({ currentView, setView, collapsed, setCollapsed, user, onLogout
           {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
         </div>
 
+        <div
+          className={`menu-item ${currentView === 'boletos' ? 'active' : ''}`}
+          onClick={() => setView('boletos')}
+          title={collapsed ? "Buscador Boletos" : ""}
+        >
+          <FileText size={20} color="#f59e0b" />
+          {!collapsed && <span style={{ color: '#f59e0b' }}>Buscador Boletos</span>}
+          {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
+        </div>
+
         {user?.rol !== 'municipalidad' && (
           <>
             <div
@@ -107,15 +117,7 @@ const Sidebar = ({ currentView, setView, collapsed, setCollapsed, user, onLogout
               {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
             </div>
 
-            <div
-              className={`menu-item ${currentView === 'boletos' ? 'active' : ''}`}
-              onClick={() => setView('boletos')}
-              title={collapsed ? "Buscador Boletos" : ""}
-            >
-              <FileText size={20} color="#f59e0b" />
-              {!collapsed && <span style={{ color: '#f59e0b' }}>Buscador Boletos</span>}
-              {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
-            </div>
+
 
             <div
               className={`menu-item ${currentView === 'explorer' ? 'active' : ''}`}

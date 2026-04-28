@@ -12,7 +12,7 @@ router.get('/legacy/search', async (req, res) => {
 
     try {
         conn = await mariaDB.getRemoteConnection();
-        await conn.query("USE recaudacion2");
+        await conn.query("USE recaudacion");
 
         const accList = Array.isArray(account) ? account : (account ? [account.toString().trim()] : []);
         const queryDate = toDate || new Date().toISOString().split('T')[0];
@@ -69,7 +69,7 @@ router.get('/legacy/search', async (req, res) => {
                     MAX(t.PeriInfo) as PeriInfo, MAX(t.CodiConc) as CodiConc,
                     'CTACTE' as Source,
                     t.CuenCtct as CuenCtct
-                FROM recaudacion2.ctacte t
+                FROM ctacte t
                 LEFT JOIN concepto c ON c.PeriInfo = t.PeriInfo AND c.CodiConc = t.CodiConc
                 ${whereClause}
                 GROUP BY t.PeriCtct, t.BimeCtct, t.PeriInfo, t.CodiConc, t.CuenCtct
@@ -293,7 +293,7 @@ router.get('/report/comparison', async (req, res) => {
 
     try {
         conn = await mariaDB.getRemoteConnection();
-        await conn.query("USE recaudacion2");
+        await conn.query("USE recaudacion");
 
         const offId = parseInt(officeId);
         const pNum = parseInt(page);
@@ -496,7 +496,7 @@ router.get('/offices', async (req, res) => {
     let conn;
     try {
         conn = await mariaDB.getRemoteConnection();
-        const results = await conn.query("SELECT CodiOfic as id, DetaOfic as name FROM recaudacion2.oficina ORDER BY id");
+        const results = await conn.query("SELECT CodiOfic as id, DetaOfic as name FROM oficina ORDER BY id");
         res.json(results);
     } catch (err) {
         res.status(500).json({ error: err.message });

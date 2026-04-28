@@ -3,16 +3,7 @@ const router = express.Router();
 const mariaDB = require('../db/maria');
 const postgres = require('../db/postgres');
 
-// Whitelist of MariaDB databases
 const ALLOWED_MARIA_DBS = ['infogov', 'contpres', 'municipiov1', 'personal3', 'recahisto', 'recaudacion', 'recaudacion2'];
-
-// Helper for MariaDB
-const getMariaQueryFn = (db) => {
-    if (db === 'recaudacion2' || db === 'recaudacion_remote') {
-        return mariaDB.queryRemote;
-    }
-    return mariaDB.query;
-};
 
 // List tables in a specific database/schema
 router.get('/:engine/:db/tables', async (req, res) => {
@@ -38,13 +29,11 @@ router.get('/:engine/:db/tables', async (req, res) => {
         }
 
         // MariaDB Logic
-        if (!ALLOWED_MARIA_DBS.includes(db) && db !== 'recaudacion_remote') {
+        if (!ALLOWED_MARIA_DBS.includes(db)) {
             return res.status(403).json({ error: 'Base de datos no permitida' });
         }
 
-        const queryFn = getMariaQueryFn(db);
-        const targetDb = db === 'recaudacion_remote' ? 'recaudacion' : db;
-        const result = await queryFn(`SHOW TABLE STATUS FROM ${targetDb}`);
+        const result = await mariaDB.query(`SHOW TABLE STATUS FROM ${db}`);
         const formatted = result.map(t => ({
             name: t.Name,
             rows: t.Rows,
@@ -91,18 +80,15 @@ router.get('/:engine/:db/explore/:table', async (req, res) => {
         }
 
         // MariaDB Logic
-        if (!ALLOWED_MARIA_DBS.includes(db) && db !== 'recaudacion_remote') {
+        if (!ALLOWED_MARIA_DBS.includes(db)) {
             return res.status(403).json({ error: 'Base de datos no permitida' });
         }
 
-        const queryFn = getMariaQueryFn(db);
-        const targetDb = db === 'recaudacion_remote' ? 'recaudacion' : db;
-        
-        let query = `SELECT * FROM ${targetDb}.${table}`;
+        let query = `SELECT * FROM ${db}.${table}`;
         let params = [];
 
         if (q) {
-            const columns = await queryFn(`SHOW COLUMNS FROM ${targetDb}.${table}`);
+            const columns = await mariaDB.query(`SHOW COLUMNS FROM ${db}.${table}`);
             const searchableColumns = columns
                 .filter(col => {
                     const type = col.Type.toLowerCase();
@@ -123,7 +109,7 @@ router.get('/:engine/:db/explore/:table', async (req, res) => {
         }
 
         query += ` LIMIT ${parseInt(limit)}`;
-        const result = await queryFn(query, params);
+        const result = await mariaDB.query(query, params);
         res.json(result);
     } catch (err) {
         console.error(`Error exploring ${db}.${table}:`, err);

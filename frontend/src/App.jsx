@@ -91,7 +91,7 @@ function App() {
         onLogout={handleLogout}
       />
       <main className="main-content">
-        <Header />
+        <Header user={user} />
         <div className="body-content-wrapper" style={{ flex: 1, overflow: 'hidden' }}>
           {view === 'dashboard' ? (
             <AuditDashboard />
