@@ -38,6 +38,12 @@ const CuentaCorrienteFn = () => {
     const [filterYear, setFilterYear] = useState('');
     const [filterMonth, setFilterMonth] = useState('');
 
+    const [isFiltersExpanded, setIsFiltersExpanded] = useState(false);
+
+    const formatCurrency = (val) => {
+        return parseFloat(val || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    };
+
     // Person search autocomplete
     const [personSearchText, setPersonSearchText] = useState('');
     const [personSearchResults, setPersonSearchResults] = useState([]);
@@ -343,10 +349,10 @@ const CuentaCorrienteFn = () => {
                     </span>
                 ) : '-'}
             </td>
-            <td style={{ color: '#ef4444' }}>${parseFloat(row.DebeCtct || 0).toFixed(2)}</td>
-            <td style={{ color: '#f59e0b' }}>${parseFloat(row.RecaCtct || 0).toFixed(2)}</td>
-            <td style={{ color: '#10b981' }}>${parseFloat(row.CredCtct || 0).toFixed(2)}</td>
-            <td style={{ fontWeight: 'bold' }}>${parseFloat(row.TotaCtct || 0).toFixed(2)}</td>
+            <td style={{ color: '#ef4444' }}>${formatCurrency(row.DebeCtct)}</td>
+            <td style={{ color: '#f59e0b' }}>${formatCurrency(row.RecaCtct)}</td>
+            <td style={{ color: '#10b981' }}>${formatCurrency(row.CredCtct)}</td>
+            <td style={{ fontWeight: 'bold' }}>${formatCurrency(row.TotaCtct)}</td>
             <td>
                 {(() => {
                     const hasBalance = parseFloat(row.TotaCtct || 0) > 0.10;
@@ -386,11 +392,11 @@ const CuentaCorrienteFn = () => {
             <td colSpan={5} style={{ textAlign: 'right', fontWeight: 'bold', color: 'var(--primary)' }}>
                 Subtotal {period}/{bime}:
             </td>
-            <td style={{ color: '#ef4444', fontWeight: 'bold' }}>${totals.debe.toFixed(2)}</td>
-            <td style={{ color: '#f59e0b', fontWeight: 'bold' }}>${totals.reca.toFixed(2)}</td>
-            <td style={{ color: '#10b981', fontWeight: 'bold' }}>${totals.haber.toFixed(2)}</td>
+            <td style={{ color: '#ef4444', fontWeight: 'bold' }}>${formatCurrency(totals.debe)}</td>
+            <td style={{ color: '#f59e0b', fontWeight: 'bold' }}>${formatCurrency(totals.reca)}</td>
+            <td style={{ color: '#10b981', fontWeight: 'bold' }}>${formatCurrency(totals.haber)}</td>
             <td style={{ borderTop: '1px solid var(--primary)', background: 'rgba(37, 99, 235, 0.1)' }}>
-                ${totals.total.toFixed(2)}
+                ${formatCurrency(totals.total)}
             </td>
             <td></td>
         </tr>
@@ -880,15 +886,15 @@ const CuentaCorrienteFn = () => {
                         ) : '-'}
                     </td>
                     <td style={{ color: isMismatchDebe ? '#fca5a5' : '#ef4444', fontWeight: isMismatchDebe ? 'bold' : 'normal' }}>
-                        ${row.DebeCtct.toFixed(2)}
+                        ${formatCurrency(row.DebeCtct)}
                     </td>
                     <td style={{ color: isMismatchReca ? '#fca5a5' : '#f59e0b', fontWeight: isMismatchReca ? 'bold' : 'normal' }}>
-                        ${(row.RecaCtct || 0).toFixed(2)}
+                        ${formatCurrency(row.RecaCtct)}
                     </td>
                     <td style={{ color: '#10b981' }}>
-                        ${(row.CredCtct || 0).toFixed(2)}
+                        ${formatCurrency(row.CredCtct)}
                     </td>
-                    <td style={{ fontWeight: 'bold' }}>${(row.TotaCtct || 0).toFixed(2)}</td>
+                    <td style={{ fontWeight: 'bold' }}>${formatCurrency(row.TotaCtct)}</td>
                     <td>
                         <div className={`status-pill ${row.NumeAcpa && row.NumeAcpa != '0' ? 'P' : 'D'}`}>
                             {row.NumeAcpa && row.NumeAcpa != '0' ? 'Pagado' : 'Deuda'}
@@ -1174,92 +1180,112 @@ const CuentaCorrienteFn = () => {
                         </div>
                     )}
 
-                    <div className="input-group">
-                        <Calendar size={18} />
-                        <div style={{ display: 'flex', flexDirection: 'column', padding: '2px' }}>
-                            <label style={{ fontSize: '0.65rem', opacity: 0.7, marginLeft: '0.5rem' }}>Fecha Tope (Interés)</label>
-                            <input
-                                type="date"
-                                value={toDate}
-                                onChange={(e) => setToDate(e.target.value)}
-                                style={{ background: 'transparent', border: 'none', color: 'white' }}
-                            />
-                        </div>
-                    </div>
+                    {isFiltersExpanded && (
+                        <>
+                            <div className="input-group">
+                                <Calendar size={18} />
+                                <div style={{ display: 'flex', flexDirection: 'column', padding: '2px' }}>
+                                    <label style={{ fontSize: '0.65rem', opacity: 0.7, marginLeft: '0.5rem' }}>Fecha Tope (Interés)</label>
+                                    <input
+                                        type="date"
+                                        value={toDate}
+                                        onChange={(e) => setToDate(e.target.value)}
+                                        style={{ background: 'transparent', border: 'none', color: 'white' }}
+                                    />
+                                </div>
+                            </div>
 
-                    <div className="input-group" style={{ paddingLeft: '10px' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', padding: '2px' }}>
-                            <label style={{ fontSize: '0.65rem', color: '#fbbf24' }}>Año</label>
-                            <input
-                                type="number"
-                                placeholder="AAAA"
-                                value={filterYear}
-                                onChange={(e) => setFilterYear(e.target.value)}
-                                style={{ background: 'transparent', border: 'none', color: '#fbbf24', width: '90px', fontSize: '1.1rem', fontWeight: 'bold' }}
-                            />
-                        </div>
-                    </div>
+                            <div className="input-group" style={{ paddingLeft: '10px' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', padding: '2px' }}>
+                                    <label style={{ fontSize: '0.65rem', color: '#fbbf24' }}>Año</label>
+                                    <input
+                                        type="number"
+                                        placeholder="AAAA"
+                                        value={filterYear}
+                                        onChange={(e) => setFilterYear(e.target.value)}
+                                        style={{ background: 'transparent', border: 'none', color: '#fbbf24', width: '90px', fontSize: '1.1rem', fontWeight: 'bold' }}
+                                    />
+                                </div>
+                            </div>
 
-                    <div className="input-group" style={{ paddingLeft: '10px' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', padding: '2px' }}>
-                            <label style={{ fontSize: '0.65rem', color: '#fbbf24' }}>Cuota/Mes</label>
-                            <input
-                                type="number"
-                                placeholder="1-12"
-                                value={filterMonth}
-                                onChange={(e) => setFilterMonth(e.target.value)}
-                                style={{ background: 'transparent', border: 'none', color: '#fbbf24', width: '65px', fontSize: '1.1rem', fontWeight: 'bold' }}
-                            />
-                        </div>
-                    </div>
+                            <div className="input-group" style={{ paddingLeft: '10px' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', padding: '2px' }}>
+                                    <label style={{ fontSize: '0.65rem', color: '#fbbf24' }}>Cuota/Mes</label>
+                                    <input
+                                        type="number"
+                                        placeholder="1-12"
+                                        value={filterMonth}
+                                        onChange={(e) => setFilterMonth(e.target.value)}
+                                        style={{ background: 'transparent', border: 'none', color: '#fbbf24', width: '65px', fontSize: '1.1rem', fontWeight: 'bold' }}
+                                    />
+                                </div>
+                            </div>
+                        </>
+                    )}
 
-                    <button id="btn-main-search" type="submit" className="btn btn-primary" disabled={loading} style={{ padding: '0.8rem 2rem', fontWeight: 'bold' }}>
-                        {loading ? 'Buscando...' : 'Buscar'}
-                    </button>
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                        <button id="btn-main-search" type="submit" className="btn btn-primary" disabled={loading} style={{ padding: '0.8rem 2rem', fontWeight: 'bold' }}>
+                            {loading ? 'Buscando...' : 'Buscar'}
+                        </button>
+                        <button 
+                            type="button" 
+                            onClick={() => setIsFiltersExpanded(!isFiltersExpanded)}
+                            style={{ 
+                                background: 'transparent', border: '1px solid var(--border)', color: 'white', 
+                                padding: '0.8rem', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' 
+                            }}
+                        >
+                            <Filter size={16} /> {isFiltersExpanded ? 'Menos Filtros' : 'Más Filtros'}
+                        </button>
+                    </div>
 
                     {/* Second Row for Filters and Actions */}
                     <div style={{ width: '100%', display: 'flex', flexWrap: 'wrap', gap: '1rem', alignItems: 'center', marginTop: '0.8rem', paddingTop: '0.8rem', borderTop: '1px solid var(--border)' }}>
-                        <div className="checkbox-group">
-                            <input
-                                type="checkbox"
-                                id="onlyDebt"
-                                checked={onlyDebt}
-                                onChange={(e) => setOnlyDebt(e.target.checked)}
-                            />
-                            <label htmlFor="onlyDebt">Solo Deuda</label>
-                        </div>
+                        {isFiltersExpanded && (
+                            <>
+                                <div className="checkbox-group">
+                                    <input
+                                        type="checkbox"
+                                        id="onlyDebt"
+                                        checked={onlyDebt}
+                                        onChange={(e) => setOnlyDebt(e.target.checked)}
+                                    />
+                                    <label htmlFor="onlyDebt">Solo Deuda</label>
+                                </div>
 
-                        <div className="checkbox-group">
-                            <input
-                                type="checkbox"
-                                id="showQuotaDetail"
-                                checked={showQuotaDetail}
-                                onChange={(e) => setShowQuotaDetail(e.target.checked)}
-                            />
-                            <label htmlFor="showQuotaDetail" title="Postgres: Muestra GeneracionCuota">Detalle Cuotas (P)</label>
-                        </div>
+                                <div className="checkbox-group">
+                                    <input
+                                        type="checkbox"
+                                        id="showQuotaDetail"
+                                        checked={showQuotaDetail}
+                                        onChange={(e) => setShowQuotaDetail(e.target.checked)}
+                                    />
+                                    <label htmlFor="showQuotaDetail" title="Postgres: Muestra GeneracionCuota">Detalle Cuotas (P)</label>
+                                </div>
 
-                        <div className="checkbox-group">
-                            <input
-                                type="checkbox"
-                                id="showSubtotals"
-                                checked={showSubtotals}
-                                onChange={(e) => setShowSubtotals(e.target.checked)}
-                            />
-                            <label htmlFor="showSubtotals">Totales Periodo</label>
-                        </div>
+                                <div className="checkbox-group">
+                                    <input
+                                        type="checkbox"
+                                        id="showSubtotals"
+                                        checked={showSubtotals}
+                                        onChange={(e) => setShowSubtotals(e.target.checked)}
+                                    />
+                                    <label htmlFor="showSubtotals">Totales Periodo</label>
+                                </div>
 
-                        <div className="checkbox-group">
-                            <input
-                                type="checkbox"
-                                id="isGrouped"
-                                checked={isGrouped}
-                                onChange={(e) => setIsGrouped(e.target.checked)}
-                            />
-                            <label htmlFor="isGrouped">Agrupar Cuotas</label>
-                        </div>
+                                <div className="checkbox-group">
+                                    <input
+                                        type="checkbox"
+                                        id="isGrouped"
+                                        checked={isGrouped}
+                                        onChange={(e) => setIsGrouped(e.target.checked)}
+                                    />
+                                    <label htmlFor="isGrouped">Agrupar Cuotas</label>
+                                </div>
 
-                        <div className="divider-vertical" style={{ width: '1px', height: '20px', background: 'var(--border)', margin: '0 0.5rem' }}></div>
+                                <div className="divider-vertical" style={{ width: '1px', height: '20px', background: 'var(--border)', margin: '0 0.5rem' }}></div>
+                            </>
+                        )}
 
                         <button
                             type="button"
@@ -1341,16 +1367,16 @@ const CuentaCorrienteFn = () => {
                                     <tr>
                                         <td colSpan={5} style={{ textAlign: 'right' }}>TOTALES GENERALES:</td>
                                         <td style={{ color: '#ef4444' }}>
-                                            ${legacyData.reduce((acc, row) => acc + parseFloat(row.DebeCtct || 0), 0).toFixed(2)}
+                                            ${formatCurrency(legacyData.reduce((acc, row) => acc + parseFloat(row.DebeCtct || 0), 0))}
                                         </td>
                                         <td style={{ color: '#f59e0b' }}>
-                                            ${legacyData.reduce((acc, row) => acc + parseFloat(row.RecaCtct || 0), 0).toFixed(2)}
+                                            ${formatCurrency(legacyData.reduce((acc, row) => acc + parseFloat(row.RecaCtct || 0), 0))}
                                         </td>
                                         <td style={{ color: '#10b981' }}>
-                                            ${legacyData.reduce((acc, row) => acc + parseFloat(row.CredCtct || 0), 0).toFixed(2)}
+                                            ${formatCurrency(legacyData.reduce((acc, row) => acc + parseFloat(row.CredCtct || 0), 0))}
                                         </td>
                                         <td style={{ fontSize: '1.1rem', borderTop: '2px solid var(--primary)' }}>
-                                            ${legacyData.reduce((acc, row) => acc + parseFloat(row.TotaCtct || 0), 0).toFixed(2)}
+                                            ${formatCurrency(legacyData.reduce((acc, row) => acc + parseFloat(row.TotaCtct || 0), 0))}
                                         </td>
                                         <td></td>
                                     </tr>
@@ -1402,16 +1428,16 @@ const CuentaCorrienteFn = () => {
                                     <tr>
                                         <td colSpan={5} style={{ textAlign: 'right' }}>TOTALES POSTGRES:</td>
                                         <td style={{ color: '#ef4444' }}>
-                                            ${postgresData.reduce((acc, row) => acc + parseFloat(row.DebeCtct || 0), 0).toFixed(2)}
+                                            ${formatCurrency(postgresData.reduce((acc, row) => acc + parseFloat(row.DebeCtct || 0), 0))}
                                         </td>
                                         <td style={{ color: '#f59e0b' }}>
-                                            ${postgresData.reduce((acc, row) => acc + parseFloat(row.RecaCtct || 0), 0).toFixed(2)}
+                                            ${formatCurrency(postgresData.reduce((acc, row) => acc + parseFloat(row.RecaCtct || 0), 0))}
                                         </td>
                                         <td style={{ color: '#10b981' }}>
-                                            ${postgresData.reduce((acc, row) => acc + parseFloat(row.CredCtct || 0), 0).toFixed(2)}
+                                            ${formatCurrency(postgresData.reduce((acc, row) => acc + parseFloat(row.CredCtct || 0), 0))}
                                         </td>
                                         <td style={{ fontSize: '1.1rem', borderTop: '2px solid var(--primary)' }}>
-                                            ${postgresData.reduce((acc, row) => acc + parseFloat(row.TotaCtct || 0), 0).toFixed(2)}
+                                            ${formatCurrency(postgresData.reduce((acc, row) => acc + parseFloat(row.TotaCtct || 0), 0))}
                                         </td>
                                         <td></td>
                                     </tr>

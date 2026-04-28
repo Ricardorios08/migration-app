@@ -68,12 +68,12 @@ const Sidebar = ({ currentView, setView, collapsed, setCollapsed, user, onLogout
         {user?.rol !== 'municipalidad' && (
           <>
             <div
-              className={`menu-item ${currentView === 'apremios' ? 'active' : ''}`}
-              onClick={() => setView('apremios')}
-              title={collapsed ? "Apremios" : ""}
+              className={`menu-item ${['apremio_dashboard', 'apremios', 'gastos_apremio'].includes(currentView) ? 'active' : ''}`}
+              onClick={() => setView('apremio_dashboard')}
+              title={collapsed ? "Apremio" : ""}
             >
-              <Scale size={20} />
-              {!collapsed && <span>Apremios</span>}
+              <Scale size={20} color="#7c4dff" />
+              {!collapsed && <span style={{ color: '#7c4dff' }}>Apremio</span>}
               {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
             </div>
 
@@ -104,6 +104,16 @@ const Sidebar = ({ currentView, setView, collapsed, setCollapsed, user, onLogout
             >
               <User size={20} />
               {!collapsed && <span>Persona (InfoGov)</span>}
+              {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
+            </div>
+
+            <div
+              className={`menu-item ${currentView === 'boletos' ? 'active' : ''}`}
+              onClick={() => setView('boletos')}
+              title={collapsed ? "Buscador Boletos" : ""}
+            >
+              <FileText size={20} color="#f59e0b" />
+              {!collapsed && <span style={{ color: '#f59e0b' }}>Buscador Boletos</span>}
               {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
             </div>
 

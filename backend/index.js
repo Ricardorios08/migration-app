@@ -31,6 +31,8 @@ app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/audit', require('./routes/audit'));
 app.use('/api/audit-snapshot', require('./routes/auditSnapshot'));
+app.use('/api/boletos', require('./routes/boletos'));
+app.use('/api/apremio-config', require('./routes/apremioConfig'));
 
 // Endpoint to serve migration logic documentation
 app.get('/api/docs/migration-logic', (req, res) => {

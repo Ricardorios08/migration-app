@@ -42,6 +42,14 @@ const isSuperAdmin = (req, res, next) => {
     }
 };
 
+const isCtaCte = (req, res, next) => {
+    if (req.user && req.user.rol === 'ctacte') {
+        next();
+    } else {
+        res.status(403).json({ error: 'Acceso denegado: se requiere rol de Cta Cte' });
+    }
+};
+
 // POST /login
 router.post('/login', async (req, res) => {
     const { nombre_usuario, password } = req.body;

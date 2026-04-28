@@ -16,6 +16,10 @@ import UserManagement from './views/UserManagement';
 import Profile from './views/Profile';
 import LogViewer from './views/LogViewer';
 import SnapshotAudit from './views/SnapshotAudit';
+import BoletoSearch from './views/BoletoSearch';
+import ApremioDashboard from './views/ApremioDashboard';
+import GastosApremioReport from './views/GastosApremioReport';
+import ApremioTables from './views/ApremioTables';
 import { API_URL } from './config';
 
 function App() {
@@ -101,8 +105,14 @@ function App() {
             <PersonaSearch />
           ) : view === 'explorer' ? (
             <TableExplorer />
+          ) : view === 'apremio_dashboard' ? (
+            <ApremioDashboard setView={setView} />
           ) : view === 'apremios' ? (
             <Apremios />
+          ) : view === 'gastos_apremio' ? (
+            <GastosApremioReport setView={setView} />
+          ) : view === 'apremio_tables' ? (
+            <ApremioTables setView={setView} />
           ) : view === 'comparison' ? (
             <ComparisonReport />
           ) : view === 'users' ? (
@@ -113,6 +123,8 @@ function App() {
             <LogViewer />
           ) : view === 'integrity' ? (
             <SnapshotAudit />
+          ) : view === 'boletos' ? (
+            <BoletoSearch currentUser={user} />
           ) : (
             <ComerciosExcel />
           )}
