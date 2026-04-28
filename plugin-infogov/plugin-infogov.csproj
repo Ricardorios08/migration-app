@@ -1,0 +1,347 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <!--Project was exported from assembly: C:\nomade\para copiar\plugin-infogov.dll-->
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{7464D0D2-86A3-471C-9C45-371D25A44406}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AssemblyName>plugin-infogov</AssemblyName>
+    <TargetFrameworkVersion>v4.6.1</TargetFrameworkVersion>
+    <ApplicationVersion>1.0.0.18780</ApplicationVersion>
+    <FileAlignment>512</FileAlignment>
+    <RootNamespace>InfoGov</RootNamespace>
+    <TargetFrameworkProfile />
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Management" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="infogov-core">
+      <HintPath>lib\infogov-core.dll</HintPath>
+    </Reference>
+    <Reference Include="infogov-docking">
+      <HintPath>lib\infogov-docking.dll</HintPath>
+    </Reference>
+    <Reference Include="infogov-metro">
+      <HintPath>lib\infogov-metro.dll</HintPath>
+    </Reference>
+    <Reference Include="infogov-resources">
+      <HintPath>lib\infogov-resources.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Utils\ToastHelper.cs" />
+    <Compile Include="Plugins\Infogov\FabricaExpertos.cs" />
+    <Compile Include="Plugins\Infogov\FabricaVentanas.cs" />
+    <Compile Include="Plugins\Infogov\Modulo.cs" />
+    <Compile Include="Plugins\Infogov\ModuloInfogov.cs" />
+    <Compile Include="Plugins\Infogov\Pnames.cs" />
+    <Compile Include="Plugins\Infogov\Rnames.cs" />
+    <Compile Include="Plugins\Infogov\Wnames.cs" />
+    <Compile Include="Plugins\Infogov\Ventanas\abmBanco.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Ventanas\abmBarrio.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Ventanas\abmCalle.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Ventanas\abmCuentaContable.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Ventanas\abmDepartamento.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Ventanas\abmDistrito.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Ventanas\abmEstadoCivil.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Ventanas\abmLocalidad.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Ventanas\abmOrganismo.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Ventanas\abmPersona.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Ventanas\abmPosicionFiscal.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Ventanas\abmProveedor.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Ventanas\abmProvincia.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Ventanas\abmTipoDocumento.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Ventanas\detailAlerta.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Ventanas\detailContacto.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Ventanas\detailDatoContactoPers.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Ventanas\detailFacixUsua.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Ventanas\detailOrgaxUsua.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Ventanas\detailTrabSocial.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Ventanas\detailUbfixUsua.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Ventanas\frmCambioCuit.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Ventanas\frmCombinarRol.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Ventanas\frmMigrarDatos.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Ventanas\frmRol.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Ventanas\frmUnificacionCuit.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Ventanas\frmUsuario.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Ventanas\gridAlerta.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Ventanas\gridContacto.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Ventanas\gridDatoContactoPers.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Ventanas\gridFacixUsua.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Ventanas\gridOrgaxUsua.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Ventanas\gridTrabSocial.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Ventanas\gridUbfixUsua.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Ventanas\mdlBuscarContribuyenteUni.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Ventanas\mdlPersonaGUAYMA.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Ventanas\mdlPersona.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Ventanas\tdPermisosRoles.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Ventanas\VisorJPG.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Ventanas\VisorPDF.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Utils\DateHelper.cs" />
+    <Compile Include="Plugins\Infogov\Reportes\DTOPersonas.cs" />
+    <Compile Include="Plugins\Infogov\Reportes\repPersonas.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Reportes\Personas\DTOPersonaTupu.cs" />
+    <Compile Include="Plugins\Infogov\Reportes\Personas\DTORetencionesPersonaTupu.cs" />
+    <Compile Include="Plugins\Infogov\Reportes\Personas\irepPersonaTupu.cs" />
+    <Compile Include="Plugins\Infogov\Reportes\PermisosRoles\DTOPermisosRoles.cs" />
+    <Compile Include="Plugins\Infogov\Reportes\PermisosRoles\irepPermisosRoles.cs" />
+    <Compile Include="Plugins\Infogov\Reportes\PermisosRoles\repPermisosRoles.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Reportes\DatosFijos\Persona\DTOPersona.cs" />
+    <Compile Include="Plugins\Infogov\Reportes\DatosFijos\Persona\irepDFPersona.cs" />
+    <Compile Include="Plugins\Infogov\Reportes\DatosFijos\Persona\repDFPersona.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Properties\Resources.cs" />
+    <Compile Include="Plugins\Infogov\Expertos\ExpAlerta.cs" />
+    <Compile Include="Plugins\Infogov\Expertos\ExpConfiguracion.cs" />
+    <Compile Include="Plugins\Infogov\Expertos\ImpresoraPredeterminada.cs" />
+    <Compile Include="Plugins\Infogov\Expertos\ExpContacto.cs" />
+    <Compile Include="Plugins\Infogov\Expertos\ExpDatoContactoPers.cs" />
+    <Compile Include="Plugins\Infogov\Expertos\ExpDomicilio.cs" />
+    <Compile Include="Plugins\Infogov\Expertos\ExpDomicilioGIS.cs" />
+    <Compile Include="Plugins\Infogov\Expertos\ExpFacixUsua.cs" />
+    <Compile Include="Plugins\Infogov\Expertos\ExpTipoFapa.cs" />
+    <Compile Include="Plugins\Infogov\Expertos\ExpMigrarDatos.cs" />
+    <Compile Include="Plugins\Infogov\Expertos\ExpObse.cs" />
+    <Compile Include="Plugins\Infogov\Expertos\ExpOrgaxUsua.cs" />
+    <Compile Include="Plugins\Infogov\Expertos\ExpPersonaRivadavia.cs" />
+    <Compile Include="Plugins\Infogov\Expertos\ExpBanco.cs" />
+    <Compile Include="Plugins\Infogov\Expertos\ExpBarrio.cs" />
+    <Compile Include="Plugins\Infogov\Expertos\ExpCalle.cs" />
+    <Compile Include="Plugins\Infogov\Expertos\ExpCambioVariablesInfogov.cs" />
+    <Compile Include="Plugins\Infogov\Expertos\ExpCodigoPostal.cs" />
+    <Compile Include="Plugins\Infogov\Expertos\ExpCuentaContable.cs" />
+    <Compile Include="Plugins\Infogov\Expertos\ExpDepartamento.cs" />
+    <Compile Include="Plugins\Infogov\Expertos\ExpDistrito.cs" />
+    <Compile Include="Plugins\Infogov\Expertos\ExpEstadoCivil.cs" />
+    <Compile Include="Plugins\Infogov\Expertos\ExpLegajo.cs" />
+    <Compile Include="Plugins\Infogov\Expertos\ExpLocalidad.cs" />
+    <Compile Include="Plugins\Infogov\Expertos\ExpOrganigrama.cs" />
+    <Compile Include="Plugins\Infogov\Expertos\ExpOrganismo.cs" />
+    <Compile Include="Plugins\Infogov\Expertos\ExpPersona.cs" />
+    <Compile Include="Plugins\Infogov\Expertos\ExpPersonaMaipu.cs" />
+    <Compile Include="Plugins\Infogov\Expertos\ExpPosicionFiscal.cs" />
+    <Compile Include="Plugins\Infogov\Expertos\ExpProveedor.cs" />
+    <Compile Include="Plugins\Infogov\Expertos\ExpProvincia.cs" />
+    <Compile Include="Plugins\Infogov\Expertos\ExpReporte.cs" />
+    <Compile Include="Plugins\Infogov\Expertos\ExpReporteInfogov.cs" />
+    <Compile Include="Plugins\Infogov\Expertos\ExpRol.cs" />
+    <Compile Include="Plugins\Infogov\Expertos\ExpSistema.cs" />
+    <Compile Include="Plugins\Infogov\Expertos\ExptdPermisosRol.cs" />
+    <Compile Include="Plugins\Infogov\Expertos\ExpTipoCuentaContable.cs" />
+    <Compile Include="Plugins\Infogov\Expertos\ExpTipoDocumento.cs" />
+    <Compile Include="Plugins\Infogov\Expertos\ExpTrabSocial.cs" />
+    <Compile Include="Plugins\Infogov\Expertos\ExpUbfixUsua.cs" />
+    <Compile Include="Plugins\Infogov\Expertos\ExpUbicacionFisica.cs" />
+    <Compile Include="Plugins\Infogov\Expertos\ExpUnificacionCuit.cs" />
+    <Compile Include="Plugins\Infogov\Expertos\ExpUserEntity.cs" />
+    <Compile Include="Plugins\Infogov\Expertos\ExpUsuario.cs" />
+    <Compile Include="Plugins\Infogov\Entidades\Alerta.cs" />
+    <Compile Include="Plugins\Infogov\Entidades\OficinaAlerta.cs" />
+    <Compile Include="Plugins\Infogov\Entidades\Banco.cs" />
+    <Compile Include="Plugins\Infogov\Entidades\Barrio.cs" />
+    <Compile Include="Plugins\Infogov\Entidades\Calle.cs" />
+    <Compile Include="Plugins\Infogov\Entidades\CodigoPostal.cs" />
+    <Compile Include="Plugins\Infogov\Entidades\Configuraciones.cs" />
+    <Compile Include="Plugins\Infogov\Entidades\Contacto.cs" />
+    <Compile Include="Plugins\Infogov\Entidades\TipoContacto.cs" />
+    <Compile Include="Plugins\Infogov\Entidades\CuentaContable.cs" />
+    <Compile Include="Plugins\Infogov\Entidades\DatoContactoPers.cs" />
+    <Compile Include="Plugins\Infogov\Entidades\Departamento.cs" />
+    <Compile Include="Plugins\Infogov\Entidades\Distrito.cs" />
+    <Compile Include="Plugins\Infogov\Entidades\Domicilio.cs" />
+    <Compile Include="Plugins\Infogov\Entidades\EstadoCivil.cs" />
+    <Compile Include="Plugins\Infogov\Entidades\FacixUsua.cs" />
+    <Compile Include="Plugins\Infogov\Entidades\TipoFapa.cs" />
+    <Compile Include="Plugins\Infogov\Entidades\InmuMigra.cs" />
+    <Compile Include="Plugins\Infogov\Entidades\Legajo.cs" />
+    <Compile Include="Plugins\Infogov\Entidades\Localidad.cs" />
+    <Compile Include="Plugins\Infogov\Entidades\Obse.cs" />
+    <Compile Include="Plugins\Infogov\Entidades\Organigrama.cs" />
+    <Compile Include="Plugins\Infogov\Entidades\Organismo.cs" />
+    <Compile Include="Plugins\Infogov\Entidades\OrgaxUsua.cs" />
+    <Compile Include="Plugins\Infogov\Entidades\PermisoVentana.cs" />
+    <Compile Include="Plugins\Infogov\Entidades\Persona.cs" />
+    <Compile Include="Plugins\Infogov\Entidades\PosicionFiscal.cs" />
+    <Compile Include="Plugins\Infogov\Entidades\Proveedor.cs" />
+    <Compile Include="Plugins\Infogov\Entidades\FactProvEnum.cs" />
+    <Compile Include="Plugins\Infogov\Entidades\Provincia.cs" />
+    <Compile Include="Plugins\Infogov\Entidades\RelaMigra.cs" />
+    <Compile Include="Plugins\Infogov\Entidades\Rol.cs" />
+    <Compile Include="Plugins\Infogov\Entidades\Sistema.cs" />
+    <Compile Include="Plugins\Infogov\Entidades\Telefono.cs" />
+    <Compile Include="Plugins\Infogov\Entidades\TipoTelefono.cs" />
+    <Compile Include="Plugins\Infogov\Entidades\TipoCuentaContable.cs" />
+    <Compile Include="Plugins\Infogov\Entidades\TipoDocumento.cs" />
+    <Compile Include="Plugins\Infogov\Entidades\TrabSocial.cs" />
+    <Compile Include="Plugins\Infogov\Entidades\UbfixUsua.cs" />
+    <Compile Include="Plugins\Infogov\Entidades\UbicacionFisica.cs" />
+    <Compile Include="Plugins\Infogov\Entidades\UnificacionCuit.cs" />
+    <Compile Include="Plugins\Infogov\Entidades\UserEntity.cs" />
+    <Compile Include="Plugins\Infogov\Entidades\Usuario.cs" />
+    <Compile Include="Plugins\Infogov\Entidades\Ventana.cs" />
+    <Compile Include="Plugins\Infogov\Controls\PreExcepcionFilterBar.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Controls\PreProrrataFilterBar.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Plugins\Infogov\Controls\ucDireccion2.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="AssemblyInfo.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="plugin-infogov\dll.licenses" />
+    <EmbeddedResource Include="Plugins\Infogov\Controls\PreExcepcionFilterBar.resx" />
+    <EmbeddedResource Include="Plugins\Infogov\Controls\PreProrrataFilterBar.resx" />
+    <EmbeddedResource Include="Plugins\Infogov\Controls\ucDireccion2.resx" />
+    <EmbeddedResource Include="Plugins\Infogov\Properties\Resources.resx" />
+    <EmbeddedResource Include="Plugins\Infogov\Reportes\DatosFijos\Persona\irepDFPersona.resx" />
+    <EmbeddedResource Include="Plugins\Infogov\Reportes\PermisosRoles\irepPermisosRoles.resx" />
+    <EmbeddedResource Include="Plugins\Infogov\Reportes\PermisosRoles\repPermisosRoles.resx" />
+    <EmbeddedResource Include="Plugins\Infogov\Reportes\Personas\irepPersonaTupu.resx" />
+    <EmbeddedResource Include="Plugins\Infogov\Reportes\repPersonas.resx" />
+    <EmbeddedResource Include="Plugins\Infogov\Ventanas\abmCalle.resx" />
+    <EmbeddedResource Include="Plugins\Infogov\Ventanas\abmDistrito.resx" />
+    <EmbeddedResource Include="Plugins\Infogov\Ventanas\abmEstadoCivil.resx" />
+    <EmbeddedResource Include="Plugins\Infogov\Ventanas\abmLocalidad.resx" />
+    <EmbeddedResource Include="Plugins\Infogov\Ventanas\abmPersona.resx" />
+    <EmbeddedResource Include="Plugins\Infogov\Ventanas\abmProveedor.resx" />
+    <EmbeddedResource Include="Plugins\Infogov\Ventanas\detailAlerta.resx" />
+    <EmbeddedResource Include="Plugins\Infogov\Ventanas\detailContacto.resx" />
+    <EmbeddedResource Include="Plugins\Infogov\Ventanas\detailDatoContactoPers.resx" />
+    <EmbeddedResource Include="Plugins\Infogov\Ventanas\detailFacixUsua.resx" />
+    <EmbeddedResource Include="Plugins\Infogov\Ventanas\detailOrgaxUsua.resx" />
+    <EmbeddedResource Include="Plugins\Infogov\Ventanas\detailTrabSocial.resx" />
+    <EmbeddedResource Include="Plugins\Infogov\Ventanas\detailUbfixUsua.resx" />
+    <EmbeddedResource Include="Plugins\Infogov\Ventanas\frmCambioCuit.resx" />
+    <EmbeddedResource Include="Plugins\Infogov\Ventanas\frmCombinarRol.resx" />
+    <EmbeddedResource Include="Plugins\Infogov\Ventanas\frmMigrarDatos.resx" />
+    <EmbeddedResource Include="Plugins\Infogov\Ventanas\frmRol.resx" />
+    <EmbeddedResource Include="Plugins\Infogov\Ventanas\frmUnificacionCuit.resx" />
+    <EmbeddedResource Include="Plugins\Infogov\Ventanas\frmUsuario.resx" />
+    <EmbeddedResource Include="Plugins\Infogov\Ventanas\gridAlerta.resx" />
+    <EmbeddedResource Include="Plugins\Infogov\Ventanas\gridContacto.resx" />
+    <EmbeddedResource Include="Plugins\Infogov\Ventanas\gridDatoContactoPers.resx" />
+    <EmbeddedResource Include="Plugins\Infogov\Ventanas\gridFacixUsua.resx" />
+    <EmbeddedResource Include="Plugins\Infogov\Ventanas\gridOrgaxUsua.resx" />
+    <EmbeddedResource Include="Plugins\Infogov\Ventanas\gridTrabSocial.resx" />
+    <EmbeddedResource Include="Plugins\Infogov\Ventanas\gridUbfixUsua.resx" />
+    <EmbeddedResource Include="Plugins\Infogov\Ventanas\mdlBuscarContribuyenteUni.resx" />
+    <EmbeddedResource Include="Plugins\Infogov\Ventanas\mdlPersona.resx" />
+    <EmbeddedResource Include="Plugins\Infogov\Ventanas\mdlPersonaGUAYMA.resx" />
+    <EmbeddedResource Include="Plugins\Infogov\Ventanas\tdPermisosRoles.resx" />
+    <EmbeddedResource Include="Plugins\Infogov\Ventanas\VisorJPG.resx" />
+    <EmbeddedResource Include="Plugins\Infogov\Ventanas\VisorPDF.resx" />
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>

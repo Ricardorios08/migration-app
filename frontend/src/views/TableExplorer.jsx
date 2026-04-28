@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Database, Table as TableIcon, List, ArrowLeft, Loader2, Filter, Download } from 'lucide-react';
+import { API_URL } from '../config';
 
 const TableExplorer = () => {
+    const [engine, setEngine] = useState('maria');
     const [db, setDb] = useState('infogov');
     const [tables, setTables] = useState([]);
     const [selectedTable, setSelectedTable] = useState(null);
@@ -11,24 +13,33 @@ const TableExplorer = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [error, setError] = useState(null);
 
-    const availableDbs = [
+    const availableDbs = engine === 'maria' ? [
         { id: 'infogov', name: 'InfoGov', color: '#2563eb' },
         { id: 'contpres', name: 'ContPres', color: '#f59e0b' },
         { id: 'municipiov1', name: 'MunicipioV1', color: '#10b981' },
         { id: 'personal3', name: 'Personal3', color: '#ec4899' },
         { id: 'recahisto', name: 'RecaHisto', color: '#8b5cf6' },
-        { id: 'recaudacion', name: 'Recaudación', color: '#6366f1' }
+        { id: 'recaudacion', name: 'Recaudación', color: '#6366f1' },
+        { id: 'recaudacion_remote', name: 'Recaudación (Remota)', color: '#ef4444' }
+    ] : [
+        { id: 'public', name: 'PostgreSQL (Public)', color: '#336791' }
     ];
 
     useEffect(() => {
+        // Reset DB when engine changes
+        if (engine === 'pg') setDb('public');
+        else if (db === 'public') setDb('infogov');
+    }, [engine]);
+
+    useEffect(() => {
         fetchTables();
-    }, [db]);
+    }, [db, engine]);
 
     const fetchTables = async () => {
         setLoading(true);
         setError(null);
         try {
-            const res = await fetch(`http://localhost:3001/api/explorer/${db}/tables`);
+            const res = await fetch(`${API_URL}/explorer/${engine}/${db}/tables`);
             if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
             const result = await res.json();
             setTables(Array.isArray(result) ? result.sort((a, b) => (b.rows || 0) - (a.rows || 0)) : []);
@@ -45,7 +56,7 @@ const TableExplorer = () => {
         setData([]);
         setSearchQuery('');
         try {
-            const res = await fetch(`http://localhost:3001/api/explorer/${db}/explore/${tableName}`);
+            const res = await fetch(`${API_URL}/explorer/${engine}/${db}/explore/${tableName}`);
             const result = await res.json();
             if (result.length > 0) {
                 setColumns(Object.keys(result[0]));
@@ -62,7 +73,7 @@ const TableExplorer = () => {
         if (e) e.preventDefault();
         setLoading(true);
         try {
-            const res = await fetch(`http://localhost:3001/api/explorer/${db}/explore/${selectedTable}?q=${encodeURIComponent(searchQuery)}`);
+            const res = await fetch(`${API_URL}/explorer/${engine}/${db}/explore/${selectedTable}?q=${encodeURIComponent(searchQuery)}`);
             const result = await res.json();
             setData(result);
         } catch (err) {
@@ -90,11 +101,22 @@ const TableExplorer = () => {
             {!selectedTable ? (
                 <div className="welcome-card">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <div style={{ padding: '0.5rem', background: 'var(--glass)', borderRadius: '0.5rem' }}>
-                                <Database size={24} color={availableDbs.find(d => d.id === db)?.color} />
-                            </div>
-                            <h1 style={{ margin: 0 }}>Explorador: <span style={{ color: availableDbs.find(d => d.id === db)?.color }}>{availableDbs.find(d => d.id === db)?.name}</span></h1>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                        <div style={{ display: 'flex', gap: '0.5rem', background: 'var(--border)', padding: '0.25rem', borderRadius: '0.75rem', width: 'fit-content' }}>
+                            <button 
+                                className={`btn ${engine === 'maria' ? 'btn-primary' : ''}`}
+                                style={{ fontSize: '0.75rem', padding: '0.4rem 1rem' }}
+                                onClick={() => setEngine('maria')}
+                            >
+                                MariaDB
+                            </button>
+                            <button 
+                                className={`btn ${engine === 'pg' ? 'btn-primary' : ''}`}
+                                style={{ fontSize: '0.75rem', padding: '0.4rem 1rem', background: engine === 'pg' ? '#336791' : 'transparent', borderColor: engine === 'pg' ? '#336791' : 'transparent' }}
+                                onClick={() => setEngine('pg')}
+                            >
+                                PostgreSQL
+                            </button>
                         </div>
 
                         <div style={{ display: 'flex', gap: '0.35rem', background: 'var(--border)', padding: '0.25rem', borderRadius: '0.75rem', overflowX: 'auto', maxWidth: '100%' }}>
@@ -116,6 +138,7 @@ const TableExplorer = () => {
                             ))}
                         </div>
                     </div>
+                </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1.25rem' }}>
                         {loading && tables.length === 0 ? (

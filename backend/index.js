@@ -21,10 +21,18 @@ app.use(cors());
 app.use(express.json());
 
 app.use('/api/ctacte', ctacteRoutes);
+app.use('/api/ctacte-fn', require('./routes/ctacteFn'));
+app.use('/api/ctacte2', require('./routes/ctacte2'));
 app.use('/api/excel', excelRoutes);
 app.use('/api/infogov', infogovRoutes);
 app.use('/api/explorer', explorerRoutes);
 app.use('/api/apremios', apremiosRoutes);
+app.use('/api/dashboard', require('./routes/dashboard'));
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/audit', require('./routes/audit'));
+app.use('/api/audit-snapshot', require('./routes/auditSnapshot'));
+app.use('/api/boletos', require('./routes/boletos'));
+app.use('/api/apremio-config', require('./routes/apremioConfig'));
 
 // Endpoint to serve migration logic documentation
 app.get('/api/docs/migration-logic', (req, res) => {
@@ -47,6 +55,7 @@ app.get('/api/docs/migration-logic', (req, res) => {
 app.get('/api/test-connections', async (req, res) => {
     let result = {
         maria: { status: 'testing', error: null },
+        mariaRemote: { status: 'testing', error: null },
         postgres: { status: 'testing', error: null }
     };
 
@@ -56,6 +65,14 @@ app.get('/api/test-connections', async (req, res) => {
     } catch (err) {
         result.maria.status = 'failed';
         result.maria.error = err.message;
+    }
+
+    try {
+        await mariaDB.queryRemote('SELECT 1');
+        result.mariaRemote.status = 'connected';
+    } catch (err) {
+        result.mariaRemote.status = 'failed';
+        result.mariaRemote.error = err.message;
     }
 
     try {
