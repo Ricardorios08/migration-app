@@ -22,10 +22,10 @@ const Login = ({ onLogin }) => {
       const { token, user } = response.data;
       localStorage.setItem('nomade_token', token);
       localStorage.setItem('nomade_user', JSON.stringify(user));
-      
+
       // Set default auth header for future requests
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      
+
       onLogin(user);
     } catch (err) {
       setError(err.response?.data?.error || 'Error al iniciar sesión');
@@ -38,11 +38,11 @@ const Login = ({ onLogin }) => {
     <div className="login-page">
       <div className="login-card">
         <div className="login-header">
-           <div className="logo-placeholder">N</div>
-           <h1>Nomade</h1>
-           <h2>Munic. Guaymallen</h2>
+          <div className="logo-placeholder">N</div>
+          <h1>Nomade</h1>
+          <h2>Munic. Guaymallen</h2>
         </div>
-        
+
         <form onSubmit={handleSubmit} className="login-form">
           <div className="form-group">
             <label htmlFor="username">Usuario</label>
@@ -55,7 +55,7 @@ const Login = ({ onLogin }) => {
               required
             />
           </div>
-          
+
           <div className="form-group">
             <label htmlFor="password">Contraseña</label>
             <input
@@ -74,9 +74,9 @@ const Login = ({ onLogin }) => {
             {loading ? 'Iniciando sesión...' : 'Entrar'}
           </button>
         </form>
-        
+
         <div className="login-footer">
-           © 2024 Modern Migration Tool
+          © 2026 Migration Tool
         </div>
       </div>
     </div>

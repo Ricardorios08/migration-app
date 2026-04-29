@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const mariaDB = require('../db/maria');
 
+const DB_NAME = process.env.MARIA_DB_NAME || 'recaudacion2';
+
 // GET /api/boletos/search
 router.get('/search', async (req, res) => {
     const { officeId, account, personId, period, status, numeBole, limit = 100 } = req.query;
@@ -9,7 +11,26 @@ router.get('/search', async (req, res) => {
 
     try {
         conn = await mariaDB.getConnection();
-        await conn.query("USE recaudacion");
+        
+        const threadId = conn.threadId;
+        req.on('aborted', async () => {
+            if (!threadId) return;
+            console.log(`[BOLETOS] Request aborted by client. Killing query thread ${threadId}...`);
+            let killConn;
+            try {
+                // Use superadmin pool to ensure we can always kill a hanging query
+                // even if the default pool is exhausted
+                killConn = await mariaDB.superadminPool.getConnection();
+                await killConn.query(`KILL QUERY ${threadId}`);
+                console.log(`[BOLETOS] Successfully killed thread ${threadId}`);
+            } catch (err) {
+                console.error(`[BOLETOS] Failed to kill thread ${threadId}:`, err);
+            } finally {
+                if (killConn) killConn.release();
+            }
+        });
+
+        await conn.query(`USE ${DB_NAME}`);
 
         // Direct join with pago table (grouped to avoid duplicates)
         let query = `
@@ -67,8 +88,15 @@ router.get('/search', async (req, res) => {
         res.json(results);
 
     } catch (err) {
+        // If the query was killed, MariaDB usually throws ER_QUERY_INTERRUPTED
+        if (err.code === 'ER_QUERY_INTERRUPTED') {
+            console.log('[BOLETOS] Query was successfully aborted in the database.');
+            return res.status(499).json({ error: 'Búsqueda cancelada por el usuario.' });
+        }
         console.error("Error searching boletos:", err);
-        res.status(500).json({ error: err.message });
+        if (!res.headersSent) {
+            res.status(500).json({ error: err.message });
+        }
     } finally {
         if (conn) conn.release();
     }
@@ -81,7 +109,7 @@ router.get('/details/:peri/:nume', async (req, res) => {
 
     try {
         conn = await mariaDB.getConnection();
-        await conn.query("USE recaudacion");
+        await conn.query(`USE ${DB_NAME}`);
         
         // 1. Get Main Header Info (simplified)
         const header = await conn.query(`
@@ -89,10 +117,10 @@ router.get('/details/:peri/:nume', async (req, res) => {
                 b.*, per.DetaPers as NombreContribuyente,
                 p.FeenAcpa as FechaCobro, p.CodiUsua as UsuarioCobro, p.AltaFeho as HoraCobro,
                 e.DetaEnre as Recaudador
-            FROM recaudacion.boleto b
+            FROM ${DB_NAME}.boleto b
             LEFT JOIN infogov.persona per ON b.CucuPers = per.CucuPers
-            LEFT JOIN recaudacion.pago p ON p.PeriBole = b.PeriBole AND p.NumeBole = b.NumeBole
-            LEFT JOIN recaudacion.acrepago a ON p.FeenAcpa = a.FeenAcpa AND p.NumeAcpa = a.NumeAcpa
+            LEFT JOIN ${DB_NAME}.pago p ON p.PeriBole = b.PeriBole AND p.NumeBole = b.NumeBole
+            LEFT JOIN ${DB_NAME}.acrepago a ON p.FeenAcpa = a.FeenAcpa AND p.NumeAcpa = a.NumeAcpa
             LEFT JOIN infogov.entereca e ON a.CodiEnre = e.CodiEnre
             WHERE b.PeriBole = ? AND b.NumeBole = ?
             ORDER BY p.FeenAcpa DESC LIMIT 1
@@ -104,15 +132,15 @@ router.get('/details/:peri/:nume', async (req, res) => {
                 db.PeriCtct, db.BimeCtct, db.NumeCtct, db.CodiConc, c.DetaConc,
                 db.CapiDebo as Capital, db.RecaDebo as Recargo, db.InteDebo as Interes, 
                 db.DereDebo as Derecho, db.TotaDebo as Total
-            FROM recaudacion.detabole db
-            LEFT JOIN recaudacion.concepto c ON c.PeriInfo = db.PeriInfo AND c.CodiConc = db.CodiConc
+            FROM ${DB_NAME}.detabole db
+            LEFT JOIN ${DB_NAME}.concepto c ON c.PeriInfo = db.PeriInfo AND c.CodiConc = db.CodiConc
             WHERE db.PeriBole = ? AND db.NumeBole = ?
         `, [peri, nume]);
 
         // 3. Get Reprints
         const reprints = await conn.query(`
             SELECT AltaUsua, AltaFeho 
-            FROM recaudacion.ticket 
+            FROM ${DB_NAME}.ticket 
             WHERE PeriBole = ? AND NumeBole = ?
             ORDER BY AltaFeho DESC
         `, [peri, nume]);
@@ -136,7 +164,7 @@ router.post('/audit-print', async (req, res) => {
 
     try {
         conn = await mariaDB.getConnection();
-        await conn.query("USE recaudacion");
+        await conn.query(`USE ${DB_NAME}`);
         await conn.query(`
             INSERT INTO ticket (PeriBole, NumeBole, AltaUsua) 
             VALUES (?, ?, ?)

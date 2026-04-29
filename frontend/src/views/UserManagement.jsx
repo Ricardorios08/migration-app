@@ -10,7 +10,18 @@ const UserManagement = () => {
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState({ type: '', text: '' });
 
+    // Edit state
+    const [editingUserId, setEditingUserId] = useState(null);
+    const [editPassword, setEditPassword] = useState('');
+    const [editRol, setEditRol] = useState('');
+
+    const [currentUser, setCurrentUser] = useState(null);
+
     useEffect(() => {
+        const userStr = localStorage.getItem('nomade_user');
+        if (userStr) {
+            try { setCurrentUser(JSON.parse(userStr)); } catch(e){}
+        }
         fetchUsers();
     }, []);
 
@@ -52,6 +63,24 @@ const UserManagement = () => {
             alert(err.response?.data?.error || 'Error al eliminar usuario');
         }
     };
+
+    const handleSaveEdit = async (id) => {
+        setLoading(true);
+        try {
+            await axios.put(`${API_URL}/auth/users/${id}`, {
+                password: editPassword || undefined,
+                rol: editRol
+            });
+            setEditingUserId(null);
+            fetchUsers();
+        } catch (err) {
+            alert(err.response?.data?.error || 'Error al actualizar usuario');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const isSuperAdmin = currentUser?.rol === 'superadmin';
 
     return (
         <div className="body-content" style={{ overflowY: 'auto', maxHeight: 'calc(100vh - 100px)' }}>
@@ -121,17 +150,61 @@ const UserManagement = () => {
                             <tr key={u.id}>
                                 <td>{u.nombre_usuario}</td>
                                 <td>
-                                    <span className={`role-badge ${u.rol}`}>
-                                        {u.rol}
-                                    </span>
+                                    {editingUserId === u.id ? (
+                                        <select 
+                                            className="input-field" 
+                                            value={editRol} 
+                                            onChange={(e) => setEditRol(e.target.value)}
+                                            style={{ padding: '0.2rem', minHeight: 'auto' }}
+                                        >
+                                            <option value="usuario">Usuario</option>
+                                            <option value="municipalidad">Municipalidad</option>
+                                            <option value="admin">Administrador</option>
+                                            <option value="superadmin">Super Administrador</option>
+                                        </select>
+                                    ) : (
+                                        <span className={`role-badge ${u.rol}`}>
+                                            {u.rol}
+                                        </span>
+                                    )}
+                                    {editingUserId === u.id && (
+                                        <div style={{ marginTop: '0.5rem' }}>
+                                            <input 
+                                                type="password" 
+                                                placeholder="Nueva clave (opcional)" 
+                                                className="input-field"
+                                                value={editPassword}
+                                                onChange={(e) => setEditPassword(e.target.value)}
+                                                style={{ padding: '0.2rem', minHeight: 'auto', fontSize: '0.8rem' }}
+                                            />
+                                        </div>
+                                    )}
                                 </td>
                                 <td>
-                                    <button 
-                                        onClick={() => handleDeleteUser(u.id)}
-                                        className="delete-btn"
-                                    >
-                                        Eliminar
-                                    </button>
+                                    {editingUserId === u.id ? (
+                                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                            <button onClick={() => handleSaveEdit(u.id)} className="btn btn-primary" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }} disabled={loading}>Guardar</button>
+                                            <button onClick={() => setEditingUserId(null)} className="btn" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}>Cancelar</button>
+                                        </div>
+                                    ) : (
+                                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                            {isSuperAdmin && (
+                                                <button 
+                                                    onClick={() => { setEditingUserId(u.id); setEditRol(u.rol); setEditPassword(''); }}
+                                                    className="btn btn-primary"
+                                                    style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', background: '#3b82f6', borderColor: '#3b82f6' }}
+                                                >
+                                                    Editar
+                                                </button>
+                                            )}
+                                            <button 
+                                                onClick={() => handleDeleteUser(u.id)}
+                                                className="delete-btn"
+                                            >
+                                                Eliminar
+                                            </button>
+                                        </div>
+                                    )}
                                 </td>
                             </tr>
                         ))}

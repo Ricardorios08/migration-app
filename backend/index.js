@@ -8,6 +8,7 @@ const excelRoutes = require('./routes/excelTools');
 const infogovRoutes = require('./routes/infogov');
 const explorerRoutes = require('./routes/explorer');
 const apremiosRoutes = require('./routes/apremios');
+const authParser = require('./middleware/authParser');
 
 dotenv.config();
 
@@ -19,6 +20,9 @@ const PORT = process.env.PORT || 3001;
 
 app.use(cors());
 app.use(express.json());
+
+// Parse tokens globally and inject context (does not reject unauthenticated requests)
+app.use('/api', authParser);
 
 app.use('/api/ctacte', ctacteRoutes);
 app.use('/api/ctacte-fn', require('./routes/ctacteFn'));

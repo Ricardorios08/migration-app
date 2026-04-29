@@ -16,7 +16,7 @@ GROUP BY tpotribcod;`
     },
     mariaDebt: {
         title: "Consulta de Deuda InfoGov (MariaDB)",
-        sql: `/* MariaDB - InfoGov (Local & Remoto) */
+        sql: `/* MariaDB - InfoGov (Unificado) */
 SELECT CodiOfic as id, SUM(DebeCtct - CredCtct) as pending 
 FROM ctacte 
 WHERE DebeCtct > CredCtct

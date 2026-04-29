@@ -39,7 +39,7 @@ const startBackgroundAudit = async () => {
 
         console.log('[DASHBOARD] Fetching MD counts...');
         console.log('[DASHBOARD] Fetching MD counts...');
-        const [pgCounts, mdCountsLocal, mdCountsRemote] = await Promise.all([
+        const [pgCounts, mdCounts] = await Promise.all([
             postgres.query(`
                 SELECT tpotribcod as id, COUNT(*) as count 
                 FROM tributo 
@@ -49,29 +49,20 @@ const startBackgroundAudit = async () => {
                 SELECT CodiOfic as id, COUNT(DISTINCT CuenCtct) as count 
                 FROM ctacte 
                 GROUP BY CodiOfic
-            `).catch(e => { console.error('MD Local Counts Error:', e); return []; }),
-            maria.queryRemote(`
-                SELECT CodiOfic as id, COUNT(DISTINCT CuenCtct) as count 
-                FROM ctacte 
-                GROUP BY CodiOfic
-            `).catch(e => { console.error('MD Remote Counts Error:', e); return []; })
+            `).catch(e => { console.error('MD Counts Error:', e); return []; })
         ]);
 
-        console.log('[DASHBOARD] MD Counts:', { 
-            local: mdCountsLocal.map(c => `${c.id}:${c.count}`).join(', '),
-            remote: mdCountsRemote.map(c => `${c.id}:${c.count}`).join(', ')
-        });
+        console.log('[DASHBOARD] MD Counts:', mdCounts.length);
 
         auditState.summary = offices.map(off => {
             const pgC = pgCounts.rows.find(c => parseInt(c.id) === off.id) || { count: 0 };
-            const mCL = mdCountsLocal.find(c => c.id === off.id) || { count: 0 };
-            const mCR = mdCountsRemote.find(c => c.id === off.id) || { count: 0 };
+            const mdC = mdCounts.find(c => c.id === off.id) || { count: 0 };
 
             return { 
                 id: off.id, 
                 name: off.name, 
                 accountsMigrated: parseInt(pgC.count),
-                accountsMaria: parseInt(mCL.count) + parseInt(mCR.count)
+                accountsMaria: parseInt(mdC.count)
             };
         });
 
@@ -88,22 +79,8 @@ const startBackgroundAudit = async () => {
             `);
         };
 
-        const [recaLocal, recaRemote] = await Promise.all([
-            fetchReca(maria.query).catch(() => []),
-            fetchReca(maria.queryRemote).catch(() => [])
-        ]);
-
-        // Merge Recaudadores
-        const recaMap = {};
-        [...recaLocal, ...recaRemote].forEach(r => {
-            if (!recaMap[r.CodiReca]) {
-                recaMap[r.CodiReca] = { ...r, CantApremios: Number(r.CantApremios), TotalApre: parseFloat(r.TotalApre || 0) };
-            } else {
-                recaMap[r.CodiReca].CantApremios += Number(r.CantApremios);
-                recaMap[r.CodiReca].TotalApre += parseFloat(r.TotalApre || 0);
-            }
-        });
-        auditState.recaudadores = Object.values(recaMap).sort((a, b) => b.TotalApre - a.TotalApre);
+        const recaLocal = await fetchReca(maria.query).catch(() => []);
+        auditState.recaudadores = recaLocal.map(r => ({ ...r, CantApremios: Number(r.CantApremios), TotalApre: parseFloat(r.TotalApre || 0) })).sort((a, b) => b.TotalApre - a.TotalApre);
 
         // 3. Grandes Contribuyentes (Top 20 Debtors)
         console.log('[DASHBOARD] Calculating Grandes Contribuyentes...');
@@ -122,10 +99,7 @@ const startBackgroundAudit = async () => {
             const cuit = pgPerson.percuilnro;
             if (cuit) {
                 // Find in MariaDB by CUIT (Both Local and Remote)
-                const [mdPLocal, mdPRemote] = await Promise.all([
-                    maria.query(`SELECT nro_padron FROM vpadrones_persona WHERE CUIT = ?`, [cuit]).catch(() => []),
-                    maria.queryRemote(`SELECT nro_padron FROM vpadrones_persona WHERE CUIT = ?`, [cuit]).catch(() => [])
-                ]);
+                const mdPLocal = await maria.query(`SELECT nro_padron FROM vpadrones_persona WHERE CUIT = ?`, [cuit]).catch(() => []);
 
                 let totalMdDebt = 0;
                 
@@ -133,17 +107,6 @@ const startBackgroundAudit = async () => {
                 if (mdPLocal.length > 0) {
                     const pads = mdPLocal.map(p => p.nro_padron);
                     const res = await maria.query(`
-                        SELECT SUM(DebeCtct - CredCtct) as total 
-                        FROM ctacte 
-                        WHERE TRIM(CuenCtct) IN (${pads.map(p => `'${p}'`).join(',')}) AND DebeCtct > CredCtct
-                    `);
-                    totalMdDebt += parseFloat(res[0]?.total || 0);
-                }
-
-                // Fetch debt for all pads found in Remote
-                if (mdPRemote.length > 0) {
-                    const pads = mdPRemote.map(p => p.nro_padron);
-                    const res = await maria.queryRemote(`
                         SELECT SUM(DebeCtct - CredCtct) as total 
                         FROM ctacte 
                         WHERE TRIM(CuenCtct) IN (${pads.map(p => `'${p}'`).join(',')}) AND DebeCtct > CredCtct
@@ -185,9 +148,8 @@ const startBackgroundAudit = async () => {
             `, [dateStr, dateStr, dateStr]);
         };
 
-        const [mdDebtLocal, mdDebtRemote, pgDebt] = await Promise.all([
-            fetchDebt(maria.query).catch(e => { console.error('MD Local Debt Error:', e); return []; }),
-            fetchDebt(maria.queryRemote).catch(e => { console.error('MD Remote Debt Error:', e); return []; }),
+        const [mdDebtLocal, pgDebt] = await Promise.all([
+            fetchDebt(maria.query).catch(e => { console.error('MD Debt Error:', e); return []; }),
             postgres.query(`
                 SELECT t.tpotribcod as id, 
                        SUM(genctaimpcta) as capital, 
@@ -204,15 +166,13 @@ const startBackgroundAudit = async () => {
         ]);
 
         console.log('[DASHBOARD] mdDebtLocal:', mdDebtLocal.length);
-        console.log('[DASHBOARD] mdDebtRemote:', mdDebtRemote.length);
 
         auditState.debt = auditState.summary.map(item => {
             const l = (mdDebtLocal || []).find(d => d.id === item.id) || { capital: 0, interest: 0 };
-            const r = (mdDebtRemote || []).find(d => d.id === item.id) || { capital: 0, interest: 0 };
             const pD = pgDebt.rows.find(d => parseInt(d.id) === item.id) || { capital: 0, interest: 0 };
             
-            const mCap = parseFloat(l.capital || 0) + parseFloat(r.capital || 0);
-            const mInt = parseFloat(l.interest || 0) + parseFloat(r.interest || 0);
+            const mCap = parseFloat(l.capital || 0);
+            const mInt = parseFloat(l.interest || 0);
             const pCap = parseFloat(pD.capital || 0);
             const pInt = parseFloat(pD.interest || 0);
 

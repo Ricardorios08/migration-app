@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Database, Table as TableIcon, List, ArrowLeft, Loader2, Filter, Download } from 'lucide-react';
+import axios from 'axios';
 import { API_URL } from '../config';
 
 const TableExplorer = () => {
     const [engine, setEngine] = useState('maria');
-    const [db, setDb] = useState('infogov');
+    const [db, setDb] = useState(import.meta.env.VITE_MARIA_DB_NAME || 'recaudacion2');
     const [tables, setTables] = useState([]);
     const [selectedTable, setSelectedTable] = useState(null);
     const [data, setData] = useState([]);
@@ -19,17 +20,10 @@ const TableExplorer = () => {
         { id: 'municipiov1', name: 'MunicipioV1', color: '#10b981' },
         { id: 'personal3', name: 'Personal3', color: '#ec4899' },
         { id: 'recahisto', name: 'RecaHisto', color: '#8b5cf6' },
-        { id: 'recaudacion', name: 'Recaudación', color: '#6366f1' },
-        { id: 'recaudacion_remote', name: 'Recaudación (Remota)', color: '#ef4444' }
+        { id: import.meta.env.VITE_MARIA_DB_NAME || 'recaudacion2', name: 'Recaudación', color: '#6366f1' }
     ] : [
-        { id: 'public', name: 'PostgreSQL (Public)', color: '#336791' }
+        { id: 'public', name: 'PostgreSQL', color: '#336791' }
     ];
-
-    useEffect(() => {
-        // Reset DB when engine changes
-        if (engine === 'pg') setDb('public');
-        else if (db === 'public') setDb('infogov');
-    }, [engine]);
 
     useEffect(() => {
         fetchTables();
@@ -39,9 +33,8 @@ const TableExplorer = () => {
         setLoading(true);
         setError(null);
         try {
-            const res = await fetch(`${API_URL}/explorer/${engine}/${db}/tables`);
-            if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-            const result = await res.json();
+            const res = await axios.get(`${API_URL}/explorer/${engine}/${db}/tables`);
+            const result = res.data;
             setTables(Array.isArray(result) ? result.sort((a, b) => (b.rows || 0) - (a.rows || 0)) : []);
         } catch (err) {
             setError(`Error cargando tablas de ${db}: ` + err.message);
@@ -56,8 +49,8 @@ const TableExplorer = () => {
         setData([]);
         setSearchQuery('');
         try {
-            const res = await fetch(`${API_URL}/explorer/${engine}/${db}/explore/${tableName}`);
-            const result = await res.json();
+            const res = await axios.get(`${API_URL}/explorer/${engine}/${db}/explore/${tableName}`);
+            const result = res.data;
             if (result.length > 0) {
                 setColumns(Object.keys(result[0]));
             }
@@ -73,8 +66,8 @@ const TableExplorer = () => {
         if (e) e.preventDefault();
         setLoading(true);
         try {
-            const res = await fetch(`${API_URL}/explorer/${engine}/${db}/explore/${selectedTable}?q=${encodeURIComponent(searchQuery)}`);
-            const result = await res.json();
+            const res = await axios.get(`${API_URL}/explorer/${engine}/${db}/explore/${selectedTable}?q=${encodeURIComponent(searchQuery)}`);
+            const result = res.data;
             setData(result);
         } catch (err) {
             setError('Error en la búsqueda: ' + err.message);
@@ -106,14 +99,14 @@ const TableExplorer = () => {
                             <button 
                                 className={`btn ${engine === 'maria' ? 'btn-primary' : ''}`}
                                 style={{ fontSize: '0.75rem', padding: '0.4rem 1rem' }}
-                                onClick={() => setEngine('maria')}
+                                onClick={() => { setEngine('maria'); setDb(import.meta.env.VITE_MARIA_DB_NAME || 'recaudacion2'); }}
                             >
                                 MariaDB
                             </button>
                             <button 
                                 className={`btn ${engine === 'pg' ? 'btn-primary' : ''}`}
                                 style={{ fontSize: '0.75rem', padding: '0.4rem 1rem', background: engine === 'pg' ? '#336791' : 'transparent', borderColor: engine === 'pg' ? '#336791' : 'transparent' }}
-                                onClick={() => setEngine('pg')}
+                                onClick={() => { setEngine('pg'); setDb('public'); }}
                             >
                                 PostgreSQL
                             </button>

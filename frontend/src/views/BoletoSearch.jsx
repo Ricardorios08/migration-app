@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import axios from 'axios';
 import { Search, FileText, Calendar, User, Hash, Filter, X, Info, CheckCircle, AlertCircle, Printer, History, Landmark, Clock } from 'lucide-react';
 import { API_URL } from '../config';
@@ -15,6 +15,7 @@ const BoletoSearch = ({ currentUser }) => {
     const [results, setResults] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+    const abortControllerRef = useRef(null);
     
     // Modal State
     const [showModal, setShowModal] = useState(false);
@@ -25,6 +26,10 @@ const BoletoSearch = ({ currentUser }) => {
         if (e) e.preventDefault();
         setLoading(true);
         setError(null);
+        setResults([]);
+        
+        abortControllerRef.current = new AbortController();
+
         try {
             const params = {};
             if (filters.officeId) params.officeId = filters.officeId;
@@ -34,12 +39,25 @@ const BoletoSearch = ({ currentUser }) => {
             if (filters.status) params.status = filters.status;
             if (filters.numeBole) params.numeBole = filters.numeBole;
 
-            const res = await axios.get(`${API_URL}/boletos/search`, { params });
+            const res = await axios.get(`${API_URL}/boletos/search`, { 
+                params,
+                signal: abortControllerRef.current.signal
+            });
             setResults(res.data);
         } catch (err) {
-            setError(err.response?.data?.error || err.message);
+            if (axios.isCancel(err)) {
+                setError('Búsqueda cancelada por el usuario.');
+            } else {
+                setError(err.response?.data?.error || err.message);
+            }
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleCancel = () => {
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
         }
     };
 
@@ -57,21 +75,7 @@ const BoletoSearch = ({ currentUser }) => {
         }
     };
 
-    const handlePrintAudit = async () => {
-        if (!boletoData || !boletoData.header) return;
-        try {
-            await axios.post(`${API_URL}/boletos/audit-print`, {
-                periBole: boletoData.header.PeriBole,
-                numeBole: boletoData.header.NumeBole,
-                user: currentUser?.nombre_usuario || 'desconocido'
-            });
-            alert("Acción de impresión registrada en auditoría (tabla ticket).");
-            // Refresh info to show new reprint in history
-            fetchFullInfo(boletoData.header);
-        } catch (err) {
-            console.error("Error auditing print:", err);
-        }
-    };
+
 
     const formatCurrency = (val) => {
         return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(val || 0);
@@ -177,10 +181,16 @@ const BoletoSearch = ({ currentUser }) => {
                             <option value="Anulado Rentas">Anulado Rentas</option>
                         </select>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-                        <button type="submit" className="btn btn-primary" disabled={loading} style={{ width: '100%', height: '42px' }}>
-                            {loading ? 'Buscando...' : <><Search size={18} /> Buscar</>}
-                        </button>
+                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: '0.5rem' }}>
+                        {loading ? (
+                            <button type="button" onClick={handleCancel} className="btn" style={{ width: '100%', height: '42px', background: '#ef4444', color: 'white', borderColor: '#ef4444' }}>
+                                Cancelar
+                            </button>
+                        ) : (
+                            <button type="submit" className="btn btn-primary" style={{ width: '100%', height: '42px' }}>
+                                <Search size={18} /> Buscar
+                            </button>
+                        )}
                     </div>
                 </form>
             </div>
@@ -286,9 +296,6 @@ const BoletoSearch = ({ currentUser }) => {
                                 <p style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>Detalle completo y trazabilidad de auditoría</p>
                             </div>
                             <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                                <button className="btn btn-primary" onClick={handlePrintAudit} disabled={!boletoData}>
-                                    <Printer size={18} /> Reimprimir
-                                </button>
                                 <button className="close-btn" onClick={() => setShowModal(false)}><X size={24} /></button>
                             </div>
                         </div>
