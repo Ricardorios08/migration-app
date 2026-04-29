@@ -3,6 +3,7 @@ import {
     Search, User, Mail, Phone, Fingerprint, CreditCard, Loader2, 
     X, MapPin, CalendarDays, PhoneCall, ShieldCheck, Info, Briefcase, UserCircle
 } from 'lucide-react';
+import { API_URL } from '../config';
 
 const PersonaSearch = () => {
     const [query, setQuery] = useState('');
@@ -19,7 +20,7 @@ const PersonaSearch = () => {
         setLoading(true);
         setError(null);
         try {
-            const response = await fetch(`http://localhost:3001/api/infogov/search-persona?q=${encodeURIComponent(query)}`);
+            const response = await fetch(`${API_URL}/infogov/search-persona?q=${encodeURIComponent(query)}`);
             if (!response.ok) throw new Error('Error al buscar personas');
             const data = await response.json();
             setResults(data);
