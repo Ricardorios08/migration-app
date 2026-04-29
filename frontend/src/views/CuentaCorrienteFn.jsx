@@ -4,7 +4,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import API_BASE_URL from '../config';
 
-const CuentaCorrienteFn = () => {
+const CuentaCorrienteFn = ({ user }) => {
     const [offices, setOffices] = useState([]);
     const [selectedOffice, setSelectedOffice] = useState('1'); // Default Inmueble
     const [account, setAccount] = useState('');
@@ -293,10 +293,14 @@ const CuentaCorrienteFn = () => {
                 periodTotals = { debe: 0, reca: 0, haber: 0, total: 0 };
             }
 
-            periodTotals.debe += parseFloat(row.DebeCtct || 0);
-            periodTotals.reca += parseFloat(row.RecaCtct || 0);
-            periodTotals.haber += parseFloat(row.CredCtct || 0);
-            periodTotals.total += parseFloat(row.TotaCtct || 0);
+            const rowDebe = parseFloat(row.DebeCtct || 0);
+            const rowCred = parseFloat(row.CredCtct || 0);
+            const isMunic = user?.rol === 'municipalidad';
+            
+            periodTotals.debe += rowDebe;
+            periodTotals.reca += (isMunic ? 0 : parseFloat(row.RecaCtct || 0));
+            periodTotals.haber += (isMunic ? Math.min(rowDebe, rowCred) : rowCred);
+            periodTotals.total += (isMunic ? Math.max(0, rowDebe - rowCred) : parseFloat(row.TotaCtct || 0));
 
             // Use DataRow normally, which now handles aggregated "Varios Conceptos" objects
             rows.push(<DataRow key={idx} row={row} />);
@@ -350,9 +354,13 @@ const CuentaCorrienteFn = () => {
                 ) : '-'}
             </td>
             <td style={{ color: '#ef4444' }}>${formatCurrency(row.DebeCtct)}</td>
-            <td style={{ color: '#f59e0b' }}>${formatCurrency(row.RecaCtct)}</td>
-            <td style={{ color: '#10b981' }}>${formatCurrency(row.CredCtct)}</td>
-            <td style={{ fontWeight: 'bold' }}>${formatCurrency(row.TotaCtct)}</td>
+            {user?.rol !== 'municipalidad' && <td style={{ color: '#f59e0b' }}>${formatCurrency(row.RecaCtct)}</td>}
+            <td style={{ color: '#10b981' }}>
+                ${formatCurrency(user?.rol === 'municipalidad' ? Math.min(parseFloat(row.DebeCtct || 0), parseFloat(row.CredCtct || 0)) : row.CredCtct)}
+            </td>
+            <td style={{ fontWeight: 'bold' }}>
+                ${formatCurrency(user?.rol === 'municipalidad' ? Math.max(0, parseFloat(row.DebeCtct || 0) - parseFloat(row.CredCtct || 0)) : row.TotaCtct)}
+            </td>
             <td>
                 {(() => {
                     const hasBalance = parseFloat(row.TotaCtct || 0) > 0.10;
@@ -393,10 +401,10 @@ const CuentaCorrienteFn = () => {
                 Subtotal {period}/{bime}:
             </td>
             <td style={{ color: '#ef4444', fontWeight: 'bold' }}>${formatCurrency(totals.debe)}</td>
-            <td style={{ color: '#f59e0b', fontWeight: 'bold' }}>${formatCurrency(totals.reca)}</td>
+            {user?.rol !== 'municipalidad' && <td style={{ color: '#f59e0b', fontWeight: 'bold' }}>${formatCurrency(totals.reca)}</td>}
             <td style={{ color: '#10b981', fontWeight: 'bold' }}>${formatCurrency(totals.haber)}</td>
             <td style={{ borderTop: '1px solid var(--primary)', background: 'rgba(37, 99, 235, 0.1)' }}>
-                ${formatCurrency(totals.total)}
+                ${formatCurrency(user?.rol === 'municipalidad' ? (totals.debe - totals.haber) : totals.total)}
             </td>
             <td></td>
         </tr>
@@ -567,16 +575,19 @@ const CuentaCorrienteFn = () => {
 
                     const pDebe = parseFloat(row.DebeCtct || 0);
                     const pReca = parseFloat(row.RecaCtct || 0);
-                    const pHaber = parseFloat(row.CredCtct || 0);
-                    const pTotal = parseFloat(row.TotaCtct || 0);
+                    const pHaberOriginal = parseFloat(row.CredCtct || 0);
+                    const isMunic = user?.rol === 'municipalidad';
+                    
+                    const pHaber = isMunic ? Math.min(pDebe, pHaberOriginal) : pHaberOriginal;
+                    const pTotal = isMunic ? Math.max(0, pDebe - pHaber) : parseFloat(row.TotaCtct || 0);
 
                     subTotals.debe += pDebe;
-                    subTotals.reca += pReca;
+                    subTotals.reca += (isMunic ? 0 : pReca);
                     subTotals.haber += pHaber;
                     subTotals.total += pTotal;
 
                     grandTotals.debe += pDebe;
-                    grandTotals.reca += pReca;
+                    grandTotals.reca += (isMunic ? 0 : pReca);
                     grandTotals.haber += pHaber;
                     grandTotals.total += pTotal;
 
@@ -637,6 +648,7 @@ const CuentaCorrienteFn = () => {
             } else if (postgresData[0]?.Pabellon) {
                 doc.text(`Ubicación: Pab: ${postgresData[0].Pabellon.trim()} Nicho: ${postgresData[0].Nicho?.trim() || ''}`, 40, 115);
             }
+            const isMunic = user?.rol === 'municipalidad';
 
             let currentY = 135;
 
@@ -651,13 +663,13 @@ const CuentaCorrienteFn = () => {
                     r.isGrandTotal ? [
                         { content: r.label, colSpan: 3, styles: { fontStyle: 'bold', halign: 'right', fillColor: [50, 50, 50], textColor: [255, 255, 255], fontSize: 9 } },
                         { content: `$${r.DebeCtct.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { fontStyle: 'bold', fillColor: [50, 50, 50], textColor: [255, 200, 200] } },
-                        { content: `$${r.RecaCtct.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { fontStyle: 'bold', fillColor: [50, 50, 50], textColor: [253, 230, 138] } },
+                        ...(isMunic ? [] : [{ content: `$${r.RecaCtct.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { fontStyle: 'bold', fillColor: [50, 50, 50], textColor: [253, 230, 138] } }]),
                         { content: `$${r.CredCtct.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { fontStyle: 'bold', fillColor: [50, 50, 50], textColor: [167, 243, 208] } },
                         { content: `$${r.TotaCtct.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { fontStyle: 'bold', fillColor: [30, 30, 30], textColor: [255, 255, 255] } }
                     ] : r.isSubtotal ? [
                         { content: r.label, colSpan: 3, styles: { fontStyle: 'bold', halign: 'right', textColor: legacyColor } },
                         { content: `$${r.DebeCtct.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { fontStyle: 'bold', textColor: [239, 68, 68] } },
-                        { content: `$${r.RecaCtct.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { fontStyle: 'bold', textColor: [245, 158, 11] } },
+                        ...(isMunic ? [] : [{ content: `$${r.RecaCtct.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { fontStyle: 'bold', textColor: [245, 158, 11] } }]),
                         { content: `$${r.CredCtct.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { fontStyle: 'bold', textColor: [16, 185, 129] } },
                         { content: `$${r.TotaCtct.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { fontStyle: 'bold', fillColor: [240, 253, 244] } }
                     ] : [
@@ -665,14 +677,16 @@ const CuentaCorrienteFn = () => {
                         r.FeveCtct ? new Date(r.FeveCtct).toLocaleDateString() : '-',
                         (r.DetaCtct || '').substring(0, 35),
                         `$${parseFloat(r.DebeCtct || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-                        `$${parseFloat(r.RecaCtct || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+                        ...(isMunic ? [] : [`$${parseFloat(r.RecaCtct || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`]),
                         `$${parseFloat(r.CredCtct || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
                         `$${parseFloat(r.TotaCtct || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
                     ]);
 
                 autoTable(doc, {
                     startY: currentY,
-                    head: [['Pe/C', 'Vencimiento', 'Detalle', 'Debe', 'Recargo', 'Haber', 'Total']],
+                    head: [isMunic 
+                        ? ['Pe/C', 'Vencimiento', 'Detalle', 'Debe', 'Haber', 'Total']
+                        : ['Pe/C', 'Vencimiento', 'Detalle', 'Debe', 'Recargo', 'Haber', 'Total']],
                     body: legacyRows,
                     theme: 'grid',
                     headStyles: { fillColor: legacyColor, fontSize: 8 },
@@ -700,13 +714,13 @@ const CuentaCorrienteFn = () => {
                     r.isGrandTotal ? [
                         { content: r.label, colSpan: 3, styles: { fontStyle: 'bold', halign: 'right', fillColor: [50, 50, 50], textColor: [255, 255, 255], fontSize: 9 } },
                         { content: `$${r.DebeCtct.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { fontStyle: 'bold', fillColor: [50, 50, 50], textColor: [255, 200, 200] } },
-                        { content: `$${r.RecaCtct.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { fontStyle: 'bold', fillColor: [50, 50, 50], textColor: [253, 230, 138] } },
+                        ...(isMunic ? [] : [{ content: `$${r.RecaCtct.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { fontStyle: 'bold', fillColor: [50, 50, 50], textColor: [253, 230, 138] } }]),
                         { content: `$${r.CredCtct.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { fontStyle: 'bold', fillColor: [50, 50, 50], textColor: [167, 243, 208] } },
                         { content: `$${r.TotaCtct.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { fontStyle: 'bold', fillColor: [30, 30, 30], textColor: [255, 255, 255] } }
                     ] : r.isSubtotal ? [
                         { content: r.label, colSpan: 3, styles: { fontStyle: 'bold', halign: 'right', textColor: mainColor } },
                         { content: `$${r.DebeCtct.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { fontStyle: 'bold', textColor: [239, 68, 68] } },
-                        { content: `$${r.RecaCtct.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { fontStyle: 'bold', textColor: [245, 158, 11] } },
+                        ...(isMunic ? [] : [{ content: `$${r.RecaCtct.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { fontStyle: 'bold', textColor: [245, 158, 11] } }]),
                         { content: `$${r.CredCtct.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { fontStyle: 'bold', textColor: [16, 185, 129] } },
                         { content: `$${r.TotaCtct.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { fontStyle: 'bold', fillColor: [239, 246, 255] } }
                     ] : [
@@ -714,14 +728,16 @@ const CuentaCorrienteFn = () => {
                         r.FeveCtct ? new Date(r.FeveCtct).toLocaleDateString() : '-',
                         `${r.DetaCtct || r.DetailName || r.TipoTributo || ''}`,
                         `$${parseFloat(r.DebeCtct || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-                        `$${parseFloat(r.RecaCtct || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+                        ...(isMunic ? [] : [`$${parseFloat(r.RecaCtct || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`]),
                         `$${parseFloat(r.CredCtct || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
                         `$${parseFloat(r.TotaCtct || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
                     ]);
 
                 autoTable(doc, {
                     startY: currentY,
-                    head: [['Pe/C', 'Vencimiento', 'Concepto', 'Debe', 'Interés', 'Haber', 'Total']],
+                    head: [isMunic 
+                        ? ['Pe/C', 'Vencimiento', 'Concepto', 'Debe', 'Haber', 'Total']
+                        : ['Pe/C', 'Vencimiento', 'Concepto', 'Debe', 'Interés', 'Haber', 'Total']],
                     body: pgRows,
                     theme: 'grid',
                     headStyles: { fillColor: mainColor, fontSize: 8 },
@@ -852,10 +868,14 @@ const CuentaCorrienteFn = () => {
                 periodTotals = { debe: 0, reca: 0, haber: 0, total: 0 };
             }
 
-            periodTotals.debe += parseFloat(row.DebeCtct || 0);
-            periodTotals.reca += parseFloat(row.RecaCtct || 0);
-            periodTotals.haber += parseFloat(row.CredCtct || 0);
-            periodTotals.total += parseFloat(row.TotaCtct || 0);
+            const rowDebe = parseFloat(row.DebeCtct || 0);
+            const rowCred = parseFloat(row.CredCtct || 0);
+            const isMunic = user?.rol === 'municipalidad';
+
+            periodTotals.debe += rowDebe;
+            periodTotals.reca += (isMunic ? 0 : parseFloat(row.RecaCtct || 0));
+            periodTotals.haber += (isMunic ? Math.min(rowDebe, rowCred) : rowCred);
+            periodTotals.total += (isMunic ? Math.max(0, rowDebe - rowCred) : parseFloat(row.TotaCtct || 0));
 
             // Comparison logic against appropriately grouped legacy data
             const legacyMatch = compareLegacyData.find(l => l.PeriCtct === row.PeriCtct && l.BimeCtct === row.BimeCtct);
@@ -888,13 +908,17 @@ const CuentaCorrienteFn = () => {
                     <td style={{ color: isMismatchDebe ? '#fca5a5' : '#ef4444', fontWeight: isMismatchDebe ? 'bold' : 'normal' }}>
                         ${formatCurrency(row.DebeCtct)}
                     </td>
-                    <td style={{ color: isMismatchReca ? '#fca5a5' : '#f59e0b', fontWeight: isMismatchReca ? 'bold' : 'normal' }}>
-                        ${formatCurrency(row.RecaCtct)}
-                    </td>
+                    {user?.rol !== 'municipalidad' && (
+                        <td style={{ color: isMismatchReca ? '#fca5a5' : '#f59e0b', fontWeight: isMismatchReca ? 'bold' : 'normal' }}>
+                            ${formatCurrency(row.RecaCtct)}
+                        </td>
+                    )}
                     <td style={{ color: '#10b981' }}>
-                        ${formatCurrency(row.CredCtct)}
+                        ${formatCurrency(user?.rol === 'municipalidad' ? Math.min(parseFloat(row.DebeCtct || 0), parseFloat(row.CredCtct || 0)) : row.CredCtct)}
                     </td>
-                    <td style={{ fontWeight: 'bold' }}>${formatCurrency(row.TotaCtct)}</td>
+                    <td style={{ fontWeight: 'bold' }}>
+                        ${formatCurrency(user?.rol === 'municipalidad' ? Math.max(0, parseFloat(row.DebeCtct || 0) - parseFloat(row.CredCtct || 0)) : row.TotaCtct)}
+                    </td>
                     <td>
                         <div className={`status-pill ${row.NumeAcpa && row.NumeAcpa != '0' ? 'P' : 'D'}`}>
                             {row.NumeAcpa && row.NumeAcpa != '0' ? 'Pagado' : 'Deuda'}
@@ -1180,6 +1204,32 @@ const CuentaCorrienteFn = () => {
                         </div>
                     )}
 
+                    <div className="input-group" style={{ paddingLeft: '10px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', padding: '2px' }}>
+                            <label style={{ fontSize: '0.65rem', color: '#fbbf24' }}>Año</label>
+                            <input
+                                type="number"
+                                placeholder="AAAA"
+                                value={filterYear}
+                                onChange={(e) => setFilterYear(e.target.value)}
+                                style={{ background: 'transparent', border: 'none', color: '#fbbf24', width: '80px', fontSize: '1.1rem', fontWeight: 'bold' }}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="input-group" style={{ paddingLeft: '10px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', padding: '2px' }}>
+                            <label style={{ fontSize: '0.65rem', color: '#fbbf24' }}>Cuota</label>
+                            <input
+                                type="number"
+                                placeholder="1-12"
+                                value={filterMonth}
+                                onChange={(e) => setFilterMonth(e.target.value)}
+                                style={{ background: 'transparent', border: 'none', color: '#fbbf24', width: '60px', fontSize: '1.1rem', fontWeight: 'bold' }}
+                            />
+                        </div>
+                    </div>
+
                     {isFiltersExpanded && (
                         <>
                             <div className="input-group">
@@ -1191,32 +1241,6 @@ const CuentaCorrienteFn = () => {
                                         value={toDate}
                                         onChange={(e) => setToDate(e.target.value)}
                                         style={{ background: 'transparent', border: 'none', color: 'white' }}
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="input-group" style={{ paddingLeft: '10px' }}>
-                                <div style={{ display: 'flex', flexDirection: 'column', padding: '2px' }}>
-                                    <label style={{ fontSize: '0.65rem', color: '#fbbf24' }}>Año</label>
-                                    <input
-                                        type="number"
-                                        placeholder="AAAA"
-                                        value={filterYear}
-                                        onChange={(e) => setFilterYear(e.target.value)}
-                                        style={{ background: 'transparent', border: 'none', color: '#fbbf24', width: '90px', fontSize: '1.1rem', fontWeight: 'bold' }}
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="input-group" style={{ paddingLeft: '10px' }}>
-                                <div style={{ display: 'flex', flexDirection: 'column', padding: '2px' }}>
-                                    <label style={{ fontSize: '0.65rem', color: '#fbbf24' }}>Cuota/Mes</label>
-                                    <input
-                                        type="number"
-                                        placeholder="1-12"
-                                        value={filterMonth}
-                                        onChange={(e) => setFilterMonth(e.target.value)}
-                                        style={{ background: 'transparent', border: 'none', color: '#fbbf24', width: '65px', fontSize: '1.1rem', fontWeight: 'bold' }}
                                     />
                                 </div>
                             </div>
@@ -1235,8 +1259,21 @@ const CuentaCorrienteFn = () => {
                                 padding: '0.8rem', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' 
                             }}
                         >
-                            <Filter size={16} /> {isFiltersExpanded ? 'Menos Filtros' : 'Más Filtros'}
+                            <Filter size={16} /> {isFiltersExpanded ? 'Opciones' : 'Más'}
                         </button>
+
+                        {user?.rol === 'municipalidad' && (
+                            <button
+                                type="button"
+                                className="btn-pdf"
+                                disabled={!account || loading || (legacyData.length === 0 && postgresData.length === 0)}
+                                onClick={handleGeneratePDF}
+                                style={{ padding: '0.8rem 1.5rem' }}
+                            >
+                                <Download size={18} style={{ marginRight: '8px' }} />
+                                Vista Previa PDF
+                            </button>
+                        )}
                     </div>
 
                     {/* Second Row for Filters and Actions */}
@@ -1287,48 +1324,54 @@ const CuentaCorrienteFn = () => {
                             </>
                         )}
 
-                        <button
-                            type="button"
-                            className="btn-pdf"
-                            disabled={!account || loading || (legacyData.length === 0 && postgresData.length === 0)}
-                            onClick={handleGeneratePDF}
-                        >
-                            Vista Previa PDF
-                        </button>
+                        {user?.rol !== 'municipalidad' && (
+                            <button
+                                type="button"
+                                className="btn-pdf"
+                                disabled={!account || loading || (legacyData.length === 0 && postgresData.length === 0)}
+                                onClick={handleGeneratePDF}
+                            >
+                                Vista Previa PDF
+                            </button>
+                        )}
 
-                        <button
-                            type="button"
-                            className="btn-sql"
-                            onClick={() => setShowSqlMariaModal(true)}
-                        >
-                            SQL MariaDB
-                        </button>
+                        {user?.rol !== 'municipalidad' && (
+                            <>
+                                <button
+                                    type="button"
+                                    className="btn-sql"
+                                    onClick={() => setShowSqlMariaModal(true)}
+                                >
+                                    SQL MariaDB
+                                </button>
 
-                        <button
-                            type="button"
-                            className="btn-sql"
-                            onClick={() => setShowSqlPgModal(true)}
-                        >
-                            SQL Postgres
-                        </button>
+                                <button
+                                    type="button"
+                                    className="btn-sql"
+                                    onClick={() => setShowSqlPgModal(true)}
+                                >
+                                    SQL Postgres
+                                </button>
 
-                        <button
-                            type="button"
-                            className="btn-sql"
-                            onClick={openManual}
-                            style={{ background: 'rgba(37, 99, 235, 0.1)', color: '#2563eb', border: '1px solid rgba(37, 99, 235, 0.2)' }}
-                        >
-                            Manual de Lógica
-                        </button>
+                                <button
+                                    type="button"
+                                    className="btn-sql"
+                                    onClick={openManual}
+                                    style={{ background: 'rgba(37, 99, 235, 0.1)', color: '#2563eb', border: '1px solid rgba(37, 99, 235, 0.2)' }}
+                                >
+                                    Manual de Lógica
+                                </button>
 
-                        <button
-                            type="button"
-                            className="btn-sql"
-                            onClick={() => setShowFormulaModal(true)}
-                            style={{ background: 'rgba(251, 191, 36, 0.1)', color: '#fbbf24', border: '1px solid rgba(251, 191, 36, 0.2)' }}
-                        >
-                            Ver Fórmula Interés
-                        </button>
+                                <button
+                                    type="button"
+                                    className="btn-sql"
+                                    onClick={() => setShowFormulaModal(true)}
+                                    style={{ background: 'rgba(251, 191, 36, 0.1)', color: '#fbbf24', border: '1px solid rgba(251, 191, 36, 0.2)' }}
+                                >
+                                    Ver Fórmula Interés
+                                </button>
+                            </>
+                        )}
                     </div>
                 </form>
             </div>
@@ -1354,7 +1397,7 @@ const CuentaCorrienteFn = () => {
                                         <th>Apr.</th>
                                         <th>Plan</th>
                                         <th>Debe</th>
-                                        <th>Recargo</th>
+                                        {user?.rol !== 'municipalidad' && <th>Recargo</th>}
                                         <th>Haber</th>
                                         <th>Total</th>
                                         <th>Estado/Ref</th>
@@ -1369,14 +1412,25 @@ const CuentaCorrienteFn = () => {
                                         <td style={{ color: '#ef4444' }}>
                                             ${formatCurrency(legacyData.reduce((acc, row) => acc + parseFloat(row.DebeCtct || 0), 0))}
                                         </td>
-                                        <td style={{ color: '#f59e0b' }}>
-                                            ${formatCurrency(legacyData.reduce((acc, row) => acc + parseFloat(row.RecaCtct || 0), 0))}
-                                        </td>
+                                        {user?.rol !== 'municipalidad' && (
+                                            <td style={{ color: '#f59e0b' }}>
+                                                ${formatCurrency(legacyData.reduce((acc, row) => acc + parseFloat(row.RecaCtct || 0), 0))}
+                                            </td>
+                                        )}
                                         <td style={{ color: '#10b981' }}>
-                                            ${formatCurrency(legacyData.reduce((acc, row) => acc + parseFloat(row.CredCtct || 0), 0))}
+                                            ${formatCurrency(legacyData.reduce((acc, row) => {
+                                                const d = parseFloat(row.DebeCtct || 0);
+                                                const h = parseFloat(row.CredCtct || 0);
+                                                return acc + (user?.rol === 'municipalidad' ? Math.min(d, h) : h);
+                                            }, 0))}
                                         </td>
                                         <td style={{ fontSize: '1.1rem', borderTop: '2px solid var(--primary)' }}>
-                                            ${formatCurrency(legacyData.reduce((acc, row) => acc + parseFloat(row.TotaCtct || 0), 0))}
+                                            ${formatCurrency(legacyData.reduce((acc, row) => {
+                                                const d = parseFloat(row.DebeCtct || 0);
+                                                const h = parseFloat(row.CredCtct || 0);
+                                                const r = parseFloat(row.RecaCtct || 0);
+                                                return acc + (user?.rol === 'municipalidad' ? Math.max(0, d - h) : (d + r - h));
+                                            }, 0))}
                                         </td>
                                         <td></td>
                                     </tr>
@@ -1415,7 +1469,7 @@ const CuentaCorrienteFn = () => {
                                         <th>Apr.</th>
                                         <th>Plan</th>
                                         <th>Debe</th>
-                                        <th>Interés</th>
+                                        {user?.rol !== 'municipalidad' && <th>Interés</th>}
                                         <th>Haber</th>
                                         <th>Total</th>
                                         <th>Estado/Ref</th>
@@ -1430,14 +1484,25 @@ const CuentaCorrienteFn = () => {
                                         <td style={{ color: '#ef4444' }}>
                                             ${formatCurrency(postgresData.reduce((acc, row) => acc + parseFloat(row.DebeCtct || 0), 0))}
                                         </td>
-                                        <td style={{ color: '#f59e0b' }}>
-                                            ${formatCurrency(postgresData.reduce((acc, row) => acc + parseFloat(row.RecaCtct || 0), 0))}
-                                        </td>
+                                        {user?.rol !== 'municipalidad' && (
+                                            <td style={{ color: '#f59e0b' }}>
+                                                ${formatCurrency(postgresData.reduce((acc, row) => acc + parseFloat(row.RecaCtct || 0), 0))}
+                                            </td>
+                                        )}
                                         <td style={{ color: '#10b981' }}>
-                                            ${formatCurrency(postgresData.reduce((acc, row) => acc + parseFloat(row.CredCtct || 0), 0))}
+                                            ${formatCurrency(postgresData.reduce((acc, row) => {
+                                                const d = parseFloat(row.DebeCtct || 0);
+                                                const h = parseFloat(row.CredCtct || 0);
+                                                return acc + (user?.rol === 'municipalidad' ? Math.min(d, h) : h);
+                                            }, 0))}
                                         </td>
                                         <td style={{ fontSize: '1.1rem', borderTop: '2px solid var(--primary)' }}>
-                                            ${formatCurrency(postgresData.reduce((acc, row) => acc + parseFloat(row.TotaCtct || 0), 0))}
+                                            ${formatCurrency(postgresData.reduce((acc, row) => {
+                                                const d = parseFloat(row.DebeCtct || 0);
+                                                const h = parseFloat(row.CredCtct || 0);
+                                                const r = parseFloat(row.RecaCtct || 0);
+                                                return acc + (user?.rol === 'municipalidad' ? Math.max(0, d - h) : (d + r - h));
+                                            }, 0))}
                                         </td>
                                         <td></td>
                                     </tr>

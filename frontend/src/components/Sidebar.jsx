@@ -13,14 +13,24 @@ import {
   Users, 
   LogOut, 
   UserCircle,
-  ShieldCheck
+  ShieldCheck,
+  TrendingUp,
+  Table,
+  ClipboardCheck,
+  Calculator
 } from 'lucide-react';
 
 const Sidebar = ({ currentView, setView, collapsed, setCollapsed, user, onLogout }) => {
+  const isAuditView = ['audit_module', 'dashboard', 'comparison', 'integrity', 'rubros', 'logs'].includes(currentView);
+  const isCtacteView = ['ctacte_module', 'ctacte', 'ctacte_fn', 'ctacte2'].includes(currentView);
+
   return (
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
-      <div className="sidebar-header">
-        {!collapsed && <span>Nomade - Guaymallen</span>}
+      <div className="sidebar-header" style={{ display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'space-between', padding: collapsed ? '10px 0' : '10px 15px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <img src="/favicon.svg" alt="Logo" style={{ width: '24px', height: '24px', objectFit: 'contain' }} />
+          {!collapsed && <span style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>Nomade</span>}
+        </div>
         <button
           className="collapse-toggle"
           onClick={() => setCollapsed(!collapsed)}
@@ -31,101 +41,77 @@ const Sidebar = ({ currentView, setView, collapsed, setCollapsed, user, onLogout
       </div>
 
       <nav className="sidebar-menu">
-        {user?.rol !== 'municipalidad' && (
-          <>
-            <div
-              className={`menu-item ${currentView === 'dashboard' ? 'active' : ''}`}
-              onClick={() => setView('dashboard')}
-              title={collapsed ? "Dashboard" : ""}
-            >
-              <LayoutDashboard size={20} />
-              {!collapsed && <span>Dashboard</span>}
-              {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
-            </div>
-            
-            <div
-              className={`menu-item ${currentView === 'ctacte' ? 'active' : ''}`}
-              onClick={() => setView('ctacte')}
-              title={collapsed ? "Cuenta Corriente" : ""}
-            >
-              <FileText size={20} />
-              {!collapsed && <span>Cta-Cte (PRUEBA)</span>}
-              {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
-            </div>
-          </>
-        )}
-
         <div
-          className={`menu-item ${currentView === 'ctacte_fn' ? 'active' : ''}`}
-          onClick={() => setView('ctacte_fn')}
-          title={collapsed ? "Cuenta Corriente (fn)" : ""}
+          className={`menu-item ctacte ${isCtacteView ? 'active' : ''}`}
+          onClick={() => setView(user?.rol === 'municipalidad' ? 'ctacte_fn' : 'ctacte_module')}
+          title={collapsed ? "Cuenta Corriente" : ""}
         >
-          <FileText size={20} color="#3b82f6" />
-          {!collapsed && <span style={{ color: '#3b82f6' }}>Cta-Cte (fn)</span>}
+          <Calculator size={20} />
+          {!collapsed && <span>Cuenta Corriente</span>}
           {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
         </div>
 
         <div
-          className={`menu-item ${currentView === 'boletos' ? 'active' : ''}`}
+          className={`menu-item boletos ${currentView === 'boletos' ? 'active' : ''}`}
           onClick={() => setView('boletos')}
           title={collapsed ? "Buscador Boletos" : ""}
         >
-          <FileText size={20} color="#f59e0b" />
-          {!collapsed && <span style={{ color: '#f59e0b' }}>Buscador Boletos</span>}
+          <FileText size={20} />
+          {!collapsed && <span>Buscador Boletos</span>}
+          {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
+        </div>
+
+        {user?.rol === 'municipalidad' && (
+          <div
+            className={`menu-item rubros ${currentView === 'rubros' ? 'active' : ''}`}
+            onClick={() => setView('rubros')}
+            title={collapsed ? "Auditoría de Rubros" : ""}
+          >
+            <ClipboardCheck size={20} />
+            {!collapsed && <span>Auditoría de Rubros</span>}
+            {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
+          </div>
+        )}
+
+        <div
+          className={`menu-item persona ${currentView === 'persona' ? 'active' : ''}`}
+          onClick={() => setView('persona')}
+          title={collapsed ? "Buscador Personas" : ""}
+        >
+          <User size={20} />
+          {!collapsed && <span>Buscador Personas</span>}
           {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
         </div>
 
         {user?.rol !== 'municipalidad' && (
           <>
             <div
-              className={`menu-item ${['apremio_dashboard', 'apremios', 'gastos_apremio'].includes(currentView) ? 'active' : ''}`}
+              className={`menu-item ${['apremio_dashboard', 'apremios', 'gastos_apremio', 'apremio_tables'].includes(currentView) ? 'active' : ''}`}
               onClick={() => setView('apremio_dashboard')}
-              title={collapsed ? "Apremio" : ""}
+              title={collapsed ? "Módulo de Apremio" : ""}
             >
-              <Scale size={20} color="#7c4dff" />
-              {!collapsed && <span style={{ color: '#7c4dff' }}>Apremio</span>}
+              <Scale size={20} />
+              {!collapsed && <span>Módulo de Apremio</span>}
               {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
             </div>
 
             <div
-              className={`menu-item ${currentView === 'comparison' ? 'active' : ''}`}
-              onClick={() => setView('comparison')}
-              title={collapsed ? "Compara Ctacte Listado" : ""}
+              className={`menu-item ${isAuditView ? 'active' : ''}`}
+              onClick={() => setView('audit_module')}
+              title={collapsed ? "Auditoría & Control" : ""}
             >
-              <LayoutDashboard size={20} color="#10b981" />
-              {!collapsed && <span>Compara Ctacte Listado</span>}
+              <ClipboardCheck size={20} />
+              {!collapsed && <span>Auditoría & Control</span>}
               {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
             </div>
-
-            <div
-              className={`menu-item ${currentView === 'integrity' ? 'active' : ''}`}
-              onClick={() => setView('integrity')}
-              title={collapsed ? "Auditoría Masiva (Snapshots)" : ""}
-            >
-              <ShieldCheck size={20} color="#7c4dff" />
-              {!collapsed && <span style={{ color: '#7c4dff' }}>Auditoría Masiva (Snapshots)</span>}
-              {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
-            </div>
-
-            <div
-              className={`menu-item ${currentView === 'persona' ? 'active' : ''}`}
-              onClick={() => setView('persona')}
-              title={collapsed ? "Persona (InfoGov)" : ""}
-            >
-              <User size={20} />
-              {!collapsed && <span>Persona (InfoGov)</span>}
-              {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
-            </div>
-
-
 
             <div
               className={`menu-item ${currentView === 'explorer' ? 'active' : ''}`}
               onClick={() => setView('explorer')}
-              title={collapsed ? "Explorador" : ""}
+              title={collapsed ? "Explorador de Tablas" : ""}
             >
               <Search size={20} />
-              {!collapsed && <span>Explorador</span>}
+              {!collapsed && <span>Explorador de Tablas</span>}
               {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
             </div>
 
@@ -134,7 +120,7 @@ const Sidebar = ({ currentView, setView, collapsed, setCollapsed, user, onLogout
               onClick={() => setView('excel')}
               title={collapsed ? "Excel Comercios" : ""}
             >
-              <LayoutDashboard size={20} style={{ color: '#10b981' }} />
+              <FileText size={20} />
               {!collapsed && <span>Excel Comercios</span>}
               {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
             </div>
@@ -143,40 +129,17 @@ const Sidebar = ({ currentView, setView, collapsed, setCollapsed, user, onLogout
           </>
         )}
 
-        {/* User Specific Items */}
-        {user?.rol === 'admin' && (
+        {/* Admin/Superadmin Specific Items */}
+        {(user?.rol === 'admin' || user?.rol === 'superadmin') && (
           <div
             className={`menu-item ${currentView === 'users' ? 'active' : ''}`}
             onClick={() => setView('users')}
             title={collapsed ? "Usuarios" : ""}
           >
-            <Users size={20} color="#fcd34d" />
-            {!collapsed && <span style={{ color: '#fcd34d' }}>Gestión Usuarios</span>}
+            <Users size={20} />
+            {!collapsed && <span>Gestión Usuarios</span>}
             {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
           </div>
-        )}
-
-        {user?.rol === 'superadmin' && (
-          <>
-            <div
-              className={`menu-item ${currentView === 'users' ? 'active' : ''}`}
-              onClick={() => setView('users')}
-              title={collapsed ? "Usuarios" : ""}
-            >
-              <Users size={20} color="#fcd34d" />
-              {!collapsed && <span style={{ color: '#fcd34d' }}>Gestión Usuarios</span>}
-              {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
-            </div>
-            <div
-              className={`menu-item ${currentView === 'logs' ? 'active' : ''}`}
-              onClick={() => setView('logs')}
-              title={collapsed ? "Auditoría" : ""}
-            >
-              <Database size={20} color="#10b981" />
-              {!collapsed && <span style={{ color: '#10b981' }}>Auditoría Sistema</span>}
-              {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
-            </div>
-          </>
         )}
 
         {user?.rol !== 'municipalidad' && (
@@ -192,10 +155,10 @@ const Sidebar = ({ currentView, setView, collapsed, setCollapsed, user, onLogout
         )}
 
         <div
-          className="menu-item logout-item"
+          className="menu-item logout logout-item"
           onClick={onLogout}
           title={collapsed ? "Cerrar Sesión" : ""}
-          style={{ marginTop: 'auto', color: '#ef4444' }}
+          style={{ marginTop: 'auto' }}
         >
           <LogOut size={20} />
           {!collapsed && <span>Cerrar Sesión</span>}
@@ -204,8 +167,8 @@ const Sidebar = ({ currentView, setView, collapsed, setCollapsed, user, onLogout
 
       {!collapsed && (
         <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid var(--border)' }}>
-          <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>
-            Usuario: <span style={{ color: 'var(--primary)', fontWeight: 600 }}>{user?.nombre_usuario}</span>
+          <p style={{ fontSize: '0.75rem', opacity: 0.6 }}>
+            Usuario: <span style={{ fontWeight: 600 }}>{user?.nombre_usuario}</span>
           </p>
         </div>
       )}

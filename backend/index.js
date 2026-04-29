@@ -21,9 +21,10 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-// Parse tokens globally and inject context (does not reject unauthenticated requests)
+// Parse tokens globally and inject context
 app.use('/api', authParser);
 
+// API Routes
 app.use('/api/ctacte', ctacteRoutes);
 app.use('/api/ctacte-fn', require('./routes/ctacteFn'));
 app.use('/api/ctacte2', require('./routes/ctacte2'));
@@ -31,12 +32,13 @@ app.use('/api/excel', excelRoutes);
 app.use('/api/infogov', infogovRoutes);
 app.use('/api/explorer', explorerRoutes);
 app.use('/api/apremios', apremiosRoutes);
+app.use('/api/apremio-config', require('./routes/apremioConfig'));
+app.use('/api/comercio-rubros', require('./routes/comercioRubros'));
 app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/audit', require('./routes/audit'));
 app.use('/api/audit-snapshot', require('./routes/auditSnapshot'));
 app.use('/api/boletos', require('./routes/boletos'));
-app.use('/api/apremio-config', require('./routes/apremioConfig'));
 
 // Endpoint to serve migration logic documentation
 app.get('/api/docs/migration-logic', (req, res) => {

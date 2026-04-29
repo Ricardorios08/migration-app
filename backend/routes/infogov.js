@@ -17,7 +17,10 @@ router.get('/search-persona', async (req, res) => {
         if (isNumeric) {
             // Search by CucuPers (ID/CUIT) or NudoPers (Document)
             query = `
-                SELECT CucuPers, CcokPers, DetaPers, NudoPers, CuitPers, MailPers, TelePers 
+                SELECT 
+                    CucuPers, CcokPers, DetaPers, NudoPers, CuitPers, MailPers, TelePers,
+                    JuriPers, SexoPers, CeluPers, FenaPers, DecrPers, NurePers, DebrPers, 
+                    UbrePers, ObsePers, AltaFeho
                 FROM infogov.persona 
                 WHERE CucuPers = ? OR NudoPers = ? OR CuitPers LIKE ? OR DetaPers LIKE ?
                 LIMIT 50
@@ -26,7 +29,10 @@ router.get('/search-persona', async (req, res) => {
         } else {
             // Search by DetaPers (Name)
             query = `
-                SELECT CucuPers, CcokPers, DetaPers, NudoPers, CuitPers, MailPers, TelePers 
+                SELECT 
+                    CucuPers, CcokPers, DetaPers, NudoPers, CuitPers, MailPers, TelePers,
+                    JuriPers, SexoPers, CeluPers, FenaPers, DecrPers, NurePers, DebrPers, 
+                    UbrePers, ObsePers, AltaFeho
                 FROM infogov.persona 
                 WHERE DetaPers LIKE ? 
                 LIMIT 50

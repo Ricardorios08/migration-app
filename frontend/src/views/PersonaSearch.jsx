@@ -1,11 +1,16 @@
 import React, { useState } from 'react';
-import { Search, User, Mail, Phone, Fingerprint, CreditCard, Loader2 } from 'lucide-react';
+import { 
+    Search, User, Mail, Phone, Fingerprint, CreditCard, Loader2, 
+    X, MapPin, CalendarDays, PhoneCall, ShieldCheck, Info, Briefcase, UserCircle
+} from 'lucide-react';
 
 const PersonaSearch = () => {
     const [query, setQuery] = useState('');
     const [results, setResults] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+    const [selectedPerson, setSelectedPerson] = useState(null);
+    const [showModal, setShowModal] = useState(false);
 
     const handleSearch = async (e) => {
         if (e) e.preventDefault();
@@ -16,13 +21,27 @@ const PersonaSearch = () => {
         try {
             const response = await fetch(`http://localhost:3001/api/infogov/search-persona?q=${encodeURIComponent(query)}`);
             if (!response.ok) throw new Error('Error al buscar personas');
-            const data = await response.ok ? await response.json() : [];
+            const data = await response.json();
             setResults(data);
         } catch (err) {
             console.error(err);
             setError(err.message);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleViewDetails = (person) => {
+        setSelectedPerson(person);
+        setShowModal(true);
+    };
+
+    const formatDate = (dateStr) => {
+        if (!dateStr) return 'N/A';
+        try {
+            return new Date(dateStr).toLocaleDateString('es-AR');
+        } catch (e) {
+            return dateStr;
         }
     };
 
@@ -92,26 +111,15 @@ const PersonaSearch = () => {
                                                 <span style={{ color: 'var(--text-dim)' }}>CUIT:</span> {person.CuitPers}
                                             </div>
                                         )}
-                                        {person.MailPers && (
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
-                                                <Mail size={14} />
-                                                <span style={{ color: 'var(--text-dim)' }}>Email:</span> {person.MailPers}
-                                            </div>
-                                        )}
-                                        {person.TelePers && (
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
-                                                <Phone size={14} />
-                                                <span style={{ color: 'var(--text-dim)' }}>Tel:</span> {person.TelePers}
-                                            </div>
-                                        )}
                                     </div>
                                     
-                                    <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid var(--border)', display: 'flex', gap: '0.5rem' }}>
-                                        <button className="btn btn-secondary" style={{ flex: 1, fontSize: '0.8rem', padding: '0.4rem' }}>
-                                            Ver Detalles
-                                        </button>
-                                        <button className="btn btn-primary" style={{ flex: 1, fontSize: '0.8rem', padding: '0.4rem' }}>
-                                            Migrar
+                                    <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid var(--border)', display: 'flex' }}>
+                                        <button 
+                                            className="btn btn-secondary" 
+                                            style={{ flex: 1, fontSize: '0.8rem', padding: '0.4rem' }}
+                                            onClick={() => handleViewDetails(person)}
+                                        >
+                                            Ver Detalles Completos
                                         </button>
                                     </div>
                                 </div>
@@ -129,6 +137,204 @@ const PersonaSearch = () => {
                     )}
                 </div>
             </div>
+
+            {/* Modal de Detalles */}
+            {showModal && selectedPerson && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(0,0,0,0.8)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 2000,
+                    padding: '2rem',
+                    backdropFilter: 'blur(8px)'
+                }}>
+                    <div style={{
+                        backgroundColor: 'var(--card)',
+                        width: '100%',
+                        maxWidth: '800px',
+                        borderRadius: '20px',
+                        border: '1px solid var(--border)',
+                        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
+                        overflow: 'hidden',
+                        position: 'relative',
+                        maxHeight: '90vh',
+                        display: 'flex',
+                        flexDirection: 'column'
+                    }}>
+                        {/* Modal Header */}
+                        <div style={{
+                            padding: '1.5rem 2rem',
+                            borderBottom: '1px solid var(--border)',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            background: 'linear-gradient(90deg, rgba(37,99,235,0.05) 0%, transparent 100%)'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                <div style={{ 
+                                    width: '45px', height: '45px', borderRadius: '12px', 
+                                    background: 'var(--primary)', display: 'flex', 
+                                    alignItems: 'center', justifyContent: 'center', color: 'white' 
+                                }}>
+                                    <User size={24} />
+                                </div>
+                                <div>
+                                    <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700 }}>{selectedPerson.DetaPers}</h2>
+                                    <span style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>ID Interno: {selectedPerson.CucuPers}</span>
+                                </div>
+                            </div>
+                            <button 
+                                onClick={() => setShowModal(false)}
+                                style={{ background: 'transparent', border: 'none', color: 'var(--text-dim)', cursor: 'pointer', padding: '0.5rem' }}
+                            >
+                                <X size={24} />
+                            </button>
+                        </div>
+
+                        {/* Modal Body - Form Layout */}
+                        <div style={{ padding: '2rem', overflowY: 'auto', flex: 1 }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
+                                
+                                {/* Section: Datos Personales */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                                    <h3 style={{ margin: 0, fontSize: '0.9rem', color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                        <UserCircle size={18} /> Datos Identificatorios
+                                    </h3>
+                                    
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
+                                        <div className="form-item">
+                                            <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-dim)', marginBottom: '0.4rem' }}>Documento / CUIT</label>
+                                            <div style={{ padding: '0.8rem', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                <Fingerprint size={16} color="#2563eb" />
+                                                <span style={{ fontWeight: 600 }}>{selectedPerson.NudoPers}</span>
+                                                <span style={{ opacity: 0.3 }}>|</span>
+                                                <span style={{ fontWeight: 600 }}>{selectedPerson.CuitPers || 'N/A'}</span>
+                                            </div>
+                                        </div>
+
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                            <div className="form-item">
+                                                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-dim)', marginBottom: '0.4rem' }}>Fecha Nacimiento</label>
+                                                <div style={{ padding: '0.8rem', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                    <CalendarDays size={16} color="#f59e0b" />
+                                                    <span>{formatDate(selectedPerson.FenaPers)}</span>
+                                                </div>
+                                            </div>
+                                            <div className="form-item">
+                                                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-dim)', marginBottom: '0.4rem' }}>Género / Tipo</label>
+                                                <div style={{ padding: '0.8rem', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                    <Info size={16} color="#10b981" />
+                                                    <span>{selectedPerson.SexoPers === 1 ? 'Masc' : selectedPerson.SexoPers === 2 ? 'Fem' : 'N/A'}</span>
+                                                    <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>({selectedPerson.JuriPers === 1 ? 'Física' : 'Jurídica'})</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <h3 style={{ margin: '1rem 0 0 0', fontSize: '0.9rem', color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                        <PhoneCall size={18} /> Contacto
+                                    </h3>
+                                    
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
+                                        <div className="form-item">
+                                            <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-dim)', marginBottom: '0.4rem' }}>Email Principal</label>
+                                            <div style={{ padding: '0.8rem', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                <Mail size={16} color="#ec4899" />
+                                                <span>{selectedPerson.MailPers || 'No registrado'}</span>
+                                            </div>
+                                        </div>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                            <div className="form-item">
+                                                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-dim)', marginBottom: '0.4rem' }}>Teléfono Fijo</label>
+                                                <div style={{ padding: '0.8rem', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                    <Phone size={16} color="#6366f1" />
+                                                    <span>{selectedPerson.TelePers || 'N/A'}</span>
+                                                </div>
+                                            </div>
+                                            <div className="form-item">
+                                                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-dim)', marginBottom: '0.4rem' }}>Celular</label>
+                                                <div style={{ padding: '0.8rem', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                    <Phone size={16} color="#8b5cf6" />
+                                                    <span>{selectedPerson.CeluPers || 'N/A'}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Section: Domicilio */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                                    <h3 style={{ margin: 0, fontSize: '0.9rem', color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                        <MapPin size={18} /> Domicilio Real
+                                    </h3>
+
+                                    <div style={{ padding: '1.5rem', background: 'rgba(255,255,255,0.02)', borderRadius: '15px', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                        <div className="form-item">
+                                            <label style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-dim)', marginBottom: '0.3rem' }}>Calle y Nro</label>
+                                            <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>
+                                                {selectedPerson.DecrPers || 'N/A'} {selectedPerson.NurePers || ''}
+                                            </div>
+                                        </div>
+                                        <div className="form-item">
+                                            <label style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-dim)', marginBottom: '0.3rem' }}>Barrio / Localidad</label>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                <ShieldCheck size={14} color="#10b981" />
+                                                <span>{selectedPerson.DebrPers || 'N/A'}</span>
+                                            </div>
+                                        </div>
+                                        {selectedPerson.UbrePers && (
+                                            <div className="form-item" style={{ marginTop: '0.5rem', padding: '0.75rem', background: 'rgba(37,99,235,0.05)', borderRadius: '8px', fontSize: '0.8rem' }}>
+                                                <strong>Ref:</strong> {selectedPerson.UbrePers}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <h3 style={{ margin: '1rem 0 0 0', fontSize: '0.9rem', color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                        <Briefcase size={18} /> Información de Registro
+                                    </h3>
+
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
+                                        <div className="form-item">
+                                            <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-dim)', marginBottom: '0.4rem' }}>Observaciones</label>
+                                            <div style={{ padding: '1rem', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid var(--border)', minHeight: '80px', fontSize: '0.85rem' }}>
+                                                {selectedPerson.ObsePers || 'Sin observaciones registradas.'}
+                                            </div>
+                                        </div>
+                                        <div className="form-item">
+                                            <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-dim)', marginBottom: '0.4rem' }}>Fecha de Alta en Sistema</label>
+                                            <div style={{ fontSize: '0.85rem', color: 'var(--text-dim)' }}>
+                                                Registrado el {formatDate(selectedPerson.AltaFeho)}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div style={{ padding: '1.5rem 2rem', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
+                            <button 
+                                className="btn btn-secondary"
+                                onClick={() => setShowModal(false)}
+                            >
+                                Cerrar
+                            </button>
+                            <button 
+                                className="btn btn-primary"
+                                onClick={() => window.print()}
+                            >
+                                Imprimir Ficha
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

@@ -20,6 +20,9 @@ import BoletoSearch from './views/BoletoSearch';
 import ApremioDashboard from './views/ApremioDashboard';
 import GastosApremioReport from './views/GastosApremioReport';
 import ApremioTables from './views/ApremioTables';
+import RubrosComparison from './views/RubrosComparison';
+import AuditModule from './views/AuditModule';
+import CtacteModule from './views/CtacteModule';
 import { API_URL } from './config';
 
 function App() {
@@ -93,12 +96,16 @@ function App() {
       <main className="main-content">
         <Header user={user} />
         <div className="body-content-wrapper" style={{ flex: 1, overflow: 'hidden' }}>
-          {view === 'dashboard' ? (
+          {view === 'audit_module' ? (
+            <AuditModule setView={setView} />
+          ) : view === 'ctacte_module' ? (
+            <CtacteModule setView={setView} user={user} />
+          ) : view === 'dashboard' ? (
             <AuditDashboard />
           ) : view === 'ctacte' ? (
             <CuentaCorriente />
           ) : view === 'ctacte_fn' ? (
-            <CuentaCorrienteFn />
+            <CuentaCorrienteFn user={user} />
           ) : view === 'ctacte2' ? (
             <CuentaCorriente2 />
           ) : view === 'persona' ? (
@@ -125,6 +132,8 @@ function App() {
             <SnapshotAudit />
           ) : view === 'boletos' ? (
             <BoletoSearch currentUser={user} />
+          ) : view === 'rubros' ? (
+            <RubrosComparison />
           ) : (
             <ComerciosExcel />
           )}

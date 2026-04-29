@@ -38,9 +38,7 @@ const Login = ({ onLogin }) => {
     <div className="login-page">
       <div className="login-card">
         <div className="login-header">
-          <div className="logo-placeholder">N</div>
-          <h1>Nomade</h1>
-          <h2>Munic. Guaymallen</h2>
+          <img src="/Logo-Nomade.svg" alt="Nomade Logo" style={{ width: '200px', marginBottom: '1.5rem' }} />
         </div>
 
         <form onSubmit={handleSubmit} className="login-form">
