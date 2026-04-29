@@ -9,7 +9,6 @@ const pool = mariadb.createPool({
      user: process.env.MARIA_USER, 
      password: process.env.MARIA_PASS,
      port: parseInt(process.env.MARIA_PORT || "3306"),
-     database: 'user',
      connectionLimit: 10,
      connectTimeout: 10000,
      acquireTimeout: 10000,
@@ -21,6 +20,7 @@ module.exports = {
         let conn;
         try {
             conn = await pool.getConnection();
+            await conn.query("USE `user`").catch(() => {});
             const res = await conn.query(sql, params);
             return res;
         } finally {
@@ -31,6 +31,7 @@ module.exports = {
         let conn;
         try {
             conn = await pool.getConnection();
+            await conn.query("USE `user`").catch(() => {});
             const res = await conn.batch(sql, params);
             return res;
         } finally {

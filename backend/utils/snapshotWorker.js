@@ -80,7 +80,13 @@ const runSnapshot = async (forceOfficeId = null) => {
         }
 
         // 2. Get offices to process
-        let offices = await maria.query('SELECT CodiOfic as id, DetaOfic as name FROM oficina');
+        const adminConn = await maria.getSuperadminConnection();
+        let offices;
+        try {
+            offices = await adminConn.query('SELECT CodiOfic as id, DetaOfic as name FROM oficina');
+        } finally {
+            adminConn.release();
+        }
         if (forceOfficeId) {
             offices = offices.filter(o => o.id === parseInt(forceOfficeId));
         }
