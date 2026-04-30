@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Database, Zap, Activity } from 'lucide-react';
+import { Database, Zap, Activity, Menu } from 'lucide-react';
 import API_BASE_URL from '../config';
 
-const Header = ({ user }) => {
+const Header = ({ user, onMenuToggle }) => {
     const [status, setStatus] = useState({ maria: 'pending', postgres: 'pending' });
 
     useEffect(() => {
@@ -30,7 +30,12 @@ const Header = ({ user }) => {
 
     return (
         <header className="header">
-            <div className="header-title">Migration Overview</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <button className="menu-toggle" onClick={onMenuToggle}>
+                    <Menu size={24} />
+                </button>
+                <div className="header-title">Migration Overview</div>
+            </div>
             {user?.rol !== 'municipalidad' && (
                 <div className="connection-status">
                     <div className="status-indicator">

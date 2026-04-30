@@ -330,15 +330,15 @@ const CuentaCorrienteFn = ({ user }) => {
     const DataRow = ({ row }) => (
         <tr>
             <td style={{ whiteSpace: 'nowrap' }}>
-                {row.PeriCtct}/{row.BimeCtct}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span>{row.PeriCtct}/{row.BimeCtct}</span>
+                    <span title={row.DetaCtct || row.TipoTributo || ''} style={{ cursor: 'help', opacity: 0.6 }}>
+                        <Info size={14} />
+                    </span>
+                </div>
                 {row.NumeBole && <div style={{ fontSize: '0.7rem', opacity: 0.6 }}>#{row.NumeBole}</div>}
             </td>
             <td style={{ whiteSpace: 'nowrap' }}>{new Date(row.FeveCtct).toLocaleDateString()}</td>
-            <td style={{ fontSize: '0.8rem', opacity: 0.8 }} title={row.DetaCtct}>
-                <div style={{ fontWeight: 'bold', color: 'var(--primary)' }}>
-                    {row.DetaCtct || row.TipoTributo || ''}
-                </div>
-            </td>
             <td style={{ textAlign: 'center' }}>
                 {row.hasApremio ? (
                     <span title={`Apremio: ${row.NumeApre || 'Sí'}`} style={{ cursor: 'help' }}>
@@ -397,7 +397,7 @@ const CuentaCorrienteFn = ({ user }) => {
 
     const SubtotalRow = ({ period, bime, totals }) => (
         <tr className="subtotal-row">
-            <td colSpan={5} style={{ textAlign: 'right', fontWeight: 'bold', color: 'var(--primary)' }}>
+            <td colSpan={4} style={{ textAlign: 'right', fontWeight: 'bold', color: 'var(--primary)' }}>
                 Subtotal {period}/{bime}:
             </td>
             <td style={{ color: '#ef4444', fontWeight: 'bold' }}>${formatCurrency(totals.debe)}</td>
@@ -884,13 +884,15 @@ const CuentaCorrienteFn = ({ user }) => {
 
             rows.push(
                 <tr key={`pg-${idx}`} style={{ opacity: row.DetailRef === 'Multiple' ? 0.9 : 1 }}>
-                    <td style={{ whiteSpace: 'nowrap' }}>{row.PeriCtct}/{row.BimeCtct}</td>
-                    <td style={{ whiteSpace: 'nowrap' }}>{row.FeveCtct ? new Date(row.FeveCtct).toLocaleDateString() : (row.ctactefchalta ? new Date(row.ctactefchalta).toLocaleDateString() : '-')}</td>
-                    <td style={{ fontSize: '0.8rem', opacity: 0.8 }}>
-                        <div style={{ fontWeight: 'bold', color: 'var(--primary)' }}>
-                            {row.DetailRef === 'Multiple' ? row.DetailName : (row.DetaCtct || row.TipoTributo)}
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <span>{row.PeriCtct}/{row.BimeCtct}</span>
+                            <span title={row.DetailRef === 'Multiple' ? row.DetailName : (row.DetaCtct || row.TipoTributo)} style={{ cursor: 'help', opacity: 0.6 }}>
+                                <Info size={14} />
+                            </span>
                         </div>
                     </td>
+                    <td style={{ whiteSpace: 'nowrap' }}>{row.FeveCtct ? new Date(row.FeveCtct).toLocaleDateString() : (row.ctactefchalta ? new Date(row.ctactefchalta).toLocaleDateString() : '-')}</td>
                     <td style={{ textAlign: 'center' }}>
                         {row.hasApremio ? (
                             <span title={`Apremio: ${row.NumeApre || row.numeapre || 'Sí'}`} style={{ cursor: 'help' }}>
@@ -1393,7 +1395,6 @@ const CuentaCorrienteFn = ({ user }) => {
                                     <tr>
                                         <th>Periodo</th>
                                         <th>Fecha Venc</th>
-                                        <th>Detalle</th>
                                         <th>Apr.</th>
                                         <th>Plan</th>
                                         <th>Debe</th>
@@ -1408,7 +1409,7 @@ const CuentaCorrienteFn = ({ user }) => {
                                 </tbody>
                                 <tfoot style={{ background: 'rgba(255,255,255,0.05)', fontWeight: 'bold' }}>
                                     <tr>
-                                        <td colSpan={5} style={{ textAlign: 'right' }}>TOTALES GENERALES:</td>
+                                        <td colSpan={4} style={{ textAlign: 'right' }}>TOTALES GENERALES:</td>
                                         <td style={{ color: '#ef4444' }}>
                                             ${formatCurrency(legacyData.reduce((acc, row) => acc + parseFloat(row.DebeCtct || 0), 0))}
                                         </td>
@@ -1465,7 +1466,6 @@ const CuentaCorrienteFn = ({ user }) => {
                                     <tr>
                                         <th>Periodo</th>
                                         <th>Vencimiento</th>
-                                        <th>Tributo</th>
                                         <th>Apr.</th>
                                         <th>Plan</th>
                                         <th>Debe</th>
@@ -1480,7 +1480,7 @@ const CuentaCorrienteFn = ({ user }) => {
                                 </tbody>
                                 <tfoot style={{ background: 'rgba(255,255,255,0.05)', fontWeight: 'bold' }}>
                                     <tr>
-                                        <td colSpan={5} style={{ textAlign: 'right' }}>TOTALES POSTGRES:</td>
+                                        <td colSpan={4} style={{ textAlign: 'right' }}>TOTALES POSTGRES:</td>
                                         <td style={{ color: '#ef4444' }}>
                                             ${formatCurrency(postgresData.reduce((acc, row) => acc + parseFloat(row.DebeCtct || 0), 0))}
                                         </td>
@@ -2010,6 +2010,62 @@ ORDER BY gc.genctaancta DESC, gc.genctanrocta DESC;`}
                     text-transform: uppercase;
                     font-size: 0.8rem;
                     letter-spacing: 0.05rem;
+                }
+
+                @media (max-width: 1024px) {
+                    .split-panels {
+                        flex-direction: column;
+                        overflow-y: visible;
+                        gap: 2rem;
+                    }
+
+                    .panel {
+                        width: 100% !important;
+                        height: auto !important;
+                        min-height: auto;
+                    }
+
+                    .resizer {
+                        display: none;
+                    }
+
+                    .search-controls {
+                        justify-content: center;
+                    }
+
+                    .ctacte-view {
+                        height: auto;
+                        min-height: 100vh;
+                        overflow-y: visible;
+                    }
+                }
+
+                @media (max-width: 768px) {
+                    .toolbar-dashboard {
+                        padding: 1rem;
+                    }
+
+                    .search-controls {
+                        gap: 0.8rem;
+                    }
+
+                    .input-group {
+                        width: 100%;
+                    }
+
+                    .input-group input, .input-group select {
+                        width: 100% !important;
+                    }
+
+                    .btn-search, .btn-pdf, #btn-main-search {
+                        width: 100%;
+                        justify-content: center;
+                    }
+
+                    .owner-header {
+                        flex-direction: column;
+                        align-items: flex-start;
+                    }
                 }
             `}</style>
             {/* Modal Manual de Lógica */}

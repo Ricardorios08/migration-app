@@ -10,7 +10,8 @@ const explorerRoutes = require('./routes/explorer');
 const apremiosRoutes = require('./routes/apremios');
 const authParser = require('./middleware/authParser');
 
-dotenv.config();
+const path = require('path');
+dotenv.config({ path: path.join(__dirname, '.env') });
 
 // Fix for BigInt serialization
 BigInt.prototype.toJSON = function() { return this.toString() };

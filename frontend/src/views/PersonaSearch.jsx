@@ -152,7 +152,7 @@ const PersonaSearch = () => {
                     alignItems: 'center',
                     justifyContent: 'center',
                     zIndex: 2000,
-                    padding: '2rem',
+                    padding: '1rem',
                     backdropFilter: 'blur(8px)'
                 }}>
                     <div style={{
@@ -164,7 +164,7 @@ const PersonaSearch = () => {
                         boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
                         overflow: 'hidden',
                         position: 'relative',
-                        maxHeight: '90vh',
+                        maxHeight: '95vh',
                         display: 'flex',
                         flexDirection: 'column'
                     }}>
@@ -200,7 +200,7 @@ const PersonaSearch = () => {
 
                         {/* Modal Body - Form Layout */}
                         <div style={{ padding: '2rem', overflowY: 'auto', flex: 1 }}>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
+                            <div className="person-modal-grid">
                                 
                                 {/* Section: Datos Personales */}
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
@@ -211,7 +211,7 @@ const PersonaSearch = () => {
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
                                         <div className="form-item">
                                             <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-dim)', marginBottom: '0.4rem' }}>Documento / CUIT</label>
-                                            <div style={{ padding: '0.8rem', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                            <div style={{ padding: '0.8rem', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
                                                 <Fingerprint size={16} color="#2563eb" />
                                                 <span style={{ fontWeight: 600 }}>{selectedPerson.NudoPers}</span>
                                                 <span style={{ opacity: 0.3 }}>|</span>
@@ -219,7 +219,7 @@ const PersonaSearch = () => {
                                             </div>
                                         </div>
 
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1rem' }}>
                                             <div className="form-item">
                                                 <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-dim)', marginBottom: '0.4rem' }}>Fecha Nacimiento</label>
                                                 <div style={{ padding: '0.8rem', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -247,10 +247,10 @@ const PersonaSearch = () => {
                                             <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-dim)', marginBottom: '0.4rem' }}>Email Principal</label>
                                             <div style={{ padding: '0.8rem', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                                                 <Mail size={16} color="#ec4899" />
-                                                <span>{selectedPerson.MailPers || 'No registrado'}</span>
+                                                <span style={{ wordBreak: 'break-all' }}>{selectedPerson.MailPers || 'No registrado'}</span>
                                             </div>
                                         </div>
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1rem' }}>
                                             <div className="form-item">
                                                 <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-dim)', marginBottom: '0.4rem' }}>Teléfono Fijo</label>
                                                 <div style={{ padding: '0.8rem', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -319,7 +319,7 @@ const PersonaSearch = () => {
                         </div>
 
                         {/* Modal Footer */}
-                        <div style={{ padding: '1.5rem 2rem', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
+                        <div style={{ padding: '1.5rem 2rem', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: '1rem', flexWrap: 'wrap' }}>
                             <button 
                                 className="btn btn-secondary"
                                 onClick={() => setShowModal(false)}
@@ -336,6 +336,36 @@ const PersonaSearch = () => {
                     </div>
                 </div>
             )}
+            <style>{`
+                .person-modal-grid {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 2rem;
+                }
+
+                @media (max-width: 768px) {
+                    .person-modal-grid {
+                        grid-template-columns: 1fr;
+                        gap: 1.5rem;
+                    }
+
+                    .welcome-card {
+                        padding: 1.5rem !important;
+                    }
+
+                    h1 {
+                        font-size: 1.25rem !important;
+                    }
+
+                    form {
+                        flex-direction: column;
+                    }
+
+                    .btn {
+                        width: 100%;
+                    }
+                }
+            `}</style>
         </div>
     );
 };

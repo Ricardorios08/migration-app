@@ -37,3 +37,7 @@ vpn/*.crt
 vpn/*.key
 vpn/auth.txt
 vpn/*.log
+
+# Config files
+vite.config.js
+frontend/vite.config.js

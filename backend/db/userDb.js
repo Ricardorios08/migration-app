@@ -4,10 +4,12 @@ const path = require('path');
 
 dotenv.config({ path: path.join(__dirname, '../.env') });
 
+console.log('DB INIT - User:', process.env.SUPERADMIN_MARIA_USER || process.env.MARIA_USER);
+
 const pool = mariadb.createPool({
      host: process.env.MARIA_HOST, 
-     user: process.env.MARIA_USER, 
-     password: process.env.MARIA_PASS,
+     user: process.env.SUPERADMIN_MARIA_USER || process.env.MARIA_USER, 
+     password: process.env.SUPERADMIN_MARIA_PASS || process.env.MARIA_PASS,
      port: parseInt(process.env.MARIA_PORT || "3306"),
      connectionLimit: 10,
      connectTimeout: 10000,

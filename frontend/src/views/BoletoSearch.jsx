@@ -103,7 +103,7 @@ const BoletoSearch = ({ currentUser }) => {
     };
 
     return (
-        <div className="body-content" style={{ overflowY: 'auto', maxHeight: 'calc(100vh - 80px)' }}>
+        <div className="body-content">
             <div style={{ marginBottom: '2rem' }}>
                 <h1 style={{ fontSize: '1.8rem', fontWeight: '800', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                     <FileText size={32} color="var(--primary)" />
@@ -306,12 +306,12 @@ const BoletoSearch = ({ currentUser }) => {
                             ) : !boletoData ? (
                                 <div style={{ padding: '3rem', textAlign: 'center' }}>No hay datos.</div>
                             ) : (
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '1.5rem' }}>
+                                <div className="boleto-grid">
                                     {/* Left Column: Header & Concepts */}
                                     <div>
-                                        <div className="data-card" style={{ padding: '1.5rem', marginBottom: '1.5rem', background: 'rgba(255,255,255,0.03)' }}>
+                                        <div className="data-card header-info-card">
                                             <h3 style={{ fontSize: '1rem', marginBottom: '1rem', color: 'var(--primary)', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>DATOS DE CABECERA</h3>
-                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1rem' }}>
                                                 <div className="info-item">
                                                     <label>Contribuyente</label>
                                                     <span style={{ fontSize: '1.1rem', fontWeight: '700' }}>{boletoData.header.NombreContribuyente}</span>
@@ -334,33 +334,35 @@ const BoletoSearch = ({ currentUser }) => {
                                         <h3 style={{ fontSize: '1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                             <FileText size={18} /> CONCEPTOS ABONADOS
                                         </h3>
-                                        <table className="user-table">
-                                            <thead>
-                                                <tr>
-                                                    <th>Periodo</th>
-                                                    <th>Descripción</th>
-                                                    <th style={{ textAlign: 'right' }}>Total</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {boletoData.concepts.map((c, i) => (
-                                                    <tr key={i}>
-                                                        <td>{c.PeriCtct}/{c.BimeCtct}</td>
-                                                        <td>
-                                                            <div style={{ fontWeight: '600' }}>{c.DetaConc}</div>
-                                                            <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>Cód: {c.CodiConc}</div>
-                                                        </td>
-                                                        <td style={{ textAlign: 'right', fontWeight: '700' }}>{formatCurrency(c.Total)}</td>
+                                        <div style={{ overflowX: 'auto' }}>
+                                            <table className="user-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Periodo</th>
+                                                        <th>Descripción</th>
+                                                        <th style={{ textAlign: 'right' }}>Total</th>
                                                     </tr>
-                                                ))}
-                                            </tbody>
-                                            <tfoot>
-                                                <tr style={{ background: 'rgba(16, 185, 129, 0.1)' }}>
-                                                    <td colSpan="2" style={{ textAlign: 'right', padding: '0.75rem', fontWeight: '800' }}>TOTAL BOLETO:</td>
-                                                    <td style={{ textAlign: 'right', padding: '0.75rem', fontWeight: '800', color: '#10b981' }}>{formatCurrency(boletoData.header.TotaBole)}</td>
-                                                </tr>
-                                            </tfoot>
-                                        </table>
+                                                </thead>
+                                                <tbody>
+                                                    {boletoData.concepts.map((c, i) => (
+                                                        <tr key={i}>
+                                                            <td>{c.PeriCtct}/{c.BimeCtct}</td>
+                                                            <td>
+                                                                <div style={{ fontWeight: '600' }}>{c.DetaConc}</div>
+                                                                <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>Cód: {c.CodiConc}</div>
+                                                            </td>
+                                                            <td style={{ textAlign: 'right', fontWeight: '700' }}>{formatCurrency(c.Total)}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                                <tfoot>
+                                                    <tr style={{ background: 'rgba(16, 185, 129, 0.1)' }}>
+                                                        <td colSpan="2" style={{ textAlign: 'right', padding: '0.75rem', fontWeight: '800' }}>TOTAL BOLETO:</td>
+                                                        <td style={{ textAlign: 'right', padding: '0.75rem', fontWeight: '800', color: '#10b981' }}>{formatCurrency(boletoData.header.TotaBole)}</td>
+                                                    </tr>
+                                                </tfoot>
+                                            </table>
+                                        </div>
                                     </div>
 
                                     {/* Right Column: Payment & History */}
@@ -421,6 +423,46 @@ const BoletoSearch = ({ currentUser }) => {
                     </div>
                 </div>
             )}
+            <style>{`
+                .boleto-grid {
+                    display: grid;
+                    grid-template-columns: 1fr 300px;
+                    gap: 1.5rem;
+                }
+
+                .header-info-card {
+                    padding: 1.5rem;
+                    marginBottom: 1.5rem;
+                    background: rgba(255,255,255,0.03);
+                }
+
+                @media (max-width: 900px) {
+                    .boleto-grid {
+                        grid-template-columns: 1fr;
+                    }
+                    
+                    .data-card {
+                        padding: 1rem !important;
+                    }
+
+                    h1 {
+                        font-size: 1.4rem !important;
+                    }
+                }
+
+                @media (max-width: 768px) {
+                    .user-table th:nth-child(2), 
+                    .user-table td:nth-child(2),
+                    .user-table th:nth-child(5),
+                    .user-table td:nth-child(5) {
+                        display: none;
+                    }
+
+                    .input-field {
+                        width: 100%;
+                    }
+                }
+            `}</style>
         </div>
     );
 };

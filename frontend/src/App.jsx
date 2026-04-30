@@ -29,6 +29,7 @@ function App() {
   const [user, setUser] = useState(null);
   const [view, setView] = useState('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
 
   useEffect(() => {
@@ -87,15 +88,17 @@ function App() {
     <div className={`dashboard-container ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
       <Sidebar 
         currentView={view} 
-        setView={setView} 
+        setView={(v) => { setView(v); setMobileMenuOpen(false); }} 
         collapsed={sidebarCollapsed} 
         setCollapsed={setSidebarCollapsed} 
+        mobileOpen={mobileMenuOpen}
+        setMobileOpen={setMobileMenuOpen}
         user={user}
         onLogout={handleLogout}
       />
       <main className="main-content">
-        <Header user={user} />
-        <div className="body-content-wrapper" style={{ flex: 1, overflow: 'hidden' }}>
+        <Header user={user} onMenuToggle={() => setMobileMenuOpen(!mobileMenuOpen)} />
+        <div className="body-content-wrapper">
           {view === 'audit_module' ? (
             <AuditModule setView={setView} />
           ) : view === 'ctacte_module' ? (

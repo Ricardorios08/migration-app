@@ -140,7 +140,7 @@ const RubrosComparison = () => {
                     </div>
                     
                     <div style={{ padding: '3rem', overflowY: 'auto', flex: 1 }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
+                        <div className="calc-modal-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
                             {/* Formula Section */}
                             <div style={{ background: 'rgba(255,255,255,0.03)', padding: '2rem', borderRadius: '1.5rem', border: '1px solid rgba(255,255,255,0.05)' }}>
                                 <h3 style={{ color: '#facc15', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -214,7 +214,7 @@ const RubrosComparison = () => {
             {showCalcModal && <CalcExplainerModal onClose={() => setShowCalcModal(false)} />}
 
             {/* Header section with search */}
-            <div style={{ 
+            <div className="header-section" style={{ 
                 background: 'rgba(30, 41, 59, 0.7)', 
                 backdropFilter: 'blur(10px)',
                 borderRadius: '1.5rem',
@@ -323,7 +323,7 @@ const RubrosComparison = () => {
             )}
 
             {data && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
+                <div className="rubros-comparison-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
                     {/* MariaDB Side */}
                     <div className="engine-card" style={{ 
                         background: 'rgba(30, 41, 59, 0.4)', 
@@ -592,5 +592,53 @@ const RubrosComparison = () => {
         </div>
     );
 };
+
+const styles = `
+    .rubros-comparison-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 2rem;
+    }
+
+    @media (max-width: 1200px) {
+        .rubros-comparison-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .rubros-container {
+            padding: 1rem !important;
+            height: auto !important;
+            overflow-y: visible !important;
+        }
+
+        .header-section {
+            flex-direction: column;
+            align-items: flex-start !important;
+            gap: 1.5rem;
+        }
+
+        form {
+            width: 100%;
+            flex-direction: column;
+        }
+
+        form input {
+            width: 100% !important;
+        }
+
+        .calc-modal-grid {
+            grid-template-columns: 1fr !important;
+        }
+    }
+`;
+
+// Add styles to head
+if (typeof document !== 'undefined') {
+    const styleSheet = document.createElement("style");
+    styleSheet.innerText = styles;
+    document.head.appendChild(styleSheet);
+}
 
 export default RubrosComparison;

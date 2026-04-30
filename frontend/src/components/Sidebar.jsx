@@ -20,12 +20,12 @@ import {
   Calculator
 } from 'lucide-react';
 
-const Sidebar = ({ currentView, setView, collapsed, setCollapsed, user, onLogout }) => {
+const Sidebar = ({ currentView, setView, collapsed, setCollapsed, mobileOpen, setMobileOpen, user, onLogout }) => {
   const isAuditView = ['audit_module', 'dashboard', 'comparison', 'integrity', 'rubros', 'logs'].includes(currentView);
   const isCtacteView = ['ctacte_module', 'ctacte', 'ctacte_fn', 'ctacte2'].includes(currentView);
 
   return (
-    <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
+    <aside className={`sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
       <div className="sidebar-header" style={{ display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'space-between', padding: collapsed ? '10px 0' : '10px 15px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <img src="/favicon.svg" alt="Logo" style={{ width: '24px', height: '24px', objectFit: 'contain' }} />
@@ -73,15 +73,17 @@ const Sidebar = ({ currentView, setView, collapsed, setCollapsed, user, onLogout
           </div>
         )}
 
-        <div
-          className={`menu-item persona ${currentView === 'persona' ? 'active' : ''}`}
-          onClick={() => setView('persona')}
-          title={collapsed ? "Buscador Personas" : ""}
-        >
-          <User size={20} />
-          {!collapsed && <span>Buscador Personas</span>}
-          {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
-        </div>
+        {user?.rol !== 'municipalidad' && (
+          <div
+            className={`menu-item persona ${currentView === 'persona' ? 'active' : ''}`}
+            onClick={() => setView('persona')}
+            title={collapsed ? "Buscador Personas" : ""}
+          >
+            <User size={20} />
+            {!collapsed && <span>Buscador Personas</span>}
+            {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
+          </div>
+        )}
 
         {user?.rol !== 'municipalidad' && (
           <>
