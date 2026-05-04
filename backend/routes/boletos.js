@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const mariaDB = require('../db/maria');
+const { logAction } = require('../utils/logger');
 
 const DB_NAME = process.env.MARIA_DB_NAME || 'recaudacion2';
 
@@ -85,6 +86,7 @@ router.get('/search', async (req, res) => {
         params.push(parseInt(limit));
 
         const results = await conn.query(query, params);
+        logAction(req.user?.nombre_usuario || 'ANONYMOUS', 'SEARCH_BOLETO', `Filtros: ${JSON.stringify(req.query)}`, req);
         res.json(results);
 
     } catch (err) {
@@ -150,6 +152,7 @@ router.get('/details/:peri/:nume', async (req, res) => {
             concepts,
             reprints
         });
+        logAction(req.user?.nombre_usuario || 'ANONYMOUS', 'VIEW_BOLETO_DETAIL', `Boleto: ${peri}/${nume}`, req);
     } catch (err) {
         res.status(500).json({ error: err.message });
     } finally {
@@ -169,6 +172,7 @@ router.post('/audit-print', async (req, res) => {
             INSERT INTO ticket (PeriBole, NumeBole, AltaUsua) 
             VALUES (?, ?, ?)
         `, [periBole, numeBole, user]);
+        logAction(user || 'ANONYMOUS', 'PRINT_BOLETO', `Boleto: ${periBole}/${numeBole}`, req);
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: err.message });

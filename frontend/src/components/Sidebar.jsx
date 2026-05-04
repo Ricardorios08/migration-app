@@ -131,8 +131,8 @@ const Sidebar = ({ currentView, setView, collapsed, setCollapsed, mobileOpen, se
           </>
         )}
 
-        {/* Admin/Superadmin Specific Items */}
-        {(user?.rol === 'admin' || user?.rol === 'superadmin') && (
+        {/* Admin/Superadmin Specific Items, and Municipalidad for self-service */}
+        {(user?.rol === 'admin' || user?.rol === 'superadmin' || user?.rol === 'municipalidad') && (
           <div
             className={`menu-item ${currentView === 'users' ? 'active' : ''}`}
             onClick={() => setView('users')}

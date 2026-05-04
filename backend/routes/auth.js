@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const userDb = require('../db/userDb');
 const fs = require('fs');
 const path = require('path');
+const { logAction } = require('../utils/logger');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
 const LOG_PATH = path.join(__dirname, '../logs/audit.log');
@@ -54,7 +55,7 @@ const isCtaCte = (req, res, next) => {
 router.post('/login', async (req, res) => {
     const { nombre_usuario, password } = req.body;
     try {
-        const users = await userDb.query('SELECT * FROM user WHERE nombre_usuario = ?', [nombre_usuario]);
+        const users = await userDb.query('SELECT * FROM user WHERE nombre_usuario = ?', [nombre_usuario], 'admin');
         if (users.length === 0) return res.status(401).json({ error: 'Usuario o contraseña incorrectos' });
 
         const user = users[0];
@@ -68,7 +69,9 @@ router.post('/login', async (req, res) => {
         );
 
         res.json({ token, user: { id: user.id, nombre_usuario: user.nombre_usuario, rol: user.rol } });
+        logAction(user.nombre_usuario, 'LOGIN', 'Inicio de sesión exitoso', req);
     } catch (err) {
+        logAction(nombre_usuario || 'UNKNOWN', 'LOGIN_FAILED', `Error: ${err.message}`, req);
         res.status(500).json({ error: err.message });
     }
 });
@@ -77,9 +80,18 @@ router.get('/me', authenticateToken, (req, res) => {
     res.json({ user: req.user });
 });
 
-router.get('/users', authenticateToken, isAdmin, async (req, res) => {
+router.get('/users', authenticateToken, async (req, res) => {
     try {
-        const users = await userDb.query('SELECT id, nombre_usuario, rol FROM user');
+        const isAdminUser = req.user.rol === 'admin' || req.user.rol === 'superadmin';
+        let query = 'SELECT id, nombre_usuario, rol FROM user';
+        let params = [];
+        
+        if (!isAdminUser) {
+            query += ' WHERE id = ?';
+            params.push(req.user.id);
+        }
+        
+        const users = await userDb.query(query, params, req.user.rol);
         res.json(users);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -87,38 +99,56 @@ router.get('/users', authenticateToken, isAdmin, async (req, res) => {
 });
 
 router.post('/users', authenticateToken, isAdmin, async (req, res) => {
+    // ... existing post logic ...
     const { nombre_usuario, password, rol } = req.body;
     if (!nombre_usuario || !password || !rol) return res.status(400).json({ error: 'Todo obligatorio' });
     try {
         const hashedPass = await bcrypt.hash(password, 10);
-        await userDb.query('INSERT INTO user (nombre_usuario, password, rol) VALUES (?, ?, ?)', [nombre_usuario, hashedPass, rol]);
+        await userDb.query('INSERT INTO user (nombre_usuario, password, rol) VALUES (?, ?, ?)', [nombre_usuario, hashedPass, rol], req.user.rol);
+        logAction(req.user.nombre_usuario, 'USER_CREATE', `Nuevo usuario: ${nombre_usuario} (Rol: ${rol})`, req);
         res.json({ message: 'OK' });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-router.delete('/users/:id', authenticateToken, isAdmin, async (req, res) => {
+router.delete('/users/:id', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
-        const users = await userDb.query('SELECT nombre_usuario, rol FROM user WHERE id = ?', [id]);
+        const isAdminUser = req.user.rol === 'admin' || req.user.rol === 'superadmin';
+
+        // SECURITY CHECK: Only admins can actually delete
+        if (!isAdminUser) {
+            logAction(req.user.nombre_usuario, 'USER_DELETE_REJECTED', `Intento fallido de eliminar usuario ID: ${id} (Permisos insuficientes)`, req);
+            return res.status(403).json({ error: 'RECHAZADO POR EL SERVIDOR: No tienes permisos de administrador para realizar eliminaciones en la base de datos.' });
+        }
+
+        const users = await userDb.query('SELECT nombre_usuario, rol FROM user WHERE id = ?', [id], req.user.rol);
         if (users.length > 0 && users[0].nombre_usuario === 'Ricardo') {
             return res.status(403).json({ error: 'No se puede eliminar a este admin' });
         }
-        await userDb.query('DELETE FROM user WHERE id = ?', [id]);
+
+        await userDb.query('DELETE FROM user WHERE id = ?', [id], req.user.rol);
+        logAction(req.user.nombre_usuario, 'USER_DELETE', `Usuario ID eliminado: ${id}`, req);
         res.json({ message: 'OK' });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-router.put('/users/:id', authenticateToken, isSuperAdmin, async (req, res) => {
+router.put('/users/:id', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
         const { password, rol } = req.body;
+        const isAdminUser = req.user.rol === 'admin' || req.user.rol === 'superadmin';
+
+        // Allow if admin OR if editing self
+        if (!isAdminUser && parseInt(id) !== req.user.id) {
+            return res.status(403).json({ error: 'No tienes permiso para editar otros usuarios' });
+        }
         
         // Check if user exists and isn't Ricardo
-        const users = await userDb.query('SELECT nombre_usuario FROM user WHERE id = ?', [id]);
+        const users = await userDb.query('SELECT nombre_usuario, rol FROM user WHERE id = ?', [id], req.user.rol);
         if (users.length === 0) return res.status(404).json({ error: 'Usuario no encontrado' });
         if (users[0].nombre_usuario === 'Ricardo' && req.user.nombre_usuario !== 'Ricardo') {
             return res.status(403).json({ error: 'No se puede modificar a este admin' });
@@ -126,9 +156,11 @@ router.put('/users/:id', authenticateToken, isSuperAdmin, async (req, res) => {
 
         if (password) {
             const hashedPass = await bcrypt.hash(password, 10);
-            await userDb.query('UPDATE user SET password = ?, rol = ? WHERE id = ?', [hashedPass, rol, id]);
-        } else {
-            await userDb.query('UPDATE user SET rol = ? WHERE id = ?', [rol, id]);
+            // If not admin, they cannot change their own role
+            const finalRol = isAdminUser ? rol : users[0].rol;
+            await userDb.query('UPDATE user SET password = ?, rol = ? WHERE id = ?', [hashedPass, finalRol, id], req.user.rol);
+        } else if (isAdminUser) {
+            await userDb.query('UPDATE user SET rol = ? WHERE id = ?', [rol, id], req.user.rol);
         }
         res.json({ message: 'OK' });
     } catch (err) {
@@ -165,11 +197,11 @@ router.post('/logs/rotate', authenticateToken, isSuperAdmin, (req, res) => {
 router.put('/change-password', authenticateToken, async (req, res) => {
     const { currentPassword, newPassword } = req.body;
     try {
-        const users = await userDb.query('SELECT password FROM user WHERE id = ?', [req.user.id]);
+        const users = await userDb.query('SELECT password FROM user WHERE id = ?', [req.user.id], req.user.rol);
         const validPassword = await bcrypt.compare(currentPassword, users[0].password);
         if (!validPassword) return res.status(401).json({ error: 'Error' });
         const hashedPass = await bcrypt.hash(newPassword, 10);
-        await userDb.query('UPDATE user SET password = ? WHERE id = ?', [hashedPass, req.user.id]);
+        await userDb.query('UPDATE user SET password = ? WHERE id = ?', [hashedPass, req.user.id], req.user.rol);
         res.json({ message: 'OK' });
     } catch (err) {
         res.status(500).json({ error: err.message });

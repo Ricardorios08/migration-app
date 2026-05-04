@@ -1,5 +1,5 @@
 import React from 'react';
-import { Scale, FileText, Database, ChevronRight, BookOpen, ArrowRight } from 'lucide-react';
+import { Scale, FileText, Database, ChevronRight, BookOpen, ArrowRight, Search } from 'lucide-react';
 
 const ApremioDashboard = ({ setView }) => {
   const cards = [
@@ -29,6 +29,15 @@ const ApremioDashboard = ({ setView }) => {
       color: '#10b981',
       gradient: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
       features: ['Vista de tablas', 'Búsqueda rápida', 'Parámetros de ley', 'Instancias judiciales']
+    },
+    {
+      id: 'apremio_search',
+      title: 'Buscador de Paridad',
+      description: 'Herramienta de auditoría para verificar si un apremio específico fue migrado correctamente y comparar sus saldos.',
+      icon: Search,
+      color: '#ef4444',
+      gradient: 'linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)',
+      features: ['Búsqueda por ID', 'Comparación MariaDB/PG', 'Validación de saldos', 'Estado de migración']
     }
   ];
 

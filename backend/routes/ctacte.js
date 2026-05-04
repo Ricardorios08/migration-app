@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const mariaDB = require('../db/maria');
+const { logAction } = require('../utils/logger');
 
 const DB_NAME = process.env.MARIA_DB_NAME || 'recaudacion2';
 const postgresDB = require('../db/postgres');
@@ -94,6 +95,7 @@ router.get('/search-person', async (req, res) => {
             };
         }));
 
+        logAction(req.user?.nombre_usuario || 'ANONYMOUS', 'SEARCH_PERSON', `Query: ${q}`, req);
         res.json(enriched);
     } catch (err) {
         console.error('Error searching persons:', err);
@@ -213,6 +215,7 @@ router.get('/resolve-account/:account', async (req, res) => {
             }));
         }
 
+        logAction(req.user?.nombre_usuario || 'ANONYMOUS', 'RESOLVE_ACCOUNT', `Account: ${account} (Found in ${officesFound.size} offices)`, req);
         res.json(officeNames);
     } catch (err) {
         console.error('Error seeking account in databases:', err);
@@ -278,6 +281,7 @@ router.get('/legacy/search', async (req, res) => {
                 
                 allResults.push(...formatted);
             }
+            logAction(req.user?.nombre_usuario || 'ANONYMOUS', 'SEARCH_LEGACY', `Account: ${account} | Office: ${officeId} | Debt Only: ${onlyDebt}`, req);
             res.json(allResults);
         } else {
             // Unified Historical View using direct SELECT/UNION to avoid temp tables

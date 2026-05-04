@@ -288,4 +288,216 @@ router.get('/compare', async (req, res) => {
     }
 });
 
+// Search Apremios by pattern
+router.get('/search-id/:id', async (req, res) => {
+    const { id } = req.params;
+    const { searchType = 'id' } = req.query; // 'id' or 'ticket'
+    let conn;
+
+    try {
+        conn = await mariaDB.getConnection();
+
+        const searchTerm = (id.includes('%') || id.includes('_')) ? id : `%${id}%`;
+        
+        // 1. MariaDB Search
+        let mariaQuery;
+        let mariaParams;
+        const isNumeric = /^\d+$/.test(id);
+
+        if (searchType === 'name') {
+            console.log(`[DEBUG] Searching Apremios by Name (Optimized): ${searchTerm}`);
+            mariaQuery = `
+                SELECT a.NumeApre, a.CuenCtct, a.CodiOfic, a.TotaApre, ea.DetaEsap as EstadoDeta,
+                       a.CapiApre, a.RecaApre, a.TituApre
+                FROM ${DB_NAME}.apremio a
+                LEFT JOIN ${DB_NAME}.estadoapremio ea ON a.EstaApre = ea.CodiEsap
+                WHERE a.TituApre LIKE ?
+                ORDER BY a.NumeApre DESC
+                LIMIT 50
+            `;
+            mariaParams = [searchTerm];
+        } else if (isNumeric && searchType === 'id') {
+            // ... (rest of numeric id logic)
+            const numId = parseInt(id);
+            const minRange = numId * 10;
+            const maxRange = parseInt(id + '999999');
+            mariaQuery = `
+                SELECT a.NumeApre, a.CuenCtct, a.CodiOfic, a.TotaApre, ea.DetaEsap as EstadoDeta,
+                       a.CapiApre, a.RecaApre
+                FROM ${DB_NAME}.apremio a
+                LEFT JOIN ${DB_NAME}.estadoapremio ea ON a.EstaApre = ea.CodiEsap
+                WHERE a.NumeApre = ? 
+                   OR (a.NumeApre >= ? AND a.NumeApre <= ?)
+                   OR CAST(a.NumeApre AS CHAR) LIKE ?
+                ORDER BY a.NumeApre DESC
+                LIMIT 50
+            `;
+            mariaParams = [numId, minRange, maxRange, searchTerm];
+        } else {
+            mariaQuery = `
+                SELECT a.NumeApre, a.CuenCtct, a.CodiOfic, a.TotaApre, ea.DetaEsap as EstadoDeta,
+                       a.CapiApre, a.RecaApre
+                FROM ${DB_NAME}.apremio a
+                LEFT JOIN ${DB_NAME}.estadoapremio ea ON a.EstaApre = ea.CodiEsap
+                WHERE CAST(a.NumeApre AS CHAR) LIKE ?
+                ORDER BY a.NumeApre DESC
+                LIMIT 50
+            `;
+            mariaParams = [searchTerm];
+        }
+        let mariaRes = await conn.query(mariaQuery, mariaParams);
+
+        // 1.1 Check for orphan movements or Deep Name Search in CtaCte if results are low
+        if (mariaRes.length < 10) {
+            let orphanQuery;
+            let orphanParams;
+            
+            if (searchType === 'name') {
+                // Skip deep name search in CtaCte for now as it lacks names and joins are slow
+                // Unless we really need it, but let's prioritize speed first.
+                return;
+            } else if (isNumeric && searchType === 'id') {
+                const numId = parseInt(id);
+                const minRange = numId * 10;
+                const maxRange = parseInt(id + '999999');
+                
+                orphanQuery = `
+                    SELECT DISTINCT t.NumeApre, t.CuenCtct, t.CodiOfic, 
+                           SUM(t.DebeCtct - t.CredCtct) as TotaApre,
+                           'SOLO EN CTACTE' as EstadoDeta,
+                           SUM(t.DebeCtct - t.CredCtct) as CapiApre, 0 as RecaApre
+                    FROM ${DB_NAME}.ctacte t
+                    WHERE t.NumeApre = ? 
+                       OR (t.NumeApre >= ? AND t.NumeApre <= ?)
+                       OR CAST(t.NumeApre AS CHAR) LIKE ?
+                    GROUP BY t.NumeApre, t.CuenCtct, t.CodiOfic
+                    LIMIT 20
+                `;
+                orphanParams = [numId, minRange, maxRange, searchTerm];
+            } else {
+                orphanQuery = `
+                    SELECT DISTINCT t.NumeApre, t.CuenCtct, t.CodiOfic, 
+                           SUM(t.DebeCtct - t.CredCtct) as TotaApre,
+                           'SOLO EN CTACTE' as EstadoDeta,
+                           SUM(t.DebeCtct - t.CredCtct) as CapiApre, 0 as RecaApre
+                    FROM ${DB_NAME}.ctacte t
+                    WHERE CAST(t.NumeApre AS CHAR) LIKE ?
+                    GROUP BY t.NumeApre, t.CuenCtct, t.CodiOfic
+                    LIMIT 20
+                `;
+                orphanParams = [searchTerm];
+            }
+            const orphans = await conn.query(orphanQuery, orphanParams);
+            orphans.forEach(o => {
+                if (!mariaRes.some(m => m.NumeApre.toString() === o.NumeApre.toString())) {
+                    mariaRes.push(o);
+                }
+            });
+        }
+
+        // 2. Postgres Search (depends on type)
+        let pgQuery;
+        if (searchType === 'ticket') {
+            pgQuery = `
+                SELECT c.cedid, c.cednro, c.cedimptot, c.cedestado, TRIM(p.pernom) as pernom
+                FROM public.cedula c
+                LEFT JOIN public.persona p ON c.cedpercod = p.percod
+                WHERE CAST(c.cednro AS TEXT) LIKE $1
+                ORDER BY c.cednro DESC
+                LIMIT 50
+            `;
+        } else if (searchType === 'name') {
+            pgQuery = `
+                SELECT c.cedid, c.cednro, c.cedimptot, c.cedestado, TRIM(p.pernom) as pernom
+                FROM public.cedula c
+                LEFT JOIN public.persona p ON c.cedpercod = p.percod
+                WHERE UPPER(p.pernom) LIKE UPPER($1)
+                ORDER BY p.pernom ASC
+                LIMIT 50
+            `;
+        } else {
+            pgQuery = `
+                SELECT c.cedid, c.cednro, c.cedimptot, c.cedestado, TRIM(p.pernom) as pernom
+                FROM public.cedula c
+                LEFT JOIN public.persona p ON c.cedpercod = p.percod
+                WHERE CAST(c.cedid AS TEXT) LIKE $1
+                ORDER BY c.cedid DESC
+                LIMIT 50
+            `;
+        }
+        const pgRes = await postgresDB.query(pgQuery, [searchTerm]);
+
+        // 1.1 Check for orphan movements in CtaCte if results are low
+        if (mariaRes.length < 10) {
+            const orphanQuery = `
+                SELECT DISTINCT t.NumeApre, t.CuenCtct, t.CodiOfic, 
+                       SUM(t.DebeCtct - t.CredCtct) as TotaApre,
+                       'SOLO EN CTACTE' as EstadoDeta,
+                       SUM(t.DebeCtct - t.CredCtct) as CapiApre, 0 as RecaApre
+                FROM ${DB_NAME}.ctacte t
+                WHERE CAST(t.NumeApre AS CHAR) LIKE ?
+                GROUP BY t.NumeApre, t.CuenCtct, t.CodiOfic
+                LIMIT 20
+            `;
+            const orphans = await conn.query(orphanQuery, [searchTerm]);
+            orphans.forEach(o => {
+                if (!mariaRes.some(m => m.NumeApre.toString() === o.NumeApre.toString())) {
+                    mariaRes.push(o);
+                }
+            });
+        }
+
+
+
+        // Combine unique IDs found in both
+        const allIds = new Set([
+            ...mariaRes.map(r => r.NumeApre.toString()),
+            ...pgRes.rows.map(r => r.cedid.toString())
+        ]);
+
+        const combinedResults = Array.from(allIds).map(idStr => {
+            const m = mariaRes.find(r => r.NumeApre.toString() === idStr);
+            const p = pgRes.rows.find(r => r.cedid.toString() === idStr);
+            
+            const mariaTotal = m ? (parseFloat(m.CapiApre || 0) + parseFloat(m.RecaApre || 0)) : null;
+            const pgTotal = p ? parseFloat(p.cedimptot || 0) : null;
+
+            return {
+                id: idStr,
+                legacy: m ? {
+                    numeapre: m.NumeApre,
+                    cuenctct: m.CuenCtct,
+                    totaapre: mariaTotal,
+                    estadodeta: m.EstadoDeta,
+                    denominacion: m.denominacion,
+                    tituapre: m.TituApre
+                } : null,
+                postgres: p ? {
+                    cedid: p.cedid,
+                    cednro: p.cednro,
+                    pernom: p.pernom,
+                    cedimptot: pgTotal,
+                    cedestado: p.cedestado
+                } : null,
+                status: {
+                    inMaria: !!m,
+                    inPostgres: !!p,
+                    match: (m && p) ? (Math.abs(mariaTotal - pgTotal) < 1.0) : false
+                }
+            };
+        });
+
+        // Sort by ID descending
+        combinedResults.sort((a, b) => parseInt(b.id) - parseInt(a.id));
+
+        res.json(combinedResults);
+
+    } catch (err) {
+        console.error('Error searching apremios list:', err);
+        res.status(500).json({ error: err.message });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
 module.exports = router;

@@ -6,6 +6,7 @@ const userDb = require('../db/userDb');
 // Trigger snapshot
 router.post('/run', (req, res) => {
     const { officeId } = req.body;
+    console.log('[AUDIT-SNAPSHOT] RECEIVED RUN REQUEST for office:', officeId);
     snapshotWorker.runSnapshot(officeId); // Runs in background
     res.json({ message: 'Snapshot process started' });
 });

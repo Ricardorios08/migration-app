@@ -2,7 +2,7 @@
 const isDevelopment = window.location.port === '5173';
 
 const API_BASE_URL = isDevelopment
-    ? `http://${window.location.hostname}:3001`
+    ? `http://${window.location.hostname}:3002`
     : ''; // In production, we use relative paths
 
 export const API_URL = `${API_BASE_URL}/api`;

@@ -20,6 +20,7 @@ import BoletoSearch from './views/BoletoSearch';
 import ApremioDashboard from './views/ApremioDashboard';
 import GastosApremioReport from './views/GastosApremioReport';
 import ApremioTables from './views/ApremioTables';
+import ApremioSearch from './views/ApremioSearch';
 import RubrosComparison from './views/RubrosComparison';
 import AuditModule from './views/AuditModule';
 import CtacteModule from './views/CtacteModule';
@@ -123,6 +124,8 @@ function App() {
             <GastosApremioReport setView={setView} />
           ) : view === 'apremio_tables' ? (
             <ApremioTables setView={setView} />
+          ) : view === 'apremio_search' ? (
+            <ApremioSearch />
           ) : view === 'comparison' ? (
             <ComparisonReport />
           ) : view === 'users' ? (

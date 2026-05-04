@@ -23,8 +23,10 @@ const runSnapshot = async (forceOfficeId = null) => {
     snapshotState.progress = 0;
     snapshotState.lastStarted = new Date();
     snapshotState.error = null;
+    console.log('[SNAPSHOT] STARTING PROCESS - VERSION WITH NO-CREATE');
 
     try {
+        /* 
         // 1. Ensure tables exist in 'user' database
         await userDb.query(`
             CREATE TABLE IF NOT EXISTS listado_historico_mariadb (
@@ -78,15 +80,11 @@ const runSnapshot = async (forceOfficeId = null) => {
         } catch (e) {
             console.log('[SNAPSHOT] Note: Column check/add failed', e.message);
         }
+        */
 
         // 2. Get offices to process
-        const adminConn = await maria.getSuperadminConnection();
-        let offices;
-        try {
-            offices = await adminConn.query('SELECT CodiOfic as id, DetaOfic as name FROM oficina');
-        } finally {
-            adminConn.release();
-        }
+        let offices = await maria.queryRemote('SELECT CodiOfic as id, DetaOfic as name FROM oficina');
+        
         if (forceOfficeId) {
             offices = offices.filter(o => o.id === parseInt(forceOfficeId));
         }

@@ -1,6 +1,9 @@
+const path = require('path');
+const dotenv = require('dotenv');
+dotenv.config({ path: path.join(__dirname, '.env') });
+
 const express = require('express');
 const cors = require('cors');
-const dotenv = require('dotenv');
 const mariaDB = require('./db/maria');
 const postgresDB = require('./db/postgres');
 const ctacteRoutes = require('./routes/ctacte');
@@ -10,14 +13,11 @@ const explorerRoutes = require('./routes/explorer');
 const apremiosRoutes = require('./routes/apremios');
 const authParser = require('./middleware/authParser');
 
-const path = require('path');
-dotenv.config({ path: path.join(__dirname, '.env') });
-
 // Fix for BigInt serialization
 BigInt.prototype.toJSON = function() { return this.toString() };
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = 3002; // Forzado a 3002 para evitar conflictos con proceso fantasma en 3001
 
 app.use(cors());
 app.use(express.json());
