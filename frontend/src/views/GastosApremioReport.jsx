@@ -342,7 +342,7 @@ const GastosApremioReport = ({ setView }) => {
             ['CoadBoap', 'CLAMP(Base × CoadInju%, CamiPaap, CamaPaap)', 'Comisión administrativa'],
             ['ApleBoap', 'MIN(Base × ApleInju%, AplePaap)', 'Aporte Ley / Gastos legales'],
             ['TasaJust.', 'LOOKUP(escaapre) ó TajuPaap', 'Tasa de Justicia (solo si instancia > 1)'],
-            ['DefiBoap', 'ROUND(TasaJust × DefiInju% / 100, 2)', 'Descuento / Deficientes'],
+            ['DefiBoap', 'ROUND(TasaJust × DefiInju% / 100, 2)', 'Descuento Deficiente (descuento sobre la Tasa de Justicia.)'],
             ['HoreBoap', 'CLAMP(Base × HoreInju%, HrmiPaap, HrmaPaap)', 'Honorarios del recaudador'],
             ['HoofBoap', 'Base × HoofInju%', 'Honorarios del oficial de justicia'],
             ['MoreBoap', 'km_recaudador × tarifa_zona', 'Movilidad del recaudador'],

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Scale, FileText, Database, ChevronRight, BookOpen, ArrowRight, Search } from 'lucide-react';
+import { Scale, FileText, Database, ChevronRight, BookOpen, ArrowRight, Search, Calculator } from 'lucide-react';
 
 const ApremioDashboard = ({ setView }) => {
   const cards = [
@@ -38,6 +38,24 @@ const ApremioDashboard = ({ setView }) => {
       color: '#ef4444',
       gradient: 'linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)',
       features: ['Búsqueda por ID', 'Comparación MariaDB/PG', 'Validación de saldos', 'Estado de migración']
+    },
+    {
+      id: 'gastos_apremio_real',
+      title: 'Calculadora Real de Gastos',
+      description: 'Calculadora dinámica que utiliza los porcentajes y parámetros reales de la base de datos para simular liquidaciones.',
+      icon: Calculator,
+      color: '#10b981',
+      gradient: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+      features: ['Cálculo dinámico', 'Validación instjudi', 'Topes paraapre', 'Auditoría real']
+    },
+    {
+      id: 'apremio_individual',
+      title: 'Reporte Individual',
+      description: 'Historial completo de un apremio, cronología de instancias judiciales y desglose de deuda.',
+      icon: FileText,
+      color: '#3b82f6',
+      gradient: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+      features: ['Historial instancias', 'Detalle de deuda', 'Estado judicial', 'Impresión de reporte']
     }
   ];
 

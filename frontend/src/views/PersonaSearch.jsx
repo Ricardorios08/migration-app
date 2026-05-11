@@ -13,6 +13,14 @@ const PersonaSearch = () => {
     const [selectedPerson, setSelectedPerson] = useState(null);
     const [showModal, setShowModal] = useState(false);
 
+    const getAuthHeaders = () => {
+        const token = localStorage.getItem('nomade_token');
+        return {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        };
+    };
+
     const handleSearch = async (e) => {
         if (e) e.preventDefault();
         if (query.trim().length < 2) return;
@@ -20,7 +28,9 @@ const PersonaSearch = () => {
         setLoading(true);
         setError(null);
         try {
-            const response = await fetch(`${API_URL}/infogov/search-persona?q=${encodeURIComponent(query)}`);
+            const response = await fetch(`${API_URL}/infogov/search-persona?q=${encodeURIComponent(query)}`, {
+                headers: getAuthHeaders()
+            });
             if (!response.ok) throw new Error('Error al buscar personas');
             const data = await response.json();
             setResults(data);

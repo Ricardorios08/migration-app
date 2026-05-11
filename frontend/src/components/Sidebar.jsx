@@ -88,7 +88,7 @@ const Sidebar = ({ currentView, setView, collapsed, setCollapsed, mobileOpen, se
         {user?.rol !== 'municipalidad' && (
           <>
             <div
-              className={`menu-item ${['apremio_dashboard', 'apremios', 'gastos_apremio', 'apremio_tables'].includes(currentView) ? 'active' : ''}`}
+              className={`menu-item ${['apremio_dashboard', 'apremios', 'gastos_apremio', 'gastos_apremio_real', 'apremio_individual', 'apremio_tables'].includes(currentView) ? 'active' : ''}`}
               onClick={() => setView('apremio_dashboard')}
               title={collapsed ? "Módulo de Apremio" : ""}
             >

@@ -13,8 +13,18 @@ const ComparisonReport = () => {
     const [search, setSearch] = useState('');
     const [error, setError] = useState(null);
 
+    const getAuthHeaders = () => {
+        const token = localStorage.getItem('nomade_token');
+        return {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        };
+    };
+
     useEffect(() => {
-        fetch(`${API_BASE_URL}/api/ctacte-fn/offices`)
+        fetch(`${API_BASE_URL}/api/ctacte-fn/offices`, {
+            headers: getAuthHeaders()
+        })
             .then(res => res.json())
             .then(data => setOffices(data))
             .catch(err => console.error('Error fetching offices:', err));
@@ -25,7 +35,9 @@ const ComparisonReport = () => {
         setError(null);
         try {
             const url = `${API_BASE_URL}/api/ctacte-fn/report/comparison?officeId=${selectedOffice}&page=${pageNum}&limit=${pageSize}&search=${encodeURIComponent(search)}`;
-            const res = await fetch(url);
+            const res = await fetch(url, {
+                headers: getAuthHeaders()
+            });
             const result = await res.json();
             
             if (result.error) throw new Error(result.error);
@@ -59,8 +71,8 @@ const ComparisonReport = () => {
         setFullDetailLoading(true);
         try {
             const [mRes, pRes] = await Promise.all([
-                fetch(`${API_BASE_URL}/api/ctacte-fn/legacy/search?account=${account.cuenta}&officeId=${selectedOffice}&agrupar=true`).then(r => r.json()),
-                fetch(`${API_BASE_URL}/api/ctacte-fn/new/search?account=${account.cuenta}&officeId=${selectedOffice}&showQuotaDetail=true`).then(r => r.json())
+                fetch(`${API_BASE_URL}/api/ctacte-fn/legacy/search?account=${account.cuenta}&officeId=${selectedOffice}&agrupar=true`, { headers: getAuthHeaders() }).then(r => r.json()),
+                fetch(`${API_BASE_URL}/api/ctacte-fn/new/search?account=${account.cuenta}&officeId=${selectedOffice}&showQuotaDetail=true`, { headers: getAuthHeaders() }).then(r => r.json())
             ]);
 
             const consolidateData = (data) => {

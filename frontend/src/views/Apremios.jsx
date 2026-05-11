@@ -21,6 +21,14 @@ const Apremios = () => {
     const [skip, setSkip] = useState(0);
     const [total, setTotal] = useState(0);
 
+    const getAuthHeaders = () => {
+        const token = localStorage.getItem('nomade_token');
+        return {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        };
+    };
+
     const [offices, setOffices] = useState([]);
 
     // Cta-Cte Modal States
@@ -36,7 +44,7 @@ const Apremios = () => {
 
     useEffect(() => {
         // Fetch offices for filtering
-        fetch(`${API_BASE_URL}/api/ctacte/offices`)
+        fetch(`${API_BASE_URL}/api/ctacte/offices`, { headers: getAuthHeaders() })
             .then(res => res.json())
             .then(data => setOffices(data))
             .catch(err => console.error('Error fetching offices:', err));
@@ -48,7 +56,7 @@ const Apremios = () => {
     const fetchStats = async () => {
         setStatsLoading(true);
         try {
-            const res = await fetch(`${API_BASE_URL}/api/apremios/stats`);
+            const res = await fetch(`${API_BASE_URL}/api/apremios/stats`, { headers: getAuthHeaders() });
             const data = await res.json();
             setStats(data);
         } catch (err) {
@@ -62,7 +70,7 @@ const Apremios = () => {
         setShowCopyModal(true);
         setCopyLoading(true);
         try {
-            const res = await fetch(`${API_BASE_URL}/api/apremios/pending-ids`);
+            const res = await fetch(`${API_BASE_URL}/api/apremios/pending-ids`, { headers: getAuthHeaders() });
             const data = await res.json();
             setPendingIds(data.ids || []);
         } catch (err) {
@@ -82,7 +90,7 @@ const Apremios = () => {
 
         try {
             // Get all accounts associated with this percod
-            const res = await fetch(`${API_BASE_URL}/api/ctacte/search-person?q=${percod}`);
+            const res = await fetch(`${API_BASE_URL}/api/ctacte/search-person?q=${percod}`, { headers: getAuthHeaders() });
             const data = await res.json();
             
             // Find the person and group their accounts by office
@@ -122,8 +130,8 @@ const Apremios = () => {
             const commonParams = `officeId=${officeId}&${accParams}&onlyDebt=${ctaCteTab === 'debt'}`;
 
             const [resLegacy, resPostgres] = await Promise.all([
-                fetch(`${API_BASE_URL}/api/ctacte/legacy/search?${commonParams}`),
-                fetch(`${API_BASE_URL}/api/ctacte/postgres/search?${commonParams}`)
+                fetch(`${API_BASE_URL}/api/ctacte/legacy/search?${commonParams}`, { headers: getAuthHeaders() }),
+                fetch(`${API_BASE_URL}/api/ctacte/postgres/search?${commonParams}`, { headers: getAuthHeaders() })
             ]);
             
             const legacy = await resLegacy.json();
@@ -145,7 +153,7 @@ const Apremios = () => {
 
     const openManual = async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/docs/migration-logic`);
+            const response = await fetch(`${API_BASE_URL}/api/docs/migration-logic`, { headers: getAuthHeaders() });
             const data = await response.json();
             if (response.ok) {
                 setManualContent(data.content);
@@ -170,7 +178,7 @@ const Apremios = () => {
         setError(null);
         try {
             const url = `${API_BASE_URL}/api/apremios/compare?limit=${limit}&skip=${skip}&status=${statusFilter}${officeId ? `&officeId=${officeId}` : ''}`;
-            const res = await fetch(url);
+            const res = await fetch(url, { headers: getAuthHeaders() });
             const result = await res.json();
             
             if (res.ok) {

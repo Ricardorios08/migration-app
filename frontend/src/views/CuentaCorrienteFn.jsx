@@ -44,6 +44,14 @@ const CuentaCorrienteFn = ({ user }) => {
         return parseFloat(val || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     };
 
+    const getAuthHeaders = () => {
+        const token = localStorage.getItem('nomade_token');
+        return {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        };
+    };
+
     // Person search autocomplete
     const [personSearchText, setPersonSearchText] = useState('');
     const [personSearchResults, setPersonSearchResults] = useState([]);
@@ -82,7 +90,9 @@ const CuentaCorrienteFn = ({ user }) => {
     };
 
     useEffect(() => {
-        fetch(`${API_BASE_URL}/api/ctacte-fn/offices`)
+        fetch(`${API_BASE_URL}/api/ctacte-fn/offices`, {
+            headers: getAuthHeaders()
+        })
             .then(res => res.json())
             .then(data => setOffices(data))
             .catch(err => console.error('Error fetching offices:', err));
@@ -98,7 +108,9 @@ const CuentaCorrienteFn = ({ user }) => {
         const timer = setTimeout(async () => {
             setIsResolvingOffices(true);
             try {
-                const res = await fetch(`${API_BASE_URL}/api/ctacte/resolve-account/${account}?searchType=${searchBy}`);
+                const res = await fetch(`${API_BASE_URL}/api/ctacte/resolve-account/${account}?searchType=${searchBy}`, {
+                    headers: getAuthHeaders()
+                });
                 const data = await res.json();
 
                 if (Array.isArray(data)) {
@@ -133,7 +145,9 @@ const CuentaCorrienteFn = ({ user }) => {
         const timer = setTimeout(async () => {
             setIsSearchingPerson(true);
             try {
-                const res = await fetch(`${API_BASE_URL}/api/ctacte/search-person?q=${encodeURIComponent(personSearchText)}`);
+                const res = await fetch(`${API_BASE_URL}/api/ctacte/search-person?q=${encodeURIComponent(personSearchText)}`, {
+                    headers: getAuthHeaders()
+                });
                 const data = await res.json();
                 setPersonSearchResults(data);
                 setShowPersonDropdown(data.length > 0);
@@ -229,7 +243,10 @@ const CuentaCorrienteFn = ({ user }) => {
                 acc[key].totalCount += 1;
                 if (isPaid) acc[key].paidCount += 1;
 
-                // Inherit Apremio/Plan only if this row has it
+                if (row.NumeBole) {
+                    acc[key].NumeBole = row.NumeBole;
+                    acc[key].PeriBole = row.PeriBole || row.periBole;
+                }
                 if (row.hasApremio) {
                     acc[key].hasApremio = true;
                     acc[key].NumeApre = row.NumeApre || row.numeapre || acc[key].NumeApre;
@@ -316,7 +333,9 @@ const CuentaCorrienteFn = ({ user }) => {
 
     const openManual = async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/docs/migration-logic`);
+            const response = await fetch(`${API_BASE_URL}/api/docs/migration-logic`, {
+                headers: getAuthHeaders()
+            });
             const data = await response.json();
             if (response.ok) {
                 setManualContent(data.content);
@@ -336,7 +355,11 @@ const CuentaCorrienteFn = ({ user }) => {
                         <Info size={14} />
                     </span>
                 </div>
-                {row.NumeBole && <div style={{ fontSize: '0.7rem', opacity: 0.6 }}>#{row.NumeBole}</div>}
+                {row.NumeBole && row.NumeBole !== '0' && row.NumeBole !== 0 && (
+                    <div style={{ fontSize: '0.7rem', opacity: 0.6 }}>
+                        #{row.NumeBole}{row.PeriBole && row.PeriBole !== '0000' && `/${row.PeriBole}`}
+                    </div>
+                )}
             </td>
             <td style={{ whiteSpace: 'nowrap' }}>{new Date(row.FeveCtct).toLocaleDateString()}</td>
             <td style={{ textAlign: 'center' }}>
@@ -430,7 +453,9 @@ const CuentaCorrienteFn = ({ user }) => {
         const isDetailRequested = !isGrouped;
         try {
             let pgUrl = `${API_BASE_URL}/api/ctacte-fn/new/search?officeId=${selectedOffice}&account=${finalAccountToSearch}&searchType=${selectedAccountFilter !== 'all' ? 'account' : searchBy}&percod=${account}&toDate=${toDate}&onlyDebt=${onlyDebt}&showQuotaDetail=${isDetailRequested}&filterYear=${filterYear}&filterMonth=${filterMonth}`;
-            const pgRes = await fetch(pgUrl);
+            const pgRes = await fetch(pgUrl, {
+                headers: getAuthHeaders()
+            });
             const pgResult = await pgRes.json();
 
             if (!pgRes.ok) {
@@ -471,7 +496,9 @@ const CuentaCorrienteFn = ({ user }) => {
                     legacyUrl += `&account=${acc}`;
                 });
 
-                const legacyRes = await fetch(legacyUrl);
+                const legacyRes = await fetch(legacyUrl, {
+                    headers: getAuthHeaders()
+                });
                 const legacyDataRes = await legacyRes.json();
 
                 if (legacyRes.ok) {

@@ -22,6 +22,8 @@ import GastosApremioReport from './views/GastosApremioReport';
 import ApremioTables from './views/ApremioTables';
 import ApremioSearch from './views/ApremioSearch';
 import RubrosComparison from './views/RubrosComparison';
+import GastosApremioReal from './views/GastosApremioReal';
+import ApremioIndividualReport from './views/ApremioIndividualReport';
 import AuditModule from './views/AuditModule';
 import CtacteModule from './views/CtacteModule';
 import { API_URL } from './config';
@@ -122,6 +124,10 @@ function App() {
             <Apremios />
           ) : view === 'gastos_apremio' ? (
             <GastosApremioReport setView={setView} />
+          ) : view === 'gastos_apremio_real' ? (
+            <GastosApremioReal setView={setView} />
+          ) : view === 'apremio_individual' ? (
+            <ApremioIndividualReport />
           ) : view === 'apremio_tables' ? (
             <ApremioTables setView={setView} />
           ) : view === 'apremio_search' ? (
