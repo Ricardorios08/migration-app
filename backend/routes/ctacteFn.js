@@ -2,7 +2,8 @@ const express = require('express');
 const router = express.Router();
 const mariaDB = require('../db/maria');
 
-const DB_NAME = process.env.MARIA_DB_NAME || 'recaudacion2';
+const DB_NAME = 'recaudacion2'; // Solo para ctacte
+const DB_RECAUDACION = 'recaudacion2'; 
 const postgresDB = require('../db/postgres');
 
 const { calculateLegacyInterest } = require('../utils/interestUtils');
@@ -14,7 +15,7 @@ router.get('/legacy/search', async (req, res) => {
 
     try {
         conn = await mariaDB.getRemoteConnection();
-        await conn.query(`USE ${DB_NAME}`);
+        await conn.query(`USE ${DB_RECAUDACION}`);
 
         const accList = Array.isArray(account) ? account : (account ? [account.toString().trim()] : []);
         const queryDate = toDate || new Date().toISOString().split('T')[0];
@@ -67,12 +68,12 @@ router.get('/legacy/search', async (req, res) => {
                     SUM(IFNULL(t.DebeCtct, 0)) as DebeCtct, 
                     SUM(IFNULL(t.CredCtct, 0)) as CredCtct,
                     MAX(t.NumeAcpa) as NumeAcpa, MAX(t.FeenAcpa) as FechaPago,
-                    MAX(t.NumeBole) as NumeBole, MAX(t.NumeApre) as NumeApre, MAX(t.CodiFapa) as CodiFapa,
+                    MAX(t.NumeBole) as NumeBole, MAX(t.PeriBole) as PeriBole, MAX(t.NumeApre) as NumeApre, MAX(t.CodiFapa) as CodiFapa,
                     MAX(t.PeriInfo) as PeriInfo, MAX(t.CodiConc) as CodiConc,
                     'CTACTE' as Source,
                     t.CuenCtct as CuenCtct
-                FROM ctacte t
-                LEFT JOIN concepto c ON c.PeriInfo = t.PeriInfo AND c.CodiConc = t.CodiConc
+                FROM ${DB_NAME}.ctacte t
+                LEFT JOIN ${DB_RECAUDACION}.concepto c ON c.PeriInfo = t.PeriInfo AND c.CodiConc = t.CodiConc
                 ${whereClause}
                 GROUP BY t.PeriCtct, t.BimeCtct, t.PeriInfo, t.CodiConc, t.CuenCtct
                 ${isOnlyDebt ? 'HAVING (SUM(IFNULL(t.DebeCtct, 0)) - SUM(IFNULL(t.CredCtct, 0))) > 0.01' : ''}
@@ -258,11 +259,16 @@ router.get('/new/search', async (req, res) => {
             const isSurcharge = detailName.includes('recargo') || detailName.includes('interes');
             const isCapital = ognMov === 1 || (ognMov === 0 && !isSurcharge);
 
+            const isPaid = parseInt(row.NumeAcpa || 0) > 0;
             if (isCapital && feve) {
-                reca = calculateLegacyInterest(feve, queryDate, debe);
+                const calculationEndDate = (isPaid && row.FechaPago) ? row.FechaPago : queryDate;
+                reca = calculateLegacyInterest(feve, calculationEndDate, debe);
+                
+                if (debe > 60000 && debe < 70000) {
+                    console.log(`[DEBUG INTEREST] Capital: ${debe}, Venc: ${feve}, Fin: ${calculationEndDate}, Reca: ${reca}, isPaid: ${isPaid}`);
+                }
             }
 
-            const isPaid = parseInt(row.NumeAcpa || 0) > 0;
             const haber = isPaid ? (debe + reca) : 0;
 
             return {
@@ -295,7 +301,7 @@ router.get('/report/comparison', async (req, res) => {
 
     try {
         conn = await mariaDB.getRemoteConnection();
-        await conn.query(`USE ${DB_NAME}`);
+        await conn.query(`USE ${DB_RECAUDACION}`);
 
         const offId = parseInt(officeId);
         const pNum = parseInt(page);
@@ -319,7 +325,7 @@ router.get('/report/comparison', async (req, res) => {
 
             accountsQuery = `
                 SELECT CuenCtct 
-                FROM ctacte 
+                FROM ${DB_NAME}.ctacte 
                 WHERE CodiOfic = ? 
                 AND CuenCtct IN (${inPlaceholders})
                 GROUP BY CuenCtct
@@ -330,7 +336,7 @@ router.get('/report/comparison', async (req, res) => {
         } else {
             accountsQuery = `
                 SELECT CuenCtct 
-                FROM ctacte 
+                FROM ${DB_NAME}.ctacte 
                 WHERE CodiOfic = ? 
                 GROUP BY CuenCtct
                 ORDER BY CuenCtct ASC
@@ -350,7 +356,7 @@ router.get('/report/comparison', async (req, res) => {
         // 2. Fetch Personal Info from vpadrones_persona (more reliable than master tables)
         const personLinkQuery = `
             SELECT nro_padron as CuenCtct, nro_doc as percod, denominacion as nombre, CUIT
-            FROM vpadrones_persona
+            FROM ${DB_RECAUDACION}.vpadrones_persona
             WHERE nro_padron IN (${placeholders}) AND principal = 'SI'
         `;
         const personDataRes = await conn.query(personLinkQuery, accList);
@@ -359,7 +365,7 @@ router.get('/report/comparison', async (req, res) => {
         // 3. Fetch MariaDB Debt Records in Bulk (Grouped by period/bimester)
         const mariaDebtQuery = `
             SELECT CuenCtct, PeriCtct, BimeCtct, MAX(FeveCtct) as FeveCtct, SUM(IFNULL(DebeCtct, 0) - IFNULL(CredCtct, 0)) as Capital
-            FROM ctacte
+            FROM ${DB_NAME}.ctacte
             WHERE CodiOfic = ? AND CuenCtct IN (${placeholders})
             GROUP BY CuenCtct, PeriCtct, BimeCtct, PeriInfo, CodiConc
             HAVING SUM(IFNULL(DebeCtct, 0) - IFNULL(CredCtct, 0)) > 0.01
@@ -369,8 +375,8 @@ router.get('/report/comparison', async (req, res) => {
         // 3b. Fetch MariaDB Plan Records in Bulk
         const mariaPlanQuery = `
             SELECT f.CuenCtct, f.PeriInfo as PeriCtct, d.CuotDefa as BimeCtct, MAX(d.FeveDefa) as FeveCtct, SUM(d.TotaDefa) as Capital
-            FROM facipago f
-            INNER JOIN detafapa d ON d.CodiFapa = f.CodiFapa
+            FROM ${DB_RECAUDACION}.facipago f
+            INNER JOIN ${DB_RECAUDACION}.detafapa d ON d.CodiFapa = f.CodiFapa
             WHERE f.CodiOfic = ? AND f.CuenCtct IN (${placeholders})
             AND f.EstaFapa = 'Activa' AND d.FepaDefa IS NULL
             GROUP BY f.CuenCtct, f.PeriInfo, d.CuotDefa
@@ -498,7 +504,7 @@ router.get('/offices', async (req, res) => {
     let conn;
     try {
         conn = await mariaDB.getRemoteConnection();
-        const results = await conn.query("SELECT CodiOfic as id, DetaOfic as name FROM oficina ORDER BY id");
+        const results = await conn.query(`SELECT CodiOfic as id, DetaOfic as name FROM ${DB_RECAUDACION}.oficina ORDER BY id`);
         res.json(results);
     } catch (err) {
         res.status(500).json({ error: err.message });

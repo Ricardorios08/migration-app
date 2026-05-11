@@ -2,13 +2,14 @@ const express = require('express');
 const router = express.Router();
 const maria = require('../db/maria');
 
-const DB_NAME = process.env.MARIA_DB_NAME || 'recaudacion2';
+const DB_NAME = 'recaudacion2';
+const DB_RECAUDACION = 'recaudacion2'; 
+const DB_APRE_CONFIG = 'recaudacion2'; 
 
 // GET /apremio-config/paraapre
 router.get('/paraapre', async (req, res) => {
     try {
-        await maria.query(`USE ${DB_NAME}`);
-        const rows = await maria.query('SELECT * FROM paraapre');
+        const rows = await maria.query(`SELECT * FROM ${DB_APRE_CONFIG}.paraapre`);
         res.json(rows);
     } catch (err) {
         console.error('Error fetching paraapre:', err);
@@ -19,8 +20,7 @@ router.get('/paraapre', async (req, res) => {
 // GET /apremio-config/instjudi
 router.get('/instjudi', async (req, res) => {
     try {
-        await maria.query(`USE ${DB_NAME}`);
-        const rows = await maria.query('SELECT * FROM instjudi ORDER BY CodiInju');
+        const rows = await maria.query(`SELECT * FROM ${DB_APRE_CONFIG}.instjudi ORDER BY CodiInju`);
         res.json(rows);
     } catch (err) {
         console.error('Error fetching instjudi:', err);
@@ -31,8 +31,7 @@ router.get('/instjudi', async (req, res) => {
 // GET /apremio-config/escaapre
 router.get('/escaapre', async (req, res) => {
     try {
-        await maria.query(`USE ${DB_NAME}`);
-        const rows = await maria.query('SELECT * FROM escaapre ORDER BY CodiPaap, CodiEsap');
+        const rows = await maria.query(`SELECT * FROM ${DB_APRE_CONFIG}.escaapre ORDER BY CodiPaap, CodiEsap`);
         res.json(rows);
     } catch (err) {
         console.error('Error fetching escaapre:', err);
@@ -44,8 +43,7 @@ router.get('/escaapre', async (req, res) => {
 router.get('/boleapre-sample', async (req, res) => {
     try {
         const limit = Math.min(parseInt(req.query.limit) || 10, 50);
-        await maria.query(`USE ${DB_NAME}`);
-        const rows = await maria.query(`SELECT * FROM boleapre WHERE CoadBoap > 0 LIMIT ?`, [limit]);
+        const rows = await maria.query(`SELECT * FROM ${DB_APRE_CONFIG}.boleapre WHERE CoadBoap > 0 LIMIT ?`, [limit]);
         res.json(rows);
     } catch (err) {
         console.error('Error fetching boleapre sample:', err);
@@ -53,38 +51,67 @@ router.get('/boleapre-sample', async (req, res) => {
     }
 });
 
-// GET /apremio-config/debt?numeApre=123 or ?cuenCtct=123
 router.get('/debt', async (req, res) => {
     try {
-        const { numeApre, cuenCtct } = req.query;
-        await maria.query(`USE ${DB_NAME}`);
+        const { numeApre, cuenCtct, q } = req.query;
+        console.log(`[DEBT CALC] URL: ${req.originalUrl}`);
+        console.log(`[DEBT CALC] Query object:`, req.query);
+        console.log(`[DEBT CALC] Request for numeApre: ${numeApre}, cuenCtct: ${cuenCtct}, q: ${q}`);
         
         let sql = '';
         let params = [];
+        const searchVal = numeApre || cuenCtct || q;
         
-        if (numeApre) {
-            sql = 'SELECT SUM(DebeCtct - CredCtct) as Capital, SUM(0) as Recargo FROM ctacte WHERE NumeApre = ?';
-            params = [numeApre];
-        } else if (cuenCtct) {
-            sql = 'SELECT SUM(DebeCtct - CredCtct) as Capital, SUM(0) as Recargo FROM ctacte WHERE CuenCtct = ? AND NumeApre > 0';
-            params = [cuenCtct];
-        } else {
-            return res.status(400).json({ error: 'Falta NumeApre o CuenCtct' });
+        if (!searchVal) {
+            console.log(`[DEBT CALC] Returning 400 because searchVal is empty.`);
+            return res.status(400).json({ error: 'No se encontró el apremio o cuenta especificada' });
         }
 
-        const rows = await maria.query(sql, params);
+        // Primero intentamos como NumeApre
+        sql = `
+            SELECT a.NumeApre, a.CuenCtct, a.CodiOfic, a.TotaApre, ea.DetaEsap as EstadoDeta, a.CapiApre as Capital, a.RecaApre as Recargo
+            FROM ${DB_RECAUDACION}.apremio a
+            LEFT JOIN ${DB_RECAUDACION}.estadoapremio ea ON a.EstaApre = ea.CodiEsap
+            WHERE a.NumeApre = ?
+        `;
+        params = [searchVal];
         
-        // Buscamos también el NumeApre si buscó por cuenta
-        let actualApre = numeApre;
-        if (cuenCtct && !numeApre) {
-            const apreRow = await maria.query('SELECT NumeApre FROM ctacte WHERE CuenCtct = ? AND NumeApre > 0 LIMIT 1', [cuenCtct]);
-            if (apreRow.length > 0) actualApre = apreRow[0].NumeApre;
+        let rows = await maria.query(sql, params);
+        
+        // Si no encontró nada, intentamos como CuenCtct
+        if (rows.length === 0) {
+            sql = `
+                SELECT a.NumeApre, a.CuenCtct, a.CodiOfic, a.TotaApre, ea.DetaEsap as EstadoDeta, a.CapiApre as Capital, a.RecaApre as Recargo
+                FROM ${DB_RECAUDACION}.apremio a
+                LEFT JOIN ${DB_RECAUDACION}.estadoapremio ea ON a.EstaApre = ea.CodiEsap
+                WHERE a.CuenCtct = ?
+                ORDER BY a.NumeApre DESC
+                LIMIT 1
+            `;
+            params = [searchVal];
+            rows = await maria.query(sql, params);
+        }
+        
+        if (rows.length === 0) {
+            return res.json({
+                capital: 0,
+                recargo: 0,
+                numeApre: null,
+                cuenCtct: null,
+                codiOfic: null,
+                debugSql: sql,
+                debugParams: params
+            });
         }
 
         res.json({
             capital: parseFloat(rows[0].Capital || 0),
-            recargo: parseFloat(rows[0].Recargo || 0), // Aquí podríamos llamar a la fn de interés real si quisiéramos
-            numeApre: actualApre
+            recargo: parseFloat(rows[0].Recargo || 0),
+            numeApre: rows[0].NumeApre,
+            cuenCtct: rows[0].CuenCtct,
+            codiOfic: rows[0].CodiOfic,
+            debugSql: sql,
+            debugParams: params
         });
     } catch (err) {
         console.error('Error fetching debt:', err);

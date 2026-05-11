@@ -14,10 +14,10 @@ const apremiosRoutes = require('./routes/apremios');
 const authParser = require('./middleware/authParser');
 
 // Fix for BigInt serialization
-BigInt.prototype.toJSON = function() { return this.toString() };
+BigInt.prototype.toJSON = function () { return this.toString() };
 
 const app = express();
-const PORT = 3002; // Forzado a 3002 para evitar conflictos con proceso fantasma en 3001
+const PORT = process.env.PORT || 3004; 
 
 app.use(cors());
 app.use(express.json());
@@ -40,6 +40,7 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/audit', require('./routes/audit'));
 app.use('/api/audit-snapshot', require('./routes/auditSnapshot'));
 app.use('/api/boletos', require('./routes/boletos'));
+app.use('/api/apremio-individual', require('./routes/apremioIndividual'));
 
 // Endpoint to serve migration logic documentation
 app.get('/api/docs/migration-logic', (req, res) => {

@@ -2,13 +2,14 @@ const express = require('express');
 const router = express.Router();
 const mariaDB = require('../db/maria');
 
-const DB_NAME = process.env.MARIA_DB_NAME || 'recaudacion2';
+const DB_NAME = 'recaudacion2'; // Solo para ctacte
+const DB_RECAUDACION = 'recaudacion2'; 
 const postgresDB = require('../db/postgres');
 
 // Get list of offices
 router.get('/offices', async (req, res) => {
     try {
-        const offices = await mariaDB.queryRemote('SELECT CodiOfic, DetaOfic FROM oficina ORDER BY CodiOfic');
+        const offices = await mariaDB.queryRemote(`SELECT CodiOfic, DetaOfic FROM ${DB_RECAUDACION}.oficina ORDER BY CodiOfic`);
         const result = [...offices, { CodiOfic: 99, DetaOfic: 'CUIL/CUIT' }];
         res.json(result);
     } catch (err) {
@@ -128,7 +129,7 @@ router.get('/resolve-account/:account', async (req, res) => {
             // Default: Search by account in both DBs
             conn = await mariaDB.getRemoteConnection();
             const mariaOffices = await conn.query(`
-                SELECT DISTINCT CodiOfic FROM ctacte WHERE CuenCtct = ?
+                SELECT DISTINCT CodiOfic FROM ${DB_NAME}.ctacte WHERE CuenCtct = ?
             `, [account]);
             mariaOffices.forEach(r => officesFound.add(r.CodiOfic.toString()));
 
@@ -143,7 +144,7 @@ router.get('/resolve-account/:account', async (req, res) => {
 
             try {
                 const boletoOffices = await conn.query(`
-                    SELECT DISTINCT CodiOfic FROM boleto WHERE CuenCtct = ?
+                    SELECT DISTINCT CodiOfic FROM ${DB_RECAUDACION}.boleto WHERE CuenCtct = ?
                 `, [account]);
                 boletoOffices.forEach(r => officesFound.add(r.CodiOfic.toString()));
             } catch (bErr) {
@@ -171,7 +172,7 @@ router.get('/resolve-account/:account', async (req, res) => {
             if (!conn) conn = await mariaDB.getRemoteConnection();
             officeNames = await conn.query(`
                 SELECT CodiOfic as id, DetaOfic as name 
-                FROM oficina 
+                FROM ${DB_RECAUDACION}.oficina 
                 WHERE CodiOfic IN (${ids.map(() => '?').join(',')})
             `, ids);
         } catch (mErr) {
@@ -224,8 +225,8 @@ router.get('/legacy/search', async (req, res) => {
                         MAX(t.CodiFapa) as CodiFapa,
                         (MAX(t.NumeApre) > 0) as hasApremio,
                         (MAX(t.CodiFapa) > 0) as hasPlan
-                    FROM ctacte t
-                    LEFT JOIN concepto c ON c.PeriInfo = t.PeriInfo AND c.CodiConc = t.CodiConc
+                    FROM ${DB_NAME}.ctacte t
+                    LEFT JOIN ${DB_RECAUDACION}.concepto c ON c.PeriInfo = t.PeriInfo AND c.CodiConc = t.CodiConc
                     WHERE t.CodiOfic = ? AND t.CuenCtct = ?
                     GROUP BY t.PeriCtct, t.BimeCtct, t.PeriInfo, t.CodiConc
                     HAVING (SUM(IFNULL(t.DebeCtct, 0)) - SUM(IFNULL(t.CredCtct, 0))) > 0.01
@@ -270,14 +271,14 @@ router.get('/legacy/search', async (req, res) => {
                     (tmp.CodiFapa > 0) as hasPlan
                 FROM (
                     SELECT PeriCtct, BimeCtct, CuotDefa, FeveCtct, DetaCtct, DebeCtct, CredCtct, NumeApre, CodiFapa, PeriInfo, CodiConc, NumeAcpa, FeenAcpa as FechaPago
-                    FROM ctacte
+                    FROM ${DB_NAME}.ctacte
                     WHERE CodiOfic = ? AND CuenCtct IN (${accPlaceholders}) ${fealCorteFilter}
                     UNION ALL
                     SELECT PeriCtct, BimeCtct, CuotDefa, FeveCtct, DetaCtct, DebeCtct, CredCtct, NumeApre, CodiFapa, PeriInfo, CodiConc, NumeAcpa, FeenAcpa as FechaPago
                     FROM recahisto.histoctacte
                     WHERE CodiOfic = ? AND CuenCtct IN (${accPlaceholders}) ${fealCorteFilter}
                 ) tmp
-                LEFT JOIN concepto c ON c.PeriInfo = tmp.PeriInfo AND c.CodiConc = tmp.CodiConc
+                LEFT JOIN ${DB_RECAUDACION}.concepto c ON c.PeriInfo = tmp.PeriInfo AND c.CodiConc = tmp.CodiConc
                 ORDER BY tmp.PeriCtct DESC, tmp.BimeCtct ASC, tmp.FeveCtct ASC
                 LIMIT 2000
             `;

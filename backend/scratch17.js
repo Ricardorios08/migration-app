@@ -1,6 +1,6 @@
 const http = require('http');
 
-http.get('http://localhost:3001/api/ctacte/search-person?q=juan', (res) => {
+http.get('http://localhost:3002/api/ctacte/search-person?q=juan', (res) => {
   let data = '';
   res.on('data', (chunk) => { data += chunk; });
   res.on('end', () => {

@@ -3,6 +3,9 @@ const router = express.Router();
 const maria = require('../db/maria');
 const postgres = require('../db/postgres');
 
+const DB_NAME = 'recaudacion2'; // Solo para ctacte
+const DB_RECAUDACION = 'recaudacion2'; // Para el resto (oficina, recaudador, apremio, etc.)
+
 // In-memory cache for background audit
 let auditState = {
     status: 'idle', // idle, calculating, ready
@@ -27,12 +30,12 @@ const startBackgroundAudit = async () => {
         console.log('[DASHBOARD] Starting multi-database audit at:', auditState.startTime);
         
         // 1. Summary (Fast)
-        const offices = await maria.query('SELECT CodiOfic as id, DetaOfic as name FROM oficina');
+        const offices = await maria.query(`SELECT CodiOfic as id, DetaOfic as name FROM ${DB_RECAUDACION}.oficina`);
         
         const fetchMdCounts = async (queryFn) => {
             return queryFn(`
                 SELECT CodiOfic as id, COUNT(DISTINCT CuenCtct) as count 
-                FROM ctacte 
+                FROM ${DB_NAME}.ctacte 
                 GROUP BY CodiOfic
             `);
         };
@@ -47,7 +50,7 @@ const startBackgroundAudit = async () => {
             `),
             maria.query(`
                 SELECT CodiOfic as id, COUNT(DISTINCT CuenCtct) as count 
-                FROM ctacte 
+                FROM ${DB_NAME}.ctacte 
                 GROUP BY CodiOfic
             `).catch(e => { console.error('MD Counts Error:', e); return []; })
         ]);
@@ -72,8 +75,8 @@ const startBackgroundAudit = async () => {
                 SELECT r.CodiReca, r.DetaReca, 
                        COUNT(a.NumeApre) as CantApremios,
                        SUM(a.TotaApre) as TotalApre
-                FROM recaudador r
-                LEFT JOIN apremio a ON r.CodiReca = a.CodiReca
+                FROM ${DB_RECAUDACION}.recaudador r
+                LEFT JOIN ${DB_RECAUDACION}.apremio a ON r.CodiReca = a.CodiReca
                 WHERE a.CancApre = 0 OR a.NumeApre IS NULL
                 GROUP BY r.CodiReca, r.DetaReca
             `);
@@ -99,7 +102,7 @@ const startBackgroundAudit = async () => {
             const cuit = pgPerson.percuilnro;
             if (cuit) {
                 // Find in MariaDB by CUIT (Both Local and Remote)
-                const mdPLocal = await maria.query(`SELECT nro_padron FROM vpadrones_persona WHERE CUIT = ?`, [cuit]).catch(() => []);
+                const mdPLocal = await maria.query(`SELECT nro_padron FROM ${DB_RECAUDACION}.vpadrones_persona WHERE CUIT = ?`, [cuit]).catch(() => []);
 
                 let totalMdDebt = 0;
                 
@@ -108,7 +111,7 @@ const startBackgroundAudit = async () => {
                     const pads = mdPLocal.map(p => p.nro_padron);
                     const res = await maria.query(`
                         SELECT SUM(DebeCtct - CredCtct) as total 
-                        FROM ctacte 
+                        FROM ${DB_NAME}.ctacte 
                         WHERE TRIM(CuenCtct) IN (${pads.map(p => `'${p}'`).join(',')}) AND DebeCtct > CredCtct
                     `);
                     totalMdDebt += parseFloat(res[0]?.total || 0);
@@ -142,7 +145,7 @@ const startBackgroundAudit = async () => {
                                    (DebeCtct - CredCtct) * (DATEDIFF(?, FeveCtct) / 30) * (1.5 / 100)
                            END
                        ) as interest 
-                FROM ctacte 
+                FROM ${DB_NAME}.ctacte 
                 WHERE DebeCtct > CredCtct 
                 GROUP BY CodiOfic
             `, [dateStr, dateStr, dateStr]);
