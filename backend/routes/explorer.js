@@ -99,4 +99,139 @@ router.get('/:engine/:db/explore/:table', async (req, res) => {
     }
 });
 
+// Get columns of a table
+router.get('/:engine/:db/columns/:table', async (req, res) => {
+    const { engine, db, table } = req.params;
+    if (!/^[a-zA-Z0-9_.]+$/.test(table)) return res.status(400).json({ error: 'Nombre de tabla inválido' });
+    
+    try {
+        if (engine === 'pg') {
+            const query = `
+                SELECT column_name as "name", data_type as "type", is_nullable as "nullable"
+                FROM information_schema.columns 
+                WHERE table_schema = 'public' AND table_name = $1
+            `;
+            const result = await postgres.query(query, [table]);
+            return res.json(result.rows.map(c => ({
+                name: c.name,
+                type: c.type,
+                nullable: c.nullable
+            })));
+        }
+        
+        if (!ALLOWED_MARIA_DBS.includes(db)) return res.status(403).json({ error: 'Base de datos no permitida' });
+        const result = await mariaDB.query(`SHOW COLUMNS FROM ${db}.${table}`);
+        res.json(result.map(c => ({
+            name: c.Field,
+            type: c.Type,
+            nullable: c.Null
+        })));
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Dynamic Aggregation Query Builder
+router.post('/query', async (req, res) => {
+    const { engine, db, table, selectColumns = [], aggregates = [], groupBy = [], filters = [], limit = 100 } = req.body;
+    
+    if (!/^[a-zA-Z0-9_.]+$/.test(table)) return res.status(400).json({ error: 'Nombre de tabla inválido' });
+    if (engine !== 'pg' && !ALLOWED_MARIA_DBS.includes(db)) return res.status(403).json({ error: 'Base de datos no permitida' });
+
+    const sanitizeColumnName = (col) => col.replace(/[^a-zA-Z0-9_*.]/g, '');
+    
+    try {
+        const cleanSelect = selectColumns.map(sanitizeColumnName);
+        const cleanGroupBy = groupBy.map(sanitizeColumnName);
+        
+        let projections = [];
+        if (cleanSelect.length > 0) {
+            projections.push(...cleanSelect);
+        }
+        
+        aggregates.forEach(agg => {
+            const op = agg.op.toUpperCase();
+            if (!['SUM', 'COUNT', 'AVG', 'MIN', 'MAX'].includes(op)) return;
+            const targetCol = agg.col === '*' ? '*' : sanitizeColumnName(agg.col);
+            const alias = sanitizeColumnName(agg.alias || `${op}_${targetCol}`);
+            
+            projections.push(`${op}(${targetCol}) as "${alias}"`);
+        });
+        
+        if (projections.length === 0) {
+            projections.push('*');
+        }
+        
+        let query = '';
+        if (engine === 'pg') {
+            query = `SELECT ${projections.join(', ')} FROM "${table}"`;
+        } else {
+            query = `SELECT ${projections.join(', ')} FROM ${db}.${table}`;
+        }
+        
+        let whereClauses = [];
+        let params = [];
+        
+        filters.forEach((filter, idx) => {
+            const col = sanitizeColumnName(filter.col);
+            const op = filter.op;
+            const val = filter.val;
+            
+            if (!col || !op) return;
+            
+            if (['=', '>', '<', '<=', '>=', '!=', 'LIKE'].includes(op)) {
+                if (engine === 'pg') {
+                    whereClauses.push(`"${col}"::text ${op} $${params.length + 1}`);
+                } else {
+                    whereClauses.push(`${col} ${op} ?`);
+                }
+                params.push(op === 'LIKE' ? `%${val}%` : val);
+            }
+        });
+        
+        if (whereClauses.length > 0) {
+            query += ` WHERE ${whereClauses.join(' AND ')}`;
+        }
+        
+        if (cleanGroupBy.length > 0) {
+            query += ` GROUP BY ${cleanGroupBy.join(', ')}`;
+        }
+        
+        query += ` LIMIT ${Math.min(parseInt(limit) || 100, 5000)}`;
+        
+        console.log(`[DYNAMIC QUERY ENGINE] Running: "${query}" with params:`, params);
+        
+        let rows = [];
+        if (engine === 'pg') {
+            // Set statement timeout for PostgreSQL to 20 seconds
+            await postgres.query(`SET statement_timeout = 20000`);
+            const resData = await postgres.query(query, params);
+            rows = resData.rows;
+        } else {
+            // Get connection from pool and query with a 20-second timeout
+            let conn;
+            try {
+                conn = await mariaDB.getConnection();
+                rows = await conn.query({ sql: query, timeout: 20000 }, params);
+            } finally {
+                if (conn) conn.release();
+            }
+        }
+        
+        res.json({
+            success: true,
+            queryExecuted: query,
+            data: rows
+        });
+    } catch (err) {
+        console.error('Dynamic Query Engine Error:', err);
+        let errorMsg = err.message;
+        if (err.code === 'ER_TIMEOUT' || err.message.toLowerCase().includes('timeout') || err.message.toLowerCase().includes('canceled')) {
+            errorMsg = 'La consulta excedió el tiempo límite de 20 segundos para evitar saturación del servidor. Por favor, selecciona dimensiones de agrupación más específicas o agrega filtros en la sección 3 para reducir el volumen de datos a procesar.';
+        }
+        res.status(500).json({ error: errorMsg });
+    }
+});
+
 module.exports = router;
+

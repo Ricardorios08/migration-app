@@ -1384,33 +1384,68 @@ const CuentaCorriente = () => {
                         </div>
 
                         <pre className="sql-code">
-{`-- 1. Preparar tabla temporal en memoria
-CREATE TEMPORARY TABLE tmp_ctacteboleto (
-    PeriCtct int, BimeCtct int, CuotDefa int, FeveCtct date, 
-    DebeCtct decimal(15,2), RecaCtct decimal(15,2), NumeApre int, CodiFapa int,
-    PeriInfo int, CodiConc char(8), NumeAcpa int, FeenAcpa date, MoviCtct int
-) ENGINE=Memory;
+{`-- CONSULTA HISTÓRICA DE CUENTA CORRIENTE LEGACY (MARIADB)
+-- El backend aplica resolución inteligente de cuentas para tasas de personas unificadas (Oficinas 3 y 5)
 
--- 2. Consolidar deuda por Tributo/Concepto/Periodo
-INSERT INTO tmp_ctacteboleto (...)
-SELECT PeriCtct, BimeCtct, MAX(CuotDefa), MAX(FeveCtct), 
-       SUM(IFNULL(DebeCtct, 0)) - SUM(IFNULL(CredCtct, 0)), 
-       0, MAX(NumeApre), MAX(CodiFapa), PeriInfo, CodiConc, MAX(NumeAcpa), MAX(FeenAcpa), 0
-FROM ctacte
-WHERE CodiOfic = '${selectedOffice}' AND CuenCtct = '${account}'
-GROUP BY PeriCtct, BimeCtct, PeriInfo, CodiConc
-HAVING (SUM(DebeCtct) - SUM(CredCtct)) > 0.01;
+-- CASO A: Búsqueda con Filtro "Solo Deuda" (onlyDebt = true)
+SELECT 
+    t.PeriCtct, 
+    t.BimeCtct, 
+    MAX(t.CuotDefa) as CuotDefa, 
+    MAX(t.FeveCtct) as FeveCtct, 
+    IFNULL(c.DetaConc, MAX(t.DetaCtct)) as DetaCtct, 
+    SUM(IFNULL(t.DebeCtct, 0)) - SUM(IFNULL(t.CredCtct, 0)) as DebeCtct, 
+    IF(MAX(t.FeveCtct) < '\${toDate}', 
+       (SUM(IFNULL(t.DebeCtct, 0)) - SUM(IFNULL(t.CredCtct, 0))) * CEIL(DATEDIFF('\${toDate}', MAX(t.FeveCtct)) / 30) * 0.03, 
+       0) as RecaCtct, 
+    MAX(t.NumeAcpa) as NumeAcpa, 
+    MAX(t.FeenAcpa) as FechaPago, 
+    MAX(t.NumeBole) as NumeBole, 
+    MAX(t.NumeApre) as NumeApre, 
+    MAX(t.CodiFapa) as CodiFapa, 
+    (MAX(t.NumeApre) > 0) as hasApremio, 
+    (MAX(t.CodiFapa) > 0) as hasPlan 
+FROM recaudacion2.ctacte t 
+LEFT JOIN recaudacion2.concepto c ON c.PeriInfo = t.PeriInfo AND c.CodiConc = t.CodiConc 
+WHERE t.CodiOfic = '\${selectedOffice}' AND t.CuenCtct = '\${account}' 
+GROUP BY t.PeriCtct, t.BimeCtct, t.PeriInfo, t.CodiConc 
+HAVING (SUM(IFNULL(t.DebeCtct, 0)) - SUM(IFNULL(t.CredCtct, 0))) > 0.01 
+ORDER BY t.PeriCtct DESC, t.BimeCtct ASC;
 
--- 3. Calcular Recargos (Interés Municipal 3% por mes o fracción)
-UPDATE tmp_ctacteboleto
-SET RecaCtct = DebeCtct * (CEIL(DATEDIFF(CURDATE(), FeveCtct) / 30) * 0.03)
-WHERE CURDATE() > FeveCtct;
-
--- 4. Consulta Final con Detalle de Conceptos
-SELECT tmp.*, c.DetaConc, (tmp.NumeApre > 0) as hasApremio
-FROM tmp_ctacteboleto tmp
-LEFT JOIN concepto c ON c.PeriInfo = tmp.PeriInfo AND c.CodiConc = tmp.CodiConc
-ORDER BY tmp.PeriCtct DESC, tmp.BimeCtct DESC;`}
+-- CASO B: Búsqueda de Estado de Cuenta Completo (Historial Completo)
+SELECT 
+    tmp.CuenCtct, 
+    tmp.PeriCtct, 
+    tmp.BimeCtct, 
+    tmp.CuotDefa, 
+    tmp.FeveCtct, 
+    IFNULL(c.DetaConc, tmp.DetaCtct) as DetaCtct, 
+    tmp.DebeCtct, 
+    tmp.CredCtct, 
+    0 as RecaCtct, 
+    (tmp.DebeCtct - tmp.CredCtct) as TotaCtct, 
+    tmp.NumeAcpa, 
+    tmp.FechaPago, 
+    tmp.NumeApre, 
+    tmp.CodiFapa, 
+    (tmp.NumeApre > 0) as hasApremio, 
+    (tmp.CodiFapa > 0) as hasPlan 
+FROM (
+    -- Movimientos activos en cuenta corriente de producción
+    SELECT CuenCtct, PeriCtct, BimeCtct, CuotDefa, FeveCtct, DetaCtct, DebeCtct, CredCtct, NumeApre, CodiFapa, PeriInfo, CodiConc, NumeAcpa, FeenAcpa as FechaPago 
+    FROM recaudacion2.ctacte 
+    WHERE CodiOfic = '\${selectedOffice}' AND CuenCtct = '\${account}'
+    
+    UNION ALL 
+    
+    -- Movimientos históricos (anteriores a cortes de migración)
+    SELECT CuenCtct, PeriCtct, BimeCtct, CuotDefa, FeveCtct, DetaCtct, DebeCtct, CredCtct, NumeApre, CodiFapa, PeriInfo, CodiConc, NumeAcpa, FeenAcpa as FechaPago 
+    FROM recahisto.histoctacte 
+    WHERE CodiOfic = '\${selectedOffice}' AND CuenCtct = '\${account}'
+) tmp 
+LEFT JOIN recaudacion2.concepto c ON c.PeriInfo = tmp.PeriInfo AND c.CodiConc = tmp.CodiConc 
+ORDER BY tmp.PeriCtct DESC, tmp.BimeCtct ASC, tmp.FeveCtct ASC 
+LIMIT 2000;`}
                         </pre>
                     </div>
                 </div>

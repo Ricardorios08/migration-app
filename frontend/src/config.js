@@ -1,4 +1,4 @@
-const BACKEND_PORT = 3005;
+const BACKEND_PORT = 3006;
 
 // Detect if we are in development (Vite port)
 const isDevelopment = window.location.port === '5173' || window.location.port === '3000';

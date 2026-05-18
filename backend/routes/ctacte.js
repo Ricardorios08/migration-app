@@ -129,22 +129,86 @@ router.get('/legacy/search', async (req, res) => {
         const accList = Array.isArray(account) ? account : (account ? [account.toString().trim()] : []);
         const dateStr = toDate || new Date().toISOString().split('T')[0];
 
+        // Dynamic Legacy Account Mapper (Smart Resolver for Office 3 & 5)
+        const mappedAccList = [];
+        const originalToMappedMap = {}; // Maps mapped account -> search key
+
+        for (const acc of accList) {
+            let mappedAcc = acc;
+            
+            // If the query is for Deudores Varios (Office 3) or Ingresos Varios (Office 5)
+            if ((officeId == '3' || officeId == '5') && /^\d+$/.test(acc)) {
+                try {
+                    // 1. Find if this is a valid Postgres percod
+                    const pgRes = await postgresDB.query(
+                        "SELECT percuiltipo, percuilnro, percuildigver FROM public.persona WHERE percod = $1",
+                        [acc]
+                    );
+                    
+                    if (pgRes.rows.length > 0) {
+                        const { percuiltipo, percuilnro, percuildigver } = pgRes.rows[0];
+                        const fullCuit = `${percuiltipo}${percuilnro}${percuildigver}`;
+                        
+                        // 2. Find corresponding legacy citizen CucuPers in infogov
+                        const mariaPers = await conn.query(
+                            "SELECT CucuPers FROM infogov.persona WHERE CucuPers = ? OR CuitPers = ?",
+                            [fullCuit, fullCuit]
+                        );
+                        
+                        if (mariaPers.length > 0) {
+                            const cucuPers = mariaPers[0].CucuPers;
+                            
+                            // 3. Find CuenCtct in relacion for this office and citizen
+                            const relRes = await conn.query(
+                                "SELECT CuenCtct FROM relacion WHERE CodiOfic = ? AND CucuPers = ?",
+                                [officeId, cucuPers]
+                            );
+                            
+                            if (relRes.length > 0) {
+                                mappedAcc = relRes[0].CuenCtct.toString().trim();
+                                console.log(`[SMART RESOLVER] Resolved search account '${acc}' to legacy account '${mappedAcc}'`);
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.error("[SMART RESOLVER ERROR]:", err);
+                }
+            }
+            
+            mappedAccList.push(mappedAcc);
+            originalToMappedMap[mappedAcc] = acc;
+        }
+
         if (onlyDebt === 'true') {
             const allResults = [];
-            for (const acc of accList) {
+            for (const acc of mappedAccList) {
                 const results = await conn.query(`SELECT t.PeriCtct, t.BimeCtct, MAX(t.CuotDefa) as CuotDefa, MAX(t.FeveCtct) as FeveCtct, IFNULL(c.DetaConc, MAX(t.DetaCtct)) as DetaCtct, SUM(IFNULL(t.DebeCtct, 0)) - SUM(IFNULL(t.CredCtct, 0)) as DebeCtct, IF(MAX(t.FeveCtct) < ?, (SUM(IFNULL(t.DebeCtct, 0)) - SUM(IFNULL(t.CredCtct, 0))) * CEIL(DATEDIFF(?, MAX(t.FeveCtct)) / 30) * 0.03, 0) as RecaCtct, MAX(t.NumeAcpa) as NumeAcpa, MAX(t.FeenAcpa) as FechaPago, MAX(t.NumeBole) as NumeBole, MAX(t.NumeApre) as NumeApre, MAX(t.CodiFapa) as CodiFapa, (MAX(t.NumeApre) > 0) as hasApremio, (MAX(t.CodiFapa) > 0) as hasPlan FROM ${DB_NAME}.ctacte t LEFT JOIN ${DB_RECAUDACION}.concepto c ON c.PeriInfo = t.PeriInfo AND c.CodiConc = t.CodiConc WHERE t.CodiOfic = ? AND t.CuenCtct = ? GROUP BY t.PeriCtct, t.BimeCtct, t.PeriInfo, t.CodiConc HAVING (SUM(IFNULL(t.DebeCtct, 0)) - SUM(IFNULL(t.CredCtct, 0))) > 0.01 ORDER BY t.PeriCtct DESC, t.BimeCtct ASC`, [dateStr, dateStr, officeId, acc]);
-                allResults.push(...results.map(r => ({ ...r, DebeCtct: parseFloat(r.DebeCtct), RecaCtct: parseFloat(r.RecaCtct), TotaCtct: parseFloat(r.DebeCtct) + parseFloat(r.RecaCtct) })));
+                
+                // Keep the search key in the response for alignment
+                const searchAcc = originalToMappedMap[acc] || acc;
+                allResults.push(...results.map(r => ({ ...r, DebeCtct: parseFloat(r.DebeCtct), RecaCtct: parseFloat(r.RecaCtct), TotaCtct: parseFloat(r.DebeCtct) + parseFloat(r.RecaCtct), CuenCtct: searchAcc })));
             }
             logAction(req.user.nombre_usuario, 'SEARCH_LEGACY', `Account: ${account} | Debt Only`, req);
             res.json(allResults);
         } else {
-            const accPlaceholders = accList.map(() => '?').join(',');
+            const accPlaceholders = mappedAccList.map(() => '?').join(',');
             const fealCorteFilter = fealCorte ? 'AND FealCtct <= ?' : '';
-            const mainParams = [officeId, ...accList];
+            const mainParams = [officeId, ...mappedAccList];
             if (fealCorte) mainParams.push(fealCorte);
 
-            const results = await conn.query(`SELECT tmp.PeriCtct, tmp.BimeCtct, tmp.CuotDefa, tmp.FeveCtct, IFNULL(c.DetaConc, tmp.DetaCtct) as DetaCtct, tmp.DebeCtct, tmp.CredCtct, 0 as RecaCtct, (tmp.DebeCtct - tmp.CredCtct) as TotaCtct, tmp.NumeAcpa, tmp.FechaPago, tmp.NumeApre, tmp.CodiFapa, (tmp.NumeApre > 0) as hasApremio, (tmp.CodiFapa > 0) as hasPlan FROM (SELECT PeriCtct, BimeCtct, CuotDefa, FeveCtct, DetaCtct, DebeCtct, CredCtct, NumeApre, CodiFapa, PeriInfo, CodiConc, NumeAcpa, FeenAcpa as FechaPago FROM ${DB_NAME}.ctacte WHERE CodiOfic = ? AND CuenCtct IN (${accPlaceholders}) ${fealCorteFilter} UNION ALL SELECT PeriCtct, BimeCtct, CuotDefa, FeveCtct, DetaCtct, DebeCtct, CredCtct, NumeApre, CodiFapa, PeriInfo, CodiConc, NumeAcpa, FeenAcpa as FechaPago FROM recahisto.histoctacte WHERE CodiOfic = ? AND CuenCtct IN (${accPlaceholders}) ${fealCorteFilter}) tmp LEFT JOIN ${DB_RECAUDACION}.concepto c ON c.PeriInfo = tmp.PeriInfo AND c.CodiConc = tmp.CodiConc ORDER BY tmp.PeriCtct DESC, tmp.BimeCtct ASC, tmp.FeveCtct ASC LIMIT 2000`, [...mainParams, ...mainParams]);
-            res.json(results.map(r => ({ ...r, DebeCtct: parseFloat(r.DebeCtct), CredCtct: parseFloat(r.CredCtct), TotaCtct: parseFloat(r.DebeCtct) - parseFloat(r.CredCtct) })));
+            const results = await conn.query(`SELECT tmp.CuenCtct, tmp.PeriCtct, tmp.BimeCtct, tmp.CuotDefa, tmp.FeveCtct, IFNULL(c.DetaConc, tmp.DetaCtct) as DetaCtct, tmp.DebeCtct, tmp.CredCtct, 0 as RecaCtct, (tmp.DebeCtct - tmp.CredCtct) as TotaCtct, tmp.NumeAcpa, tmp.FechaPago, tmp.NumeApre, tmp.CodiFapa, (tmp.NumeApre > 0) as hasApremio, (tmp.CodiFapa > 0) as hasPlan FROM (SELECT CuenCtct, PeriCtct, BimeCtct, CuotDefa, FeveCtct, DetaCtct, DebeCtct, CredCtct, NumeApre, CodiFapa, PeriInfo, CodiConc, NumeAcpa, FeenAcpa as FechaPago FROM ${DB_NAME}.ctacte WHERE CodiOfic = ? AND CuenCtct IN (${accPlaceholders}) ${fealCorteFilter} UNION ALL SELECT CuenCtct, PeriCtct, BimeCtct, CuotDefa, FeveCtct, DetaCtct, DebeCtct, CredCtct, NumeApre, CodiFapa, PeriInfo, CodiConc, NumeAcpa, FeenAcpa as FechaPago FROM recahisto.histoctacte WHERE CodiOfic = ? AND CuenCtct IN (${accPlaceholders}) ${fealCorteFilter}) tmp LEFT JOIN ${DB_RECAUDACION}.concepto c ON c.PeriInfo = tmp.PeriInfo AND c.CodiConc = tmp.CodiConc ORDER BY tmp.PeriCtct DESC, tmp.BimeCtct ASC, tmp.FeveCtct ASC LIMIT 2000`, [...mainParams, ...mainParams]);
+            
+            // Keep the search key in the response for alignment
+            res.json(results.map(r => {
+                const searchAcc = originalToMappedMap[r.CuenCtct.toString().trim()] || r.CuenCtct;
+                return { 
+                    ...r, 
+                    DebeCtct: parseFloat(r.DebeCtct), 
+                    CredCtct: parseFloat(r.CredCtct), 
+                    TotaCtct: parseFloat(r.DebeCtct) - parseFloat(r.CredCtct),
+                    CuenCtct: searchAcc
+                };
+            }));
         }
     } catch (err) {
         res.status(500).json({ error: err.message });

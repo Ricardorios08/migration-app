@@ -24,8 +24,11 @@ import ApremioSearch from './views/ApremioSearch';
 import RubrosComparison from './views/RubrosComparison';
 import GastosApremioReal from './views/GastosApremioReal';
 import ApremioIndividualReport from './views/ApremioIndividualReport';
+import BoletoExplorer from './views/BoletoExplorer';
+import ApremioExplorer from './views/ApremioExplorer';
 import AuditModule from './views/AuditModule';
 import CtacteModule from './views/CtacteModule';
+import AnalyticsExplorer from './views/AnalyticsExplorer';
 import { API_URL } from './config';
 
 function App() {
@@ -118,6 +121,8 @@ function App() {
             <PersonaSearch />
           ) : view === 'explorer' ? (
             <TableExplorer />
+          ) : view === 'analytics' ? (
+            <AnalyticsExplorer />
           ) : view === 'apremio_dashboard' ? (
             <ApremioDashboard setView={setView} />
           ) : view === 'apremios' ? (
@@ -144,6 +149,10 @@ function App() {
             <SnapshotAudit />
           ) : view === 'boletos' ? (
             <BoletoSearch currentUser={user} />
+          ) : view === 'boleto_explorer' ? (
+            <BoletoExplorer />
+          ) : view === 'apremio_explorer' ? (
+            <ApremioExplorer />
           ) : view === 'rubros' ? (
             <RubrosComparison />
           ) : (

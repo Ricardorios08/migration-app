@@ -108,12 +108,42 @@ const Sidebar = ({ currentView, setView, collapsed, setCollapsed, mobileOpen, se
             </div>
 
             <div
+              className={`menu-item ${currentView === 'apremio_explorer' ? 'active' : ''}`}
+              onClick={() => setView('apremio_explorer')}
+              title={collapsed ? "Explorador Apremios" : ""}
+            >
+              <Scale size={20} />
+              {!collapsed && <span>Explorador Apremios</span>}
+              {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
+            </div>
+
+            <div
+              className={`menu-item ${currentView === 'boleto_explorer' ? 'active' : ''}`}
+              onClick={() => setView('boleto_explorer')}
+              title={collapsed ? "Explorador Boletos" : ""}
+            >
+              <Table size={20} />
+              {!collapsed && <span>Explorador Boletos</span>}
+              {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
+            </div>
+
+            <div
               className={`menu-item ${currentView === 'explorer' ? 'active' : ''}`}
               onClick={() => setView('explorer')}
               title={collapsed ? "Explorador de Tablas" : ""}
             >
               <Search size={20} />
               {!collapsed && <span>Explorador de Tablas</span>}
+              {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
+            </div>
+
+            <div
+              className={`menu-item ${currentView === 'analytics' ? 'active' : ''}`}
+              onClick={() => setView('analytics')}
+              title={collapsed ? "Explorador Analítico (BI)" : ""}
+            >
+              <TrendingUp size={20} style={{ color: '#818cf8' }} />
+              {!collapsed && <span>Explorador Analítico (BI)</span>}
               {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
             </div>
 

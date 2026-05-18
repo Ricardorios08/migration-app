@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Info, CheckCircle2, AlertCircle, Calendar, Filter, X, FileText, Download } from 'lucide-react';
+import { Search, Info, CheckCircle2, AlertCircle, Calendar, Filter, X, FileText, Download, RefreshCw } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import API_BASE_URL from '../config';
@@ -39,6 +39,15 @@ const CuentaCorrienteFn = ({ user }) => {
     const [filterMonth, setFilterMonth] = useState('');
 
     const [isFiltersExpanded, setIsFiltersExpanded] = useState(false);
+    const [showTicketsModal, setShowTicketsModal] = useState(false);
+    const [ticketHistory, setTicketHistory] = useState([]);
+    const [isFetchingTickets, setIsFetchingTickets] = useState(false);
+    const [selectedPeriodForTickets, setSelectedPeriodForTickets] = useState(null);
+    const [selectedRowForAudit, setSelectedRowForAudit] = useState(null);
+
+    const [showPgTicketsModal, setShowPgTicketsModal] = useState(false);
+    const [pgTicketHistory, setPgTicketHistory] = useState([]);
+    const [isFetchingPgTickets, setIsFetchingPgTickets] = useState(false);
 
     const formatCurrency = (val) => {
         return parseFloat(val || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -346,6 +355,196 @@ const CuentaCorrienteFn = ({ user }) => {
         }
     };
 
+    const fetchTicketHistory = async (row) => {
+        setSelectedRowForAudit(row);
+        setIsFetchingTickets(true);
+        setSelectedPeriodForTickets(`${row.PeriCtct}/${row.BimeCtct}`);
+        setTicketHistory([]);
+        setShowTicketsModal(true);
+
+        try {
+            // Find the correct office for this row (might be different if searching by person)
+            const offId = row.officeId || selectedOffice;
+            const res = await fetch(`${API_BASE_URL}/api/ctacte-fn/tickets/${offId}/${row.CuenCtct}/${row.PeriCtct}/${row.BimeCtct}`, {
+                headers: getAuthHeaders()
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setTicketHistory(data);
+            }
+        } catch (err) {
+            console.error('Error fetching ticket history:', err);
+        } finally {
+            setIsFetchingTickets(false);
+        }
+    };
+
+    const fetchPgTicketHistory = async (row) => {
+        setSelectedRowForAudit(row);
+        setIsFetchingPgTickets(true);
+        setSelectedPeriodForTickets(`${row.PeriCtct}/${row.BimeCtct}`);
+        setPgTicketHistory([]);
+        setShowPgTicketsModal(true);
+
+        try {
+            const accId = row.CuenCtct || account;
+            const res = await fetch(`${API_BASE_URL}/api/ctacte-fn/pg-tickets/${accId}/${row.PeriCtct}/${row.BimeCtct}`, {
+                headers: getAuthHeaders()
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setPgTicketHistory(data);
+            } else {
+                console.error("Error fetching PG tickets:", data.error);
+            }
+        } catch (err) {
+            console.error("Error fetching PG tickets:", err);
+        } finally {
+            setIsFetchingPgTickets(false);
+        }
+    };
+
+    const generateAuditPDF = (row, history) => {
+        if (!row) return;
+        const doc = new jsPDF();
+        
+        // Normalización de campos (MariaDB a veces devuelve minúsculas o mayúsculas)
+        const peri = row.PeriCtct || row.perictct || 'N/A';
+        const bime = row.BimeCtct || row.bimectct || 'N/A';
+        const cuen = row.CuenCtct || row.cuenctct || account || 'N/A';
+        const debe = row.DebeCtct || row.debectct || 0;
+        const cred = row.CredCtct || row.credctct || 0;
+        const tota = row.TotaCtct || row.totactct || (debe - cred);
+
+        const offId = row.officeId || row.codiofic || selectedOffice;
+        const officeName = offices.find(o => o.id == offId)?.name || 'Oficina ' + offId;
+
+        // Header
+        doc.setFontSize(18);
+        doc.setTextColor(37, 99, 235);
+        doc.text('Informe de Auditoría de Cuenta Corriente', 14, 20);
+        
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        doc.text(`Generado el: ${new Date().toLocaleString()}`, 14, 28);
+
+        // Account Box
+        doc.setDrawColor(200);
+        doc.setFillColor(245, 247, 250);
+        doc.rect(14, 35, 182, 30, 'F');
+        doc.setTextColor(0);
+        doc.setFont('helvetica', 'bold');
+        doc.text('DATOS DEL PADRÓN', 18, 42);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Padrón: ${cuen} | Oficina: ${officeName}`, 18, 50);
+        
+        const ownerName = selectedPerson?.text || (legacyData.length > 0 ? legacyData[0].RazoPers : 'Titular No Identificado');
+        doc.text(`Titular: ${ownerName}`, 18, 58);
+
+        // Period Box
+        doc.setFont('helvetica', 'bold');
+        doc.text('CUOTA SELECCIONADA', 14, 75);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Período: ${peri} | Cuota/Bime: ${bime}`, 14, 82);
+        doc.text(`Deuda Registrada en CtaCte: $${formatCurrency(debe)}`, 14, 89);
+        doc.text(`Créditos Registrados en CtaCte: $${formatCurrency(cred)}`, 14, 96);
+        if (tota > 0) doc.setTextColor(200, 0, 0); else doc.setTextColor(0, 0, 0);
+        doc.text(`Saldo Final en CtaCte: $${formatCurrency(tota)}`, 14, 103);
+        doc.setTextColor(0, 0, 0);
+
+        // Tickets History Table
+        doc.setTextColor(0);
+        doc.setFont('helvetica', 'bold');
+        doc.text('HISTORIAL DE BOLETOS EMITIDOS (MARIADB)', 14, 115);
+        
+        const tableData = history.map(t => [
+            t.NumeBole,
+            new Date(t.AltaFeho).toLocaleDateString(),
+            t.UserName || t.CodiUsua,
+            t.EstaBole,
+            `$${formatCurrency(t.CapiBole)}`,
+            `$${formatCurrency(t.RecaBole)}`,
+            `$${formatCurrency(t.TotaBole)}`
+        ]);
+
+        autoTable(doc, {
+            startY: 120,
+            head: [['Boleto', 'Fecha', 'Usuario', 'Estado', 'Capital', 'Recargos', 'Total']],
+            body: tableData,
+            theme: 'striped',
+            headStyles: { fillColor: [37, 99, 235] },
+            styles: { fontSize: 8 }
+        });
+
+        // Discrepancy Analysis
+        const lastPos = doc.lastAutoTable.finalY + 15;
+        doc.setFont('helvetica', 'bold');
+        doc.text('ANÁLISIS DE AUDITORÍA', 14, lastPos);
+        doc.setFont('helvetica', 'normal');
+        
+        let analysis = '';
+        if (history.length > 1) {
+            const first = history[0];
+            const last = history[history.length - 1];
+            if (parseFloat(first.CapiBole) !== parseFloat(last.CapiBole)) {
+                const diff = Math.abs(parseFloat(first.CapiBole) - parseFloat(last.CapiBole));
+                analysis = `Se detectó una re-emisión con cambio de capital por el usuario ${last.UserName || last.CodiUsua}. ` +
+                           `La diferencia de $${formatCurrency(diff)} entre el capital original ($${formatCurrency(first.CapiBole)}) ` +
+                           `y el capital actualizado ($${formatCurrency(last.CapiBole)}) no fue impactada como ajuste en la CtaCte.`;
+            } else {
+                analysis = 'Se detectaron múltiples boletos pero el capital se mantiene consistente.';
+            }
+        } else if (history.length === 1) {
+            analysis = 'Solo existe un boleto emitido para este período.';
+        } else {
+            analysis = 'No se encontraron boletos físicos en la tabla de comprobantes para este período.';
+        }
+
+        const splitText = doc.splitTextToSize(analysis, 180);
+        doc.text(splitText, 14, lastPos + 7);
+
+        // PostgreSQL State (NEW)
+        const pgRow = postgresData.find(p => 
+            (p.PeriCtct || p.perictct) == peri && 
+            (p.BimeCtct || p.bimectct) == bime
+        );
+
+        const pgPos = lastPos + 35;
+        doc.setDrawColor(37, 99, 235);
+        doc.setLineWidth(0.5);
+        doc.line(14, pgPos - 5, 196, pgPos - 5);
+        
+        doc.setFont('helvetica', 'bold');
+        doc.text('ESTADO EN NUEVO SISTEMA (POSTGRESQL)', 14, pgPos);
+        doc.setFont('helvetica', 'normal');
+        
+        if (pgRow) {
+            const pgDebe = pgRow.DebeCtct || pgRow.debectct || 0;
+            const pgCred = pgRow.CredCtct || pgRow.credctct || 0;
+            const pgTota = pgRow.TotaCtct || pgRow.totactct || (pgDebe - pgCred);
+            
+            doc.text(`Deuda en Postgres: $${formatCurrency(pgDebe)}`, 14, pgPos + 7);
+            doc.text(`Pagos en Postgres: $${formatCurrency(pgCred)}`, 14, pgPos + 14);
+            if (pgTota > 0) doc.setTextColor(200, 0, 0); else doc.setTextColor(0, 150, 0);
+            doc.text(`Saldo Final en Postgres: $${formatCurrency(pgTota)}`, 14, pgPos + 21);
+            doc.setTextColor(0, 0, 0);
+            
+            if (pgTota === 0 && tota > 0) {
+                doc.setFont('helvetica', 'bold');
+                doc.text('✓ CORREGIDO: El saldo fue saneado durante la migración.', 14, pgPos + 30);
+            }
+        } else {
+            doc.text('No se encontró este período migrado en la base de datos PostgreSQL.', 14, pgPos + 7);
+        }
+
+        // Footer
+        doc.setFontSize(8);
+        doc.setTextColor(150);
+        doc.text('Este documento es un reporte técnico de auditoría generado automáticamente por el Sistema de Migración.', 14, 285);
+
+        doc.save(`Auditoria_${row.CuenCtct}_${row.PeriCtct}_${row.BimeCtct}.pdf`);
+    };
+
     const DataRow = ({ row }) => (
         <tr>
             <td style={{ whiteSpace: 'nowrap' }}>
@@ -401,7 +600,12 @@ const CuentaCorrienteFn = ({ user }) => {
                     }
 
                     return (
-                        <div className={`status-pill ${statusClass}`}>
+                        <div 
+                            className={`status-pill ${statusClass}`} 
+                            style={{ cursor: 'pointer' }}
+                            onClick={() => fetchTicketHistory(row)}
+                            title="Ver historial de boletos emitidos"
+                        >
                             {statusText}
                         </div>
                     );
@@ -949,7 +1153,11 @@ const CuentaCorrienteFn = ({ user }) => {
                         ${formatCurrency(user?.rol === 'municipalidad' ? Math.max(0, parseFloat(row.DebeCtct || 0) - parseFloat(row.CredCtct || 0)) : row.TotaCtct)}
                     </td>
                     <td>
-                        <div className={`status-pill ${row.NumeAcpa && row.NumeAcpa != '0' ? 'P' : 'D'}`}>
+                        <div 
+                            className={`status-pill ${row.NumeAcpa && row.NumeAcpa != '0' ? 'P' : 'D'}`}
+                            style={{ cursor: 'pointer' }}
+                            onClick={() => fetchPgTicketHistory(row)}
+                        >
                             {row.NumeAcpa && row.NumeAcpa != '0' ? 'Pagado' : 'Deuda'}
                         </div>
                         {row.NumeAcpa && row.NumeAcpa != '0' && (
@@ -1597,33 +1805,68 @@ const CuentaCorrienteFn = ({ user }) => {
                         </div>
 
                         <pre className="sql-code">
-                            {`-- 1. Preparar tabla temporal en memoria
-CREATE TEMPORARY TABLE tmp_ctacteboleto (
-    PeriCtct int, BimeCtct int, CuotDefa int, FeveCtct date, 
-    DebeCtct decimal(15,2), RecaCtct decimal(15,2), NumeApre int, CodiFapa int,
-    PeriInfo int, CodiConc char(8), NumeAcpa int, FeenAcpa date, MoviCtct int
-) ENGINE=Memory;
+                            {`-- CONSULTA HISTÓRICA DE CUENTA CORRIENTE LEGACY (MARIADB)
+-- El backend aplica resolución inteligente de cuentas para tasas de personas unificadas (Oficinas 3 y 5)
 
--- 2. Consolidar deuda por Tributo/Concepto/Periodo
-INSERT INTO tmp_ctacteboleto (...)
-SELECT PeriCtct, BimeCtct, MAX(CuotDefa), MAX(FeveCtct), 
-       SUM(IFNULL(DebeCtct, 0)) - SUM(IFNULL(CredCtct, 0)), 
-       0, MAX(NumeApre), MAX(CodiFapa), PeriInfo, CodiConc, MAX(NumeAcpa), MAX(FeenAcpa), 0
-FROM ctacte
-WHERE CodiOfic = '${selectedOffice}' AND CuenCtct = '${account}'
-GROUP BY PeriCtct, BimeCtct, PeriInfo, CodiConc
-HAVING (SUM(DebeCtct) - SUM(CredCtct)) > 0.01;
+-- CASO A: Búsqueda con Filtro "Solo Deuda" (onlyDebt = true)
+SELECT 
+    t.PeriCtct, 
+    t.BimeCtct, 
+    MAX(t.CuotDefa) as CuotDefa, 
+    MAX(t.FeveCtct) as FeveCtct, 
+    IFNULL(c.DetaConc, MAX(t.DetaCtct)) as DetaCtct, 
+    SUM(IFNULL(t.DebeCtct, 0)) - SUM(IFNULL(t.CredCtct, 0)) as DebeCtct, 
+    IF(MAX(t.FeveCtct) < '\${toDate}', 
+       (SUM(IFNULL(t.DebeCtct, 0)) - SUM(IFNULL(t.CredCtct, 0))) * CEIL(DATEDIFF('\${toDate}', MAX(t.FeveCtct)) / 30) * 0.03, 
+       0) as RecaCtct, 
+    MAX(t.NumeAcpa) as NumeAcpa, 
+    MAX(t.FeenAcpa) as FechaPago, 
+    MAX(t.NumeBole) as NumeBole, 
+    MAX(t.NumeApre) as NumeApre, 
+    MAX(t.CodiFapa) as CodiFapa, 
+    (MAX(t.NumeApre) > 0) as hasApremio, 
+    (MAX(t.CodiFapa) > 0) as hasPlan 
+FROM recaudacion2.ctacte t 
+LEFT JOIN recaudacion2.concepto c ON c.PeriInfo = t.PeriInfo AND c.CodiConc = t.CodiConc 
+WHERE t.CodiOfic = '\${selectedOffice}' AND t.CuenCtct = '\${account}' 
+GROUP BY t.PeriCtct, t.BimeCtct, t.PeriInfo, t.CodiConc 
+HAVING (SUM(IFNULL(t.DebeCtct, 0)) - SUM(IFNULL(t.CredCtct, 0))) > 0.01 
+ORDER BY t.PeriCtct DESC, t.BimeCtct ASC;
 
--- 3. Calcular Recargos (Interés Municipal 3% por mes o fracción)
-UPDATE tmp_ctacteboleto
-SET RecaCtct = DebeCtct * (CEIL(DATEDIFF(CURDATE(), FeveCtct) / 30) * 0.03)
-WHERE CURDATE() > FeveCtct;
-
--- 4. Consulta Final con Detalle de Conceptos
-SELECT tmp.*, c.DetaConc, (tmp.NumeApre > 0) as hasApremio
-FROM tmp_ctacteboleto tmp
-LEFT JOIN concepto c ON c.PeriInfo = tmp.PeriInfo AND c.CodiConc = tmp.CodiConc
-ORDER BY tmp.PeriCtct DESC, tmp.BimeCtct DESC;`}
+-- CASO B: Búsqueda de Estado de Cuenta Completo (Historial Completo)
+SELECT 
+    tmp.CuenCtct, 
+    tmp.PeriCtct, 
+    tmp.BimeCtct, 
+    tmp.CuotDefa, 
+    tmp.FeveCtct, 
+    IFNULL(c.DetaConc, tmp.DetaCtct) as DetaCtct, 
+    tmp.DebeCtct, 
+    tmp.CredCtct, 
+    0 as RecaCtct, 
+    (tmp.DebeCtct - tmp.CredCtct) as TotaCtct, 
+    tmp.NumeAcpa, 
+    tmp.FechaPago, 
+    tmp.NumeApre, 
+    tmp.CodiFapa, 
+    (tmp.NumeApre > 0) as hasApremio, 
+    (tmp.CodiFapa > 0) as hasPlan 
+FROM (
+    -- Movimientos activos en cuenta corriente de producción
+    SELECT CuenCtct, PeriCtct, BimeCtct, CuotDefa, FeveCtct, DetaCtct, DebeCtct, CredCtct, NumeApre, CodiFapa, PeriInfo, CodiConc, NumeAcpa, FeenAcpa as FechaPago 
+    FROM recaudacion2.ctacte 
+    WHERE CodiOfic = '\${selectedOffice}' AND CuenCtct = '\${account}'
+    
+    UNION ALL 
+    
+    -- Movimientos históricos (anteriores a cortes de migración)
+    SELECT CuenCtct, PeriCtct, BimeCtct, CuotDefa, FeveCtct, DetaCtct, DebeCtct, CredCtct, NumeApre, CodiFapa, PeriInfo, CodiConc, NumeAcpa, FeenAcpa as FechaPago 
+    FROM recahisto.histoctacte 
+    WHERE CodiOfic = '\${selectedOffice}' AND CuenCtct = '\${account}'
+) tmp 
+LEFT JOIN recaudacion2.concepto c ON c.PeriInfo = tmp.PeriInfo AND c.CodiConc = tmp.CodiConc 
+ORDER BY tmp.PeriCtct DESC, tmp.BimeCtct ASC, tmp.FeveCtct ASC 
+LIMIT 2000;`}
                         </pre>
                     </div>
                 </div>
@@ -2140,28 +2383,221 @@ ORDER BY gc.genctaancta DESC, gc.genctanrocta DESC;`}
                                     <div style={{ background: 'rgba(0,0,0,0.3)', padding: '1rem', borderRadius: '8px', border: '1px dashed #fbbf24', textAlign: 'center', fontSize: '1.1rem', fontWeight: 'bold' }}>
                                         Tasa Diaria = (1 + TasaMensual) <sup>1/30</sup> - 1
                                     </div>
-                                    <p style={{ fontSize: '0.85rem', color: '#9ca3af', marginTop: '0.5rem' }}>
-                                        * Esto da aproximadamente 0.000985... por día para el 3%.
-                                    </p>
                                 </section>
 
                                 <section>
-                                    <h4 style={{ color: '#fbbf24', marginBottom: '0.5rem' }}>3. El Resultado Final</h4>
+                                    <h4 style={{ color: '#fbbf24', marginBottom: '0.5rem' }}>3. Resultado</h4>
                                     <p style={{ opacity: 0.9 }}>
-                                        Multiplicamos el capital original por los días de atraso y por esa tasa diaria.
+                                        Esa tasa diaria se aplica por cada día transcurrido desde el <strong>Vencimiento</strong> hasta la <strong>Fecha de Cálculo</strong>.
                                     </p>
-                                    <div style={{ background: 'rgba(251, 191, 36, 0.1)', padding: '1rem', borderRadius: '8px', marginTop: '0.5rem', borderLeft: '4px solid #fbbf24' }}>
-                                        <strong>Interés = Capital × Días × Tasa Diaria</strong>
-                                    </div>
                                 </section>
-
-                                <p style={{ fontSize: '0.9rem', fontStyle: 'italic', color: '#9ca3af', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '1rem' }}>
-                                    Este método asegura que el cálculo sea preciso y coincida con el sistema de Rentas.
-                                </p>
                             </div>
                         </div>
-                        <div className="modal-footer" style={{ borderTop: '1px solid rgba(255,255,255,0.1)', padding: '1rem' }}>
-                            <button onClick={() => setShowFormulaModal(false)} className="btn btn-primary" style={{ background: '#fbbf24', color: '#000' }}>Entendido</button>
+                        <div className="modal-footer" style={{ background: '#111827', borderTop: '1px solid rgba(251, 191, 36, 0.2)' }}>
+                            <button onClick={() => setShowFormulaModal(false)} className="btn btn-pdf" style={{ background: '#fbbf24', color: '#000' }}>Entendido</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Historial de Boletos (NUEVO) */}
+            {showTicketsModal && (
+                <div className="modal-overlay" onClick={() => setShowTicketsModal(false)}>
+                    <div className="modal-content" style={{ width: '90%', maxWidth: '850px', maxHeight: '85vh' }} onClick={e => e.stopPropagation()}>
+                        <div className="modal-header" style={{ borderBottom: '1px solid var(--primary)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: 'rgba(37, 99, 235, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <FileText size={20} color="var(--primary)" />
+                                </div>
+                                <div>
+                                    <h3 style={{ margin: 0 }}>Historial de Boletos Emitidos</h3>
+                                    <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-dim)' }}>Período {selectedPeriodForTickets}</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setShowTicketsModal(false)} className="close-btn">&times;</button>
+                        </div>
+                        <div className="modal-body" style={{ padding: '2rem', background: 'var(--bg)', overflowY: 'auto' }}>
+                            {isFetchingTickets ? (
+                                <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--primary)' }}>
+                                    <div className="spin" style={{ marginBottom: '1rem', display: 'inline-block' }}><RefreshCw size={32} /></div>
+                                    <p>Consultando base de datos MariaDB...</p>
+                                </div>
+                            ) : ticketHistory.length === 0 ? (
+                                <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-dim)' }}>
+                                    <AlertCircle size={48} style={{ opacity: 0.2, marginBottom: '1rem' }} />
+                                    <p>No se encontraron boletos emitidos para este período en MariaDB.</p>
+                                </div>
+                            ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                                        {ticketHistory.map((t, idx) => (
+                                            <div key={idx} style={{ 
+                                                background: 'var(--card)', 
+                                                borderRadius: '12px', 
+                                                border: `1px solid ${t.EstaBole === 'Emitido' ? 'rgba(255,255,255,0.1)' : 'var(--primary)'}`,
+                                                padding: '1.5rem',
+                                                position: 'relative',
+                                                overflow: 'hidden'
+                                            }}>
+                                                {t.EstaBole !== 'Emitido' && (
+                                                    <div style={{ 
+                                                        position: 'absolute', top: 0, right: 0, 
+                                                        background: 'var(--primary)', color: 'white', 
+                                                        fontSize: '0.65rem', padding: '4px 12px', 
+                                                        borderBottomLeftRadius: '8px', fontWeight: 'bold' 
+                                                    }}>
+                                                        ACTUALIZADO / PAGADO
+                                                    </div>
+                                                )}
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                                                    <div>
+                                                        <span style={{ fontSize: '0.65rem', color: 'var(--text-dim)', display: 'block', textTransform: 'uppercase' }}>Boleto #</span>
+                                                        <strong style={{ fontSize: '1.25rem' }}>{t.NumeBole}</strong>
+                                                    </div>
+                                                    <div style={{ textAlign: 'right' }}>
+                                                        <span style={{ fontSize: '0.65rem', color: 'var(--text-dim)', display: 'block', textTransform: 'uppercase' }}>Emisión</span>
+                                                        <span style={{ fontSize: '0.85rem' }}>{new Date(t.AltaFeho).toLocaleString()}</span>
+                                                    </div>
+                                                </div>
+
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '1rem' }}>
+                                                    <div style={{ padding: '10px', background: 'rgba(0,0,0,0.2)', borderRadius: '6px' }}>
+                                                        <span style={{ fontSize: '0.6rem', color: 'var(--text-dim)', display: 'block' }}>CAPITAL</span>
+                                                        <span style={{ fontWeight: 'bold', color: '#cbd5e1' }}>${formatCurrency(t.CapiBole)}</span>
+                                                    </div>
+                                                    <div style={{ padding: '10px', background: 'rgba(0,0,0,0.2)', borderRadius: '6px' }}>
+                                                        <span style={{ fontSize: '0.6rem', color: 'var(--text-dim)', display: 'block' }}>RECARGOS</span>
+                                                        <span style={{ fontWeight: 'bold', color: '#f59e0b' }}>${formatCurrency(t.RecaBole)}</span>
+                                                    </div>
+                                                </div>
+
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                    <div style={{ fontSize: '0.75rem' }}>
+                                                        <span style={{ color: 'var(--text-dim)' }}>Usuario: </span>
+                                                        <strong>{t.UserName || t.CodiUsua}</strong>
+                                                    </div>
+                                                    <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--primary)' }}>
+                                                        ${formatCurrency(t.TotaBole)}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div style={{ 
+                                        padding: '1rem', 
+                                        background: 'rgba(245, 158, 11, 0.05)', 
+                                        border: '1px solid rgba(245, 158, 11, 0.2)', 
+                                        borderRadius: '8px',
+                                        fontSize: '0.85rem',
+                                        color: '#f59e0b',
+                                        display: 'flex',
+                                        gap: '10px'
+                                    }}>
+                                        <Info size={20} style={{ flexShrink: 0 }} />
+                                        <span>
+                                            <strong>Nota de Auditoría:</strong> La diferencia entre el capital de los boletos emitidos puede causar que el estado figure como "Parcial" si el ajuste no fue impactado correctamente en la Cuenta Corriente de MariaDB.
+                                        </span>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        <div className="modal-footer" style={{ background: 'var(--surface)', display: 'flex', justifyContent: 'space-between' }}>
+                            <button 
+                                onClick={() => generateAuditPDF(selectedRowForAudit, ticketHistory)} 
+                                className="btn btn-pdf" 
+                                style={{ background: '#10b981' }}
+                                disabled={ticketHistory.length === 0 || !selectedRowForAudit}
+                            >
+                                <Download size={16} style={{ marginRight: '8px' }} />
+                                Descargar Informe
+                            </button>
+                            <button onClick={() => setShowTicketsModal(false)} className="btn btn-pdf" style={{ background: 'var(--primary)' }}>Cerrar Historial</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* Modal Historial de Boletos Postgres */}
+            {showPgTicketsModal && (
+                <div className="modal-overlay" onClick={() => setShowPgTicketsModal(false)}>
+                    <div className="modal-content" onClick={e => e.stopPropagation()}>
+                        <div className="modal-header" style={{ background: '#2563eb' }}>
+                            <h3><Calendar size={18} style={{ marginRight: '8px' }} /> Historial Migrado en Postgres</h3>
+                            <button className="close-btn" onClick={() => setShowPgTicketsModal(false)}>&times;</button>
+                        </div>
+                        <div className="modal-body" style={{ background: '#111827', padding: '0' }}>
+                            <div style={{ padding: '1.5rem', borderBottom: '1px solid rgba(255,255,255,0.1)', background: 'rgba(37, 99, 235, 0.05)' }}>
+                                <h4 style={{ margin: 0, color: '#60a5fa' }}>Período {selectedPeriodForTickets}</h4>
+                                <p style={{ margin: '5px 0 0 0', fontSize: '0.9rem', opacity: 0.7 }}>
+                                    Padrón: {selectedRowForAudit?.CuenCtct} - {selectedRowForAudit?.OwnerName || selectedPerson?.text}
+                                </p>
+                            </div>
+
+                            {isFetchingPgTickets ? (
+                                <div style={{ padding: '3rem', textAlign: 'center' }}>
+                                    <div className="loader-mini" style={{ width: '30px', height: '30px', margin: '0 auto 1rem' }}></div>
+                                    <p>Consultando registros migrados...</p>
+                                </div>
+                            ) : pgTicketHistory.length > 0 ? (
+                                <div style={{ overflowX: 'auto' }}>
+                                    <table className="comparison-table" style={{ width: '100%' }}>
+                                        <thead style={{ background: 'rgba(0,0,0,0.3)' }}>
+                                            <tr>
+                                                <th>Conc / Boleto</th>
+                                                <th>Detalle Concepto</th>
+                                                <th>Fecha</th>
+                                                <th>Importe</th>
+                                                <th>Boleto Pago (P)</th>
+                                                <th>Est.</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {pgTicketHistory.map((t, i) => (
+                                                <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                                                    <td style={{ fontWeight: 'bold', color: '#60a5fa' }}>
+                                                        {t.BoletoOriginal || '-'}
+                                                    </td>
+                                                    <td style={{ fontSize: '0.8rem' }}>
+                                                        {t.ConceptoNombre || <span style={{ opacity: 0.5 }}>- Sin Concepto -</span>}
+                                                        <div style={{ fontSize: '0.65rem', opacity: 0.5 }}>ID: {t.ctactecod}</div>
+                                                    </td>
+                                                    <td>{new Date(t.Fecha).toLocaleDateString()}</td>
+                                                    <td style={{ color: '#10b981', fontWeight: 'bold' }}>
+                                                        ${formatCurrency(t.Importe)}
+                                                    </td>
+                                                    <td style={{ color: '#fbbf24' }}>{t.BoletoPago || '-'}</td>
+                                                    <td>
+                                                        {t.EstadoBoleto ? (
+                                                            <span className={`status-pill ${t.EstadoBoleto}`} title={t.EstadoBoleto === 'E' ? 'Emitido' : (t.EstadoBoleto === 'P' ? 'Pagado' : 'Anulado')}>
+                                                                {t.EstadoBoleto}
+                                                            </span>
+                                                        ) : '-'}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                        <tfoot style={{ background: 'rgba(0,0,0,0.4)', fontWeight: 'bold' }}>
+                                            <tr>
+                                                <td colSpan={3} style={{ textAlign: 'right' }}>TOTAL PERIODO (P):</td>
+                                                <td style={{ color: '#10b981', fontSize: '1rem' }}>
+                                                    ${formatCurrency(pgTicketHistory.reduce((acc, t) => acc + parseFloat(t.Importe || 0), 0))}
+                                                </td>
+                                                <td colSpan={2}>
+                                                    <div style={{ fontSize: '0.7rem', opacity: 0.6, fontWeight: 'normal' }}>
+                                                        E: Emitido | P: Pagado | A: Anulado
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+                            ) : (
+                                <div style={{ padding: '3rem', textAlign: 'center', opacity: 0.5 }}>
+                                    <p>No se encontraron registros de este período en las tablas de Postgres.</p>
+                                </div>
+                            )}
+                        </div>
+                        <div className="modal-footer" style={{ background: 'var(--surface)', display: 'flex', justifyContent: 'flex-end' }}>
+                            <button onClick={() => setShowPgTicketsModal(false)} className="btn btn-pdf" style={{ background: 'var(--primary)' }}>Cerrar</button>
                         </div>
                     </div>
                 </div>

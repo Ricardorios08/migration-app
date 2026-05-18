@@ -67,6 +67,41 @@ const ComparisonReport = () => {
     const [mariaFull, setMariaFull] = useState([]);
     const [pgFull, setPgFull] = useState([]);
 
+    const consolidateData = (data) => {
+        if (!Array.isArray(data)) return [];
+        const groups = {};
+        data.forEach(row => {
+            let p = parseInt(row.PeriCtct);
+            let b = parseInt(row.BimeCtct);
+            const key = p <= 2018 ? "2018-99" : `${p}-${b}`;
+            
+            if (!groups[key]) {
+                groups[key] = {
+                    PeriCtct: p <= 2018 ? 2018 : p,
+                    BimeCtct: p <= 2018 ? 99 : b,
+                    FeveCtct: row.FeveCtct,
+                    DebeCtct: 0,
+                    RecaCtct: 0,
+                    CredCtct: 0,
+                    TotaCtct: 0,
+                    isLegacyGroup: p <= 2018
+                };
+            }
+            groups[key].DebeCtct += parseFloat(row.DebeCtct || 0);
+            groups[key].RecaCtct += parseFloat(row.RecaCtct || 0);
+            groups[key].CredCtct += parseFloat(row.CredCtct || row.Pagado || 0);
+            groups[key].TotaCtct += parseFloat(row.TotaCtct || 0);
+            
+            if (row.FeveCtct && (!groups[key].FeveCtct || new Date(row.FeveCtct) > new Date(groups[key].FeveCtct))) {
+                groups[key].FeveCtct = row.FeveCtct;
+            }
+        });
+        return Object.values(groups).sort((a, b) => {
+            if (b.PeriCtct !== a.PeriCtct) return b.PeriCtct - a.PeriCtct;
+            return b.BimeCtct - a.BimeCtct;
+        });
+    };
+
     const fetchFullDetail = async (account) => {
         setFullDetailLoading(true);
         try {
@@ -75,43 +110,9 @@ const ComparisonReport = () => {
                 fetch(`${API_BASE_URL}/api/ctacte-fn/new/search?account=${account.cuenta}&officeId=${selectedOffice}&showQuotaDetail=true`, { headers: getAuthHeaders() }).then(r => r.json())
             ]);
 
-            const consolidateData = (data) => {
-                if (!Array.isArray(data)) return [];
-                const groups = {};
-                data.forEach(row => {
-                    let p = parseInt(row.PeriCtct);
-                    let b = parseInt(row.BimeCtct);
-                    const key = p <= 2018 ? "2018-99" : `${p}-${b}`;
-                    
-                    if (!groups[key]) {
-                        groups[key] = {
-                            PeriCtct: p <= 2018 ? 2018 : p,
-                            BimeCtct: p <= 2018 ? 99 : b,
-                            FeveCtct: row.FeveCtct,
-                            DebeCtct: 0,
-                            RecaCtct: 0,
-                            TotaCtct: 0,
-                            isLegacyGroup: p <= 2018
-                        };
-                    }
-                    groups[key].DebeCtct += parseFloat(row.DebeCtct || 0);
-                    groups[key].RecaCtct += parseFloat(row.RecaCtct || 0);
-                    groups[key].TotaCtct += parseFloat(row.TotaCtct || 0);
-                    // For legacy group, pick the most recent FeveCtct or leave as is
-                    if (row.FeveCtct && (!groups[key].FeveCtct || new Date(row.FeveCtct) > new Date(groups[key].FeveCtct))) {
-                        groups[key].FeveCtct = row.FeveCtct;
-                    }
-                });
-                return Object.values(groups).sort((a, b) => {
-                    if (b.PeriCtct !== a.PeriCtct) return b.PeriCtct - a.PeriCtct;
-                    return b.BimeCtct - a.BimeCtct;
-                });
-            };
-
             const mariaMerged = consolidateData(mRes);
-            const pgMerged = consolidateData(pRes).filter(r => r.TotaCtct > 0.01);
+            const pgMerged = consolidateData(pRes);
 
-            // Merge both sides for side-by-side comparison
             const allPeriods = Array.from(new Set([
                 ...mariaMerged.map(r => `${r.PeriCtct}-${r.BimeCtct}`),
                 ...pgMerged.map(r => `${r.PeriCtct}-${r.BimeCtct}`)
@@ -124,10 +125,16 @@ const ComparisonReport = () => {
 
             const unified = allPeriods.map(key => {
                 const [p, b] = key.split('-').map(Number);
-                const m = mariaMerged.find(r => r.PeriCtct === p && r.BimeCtct === b) || { DebeCtct: 0, RecaCtct: 0, TotaCtct: 0 };
-                const pg = pgMerged.find(r => r.PeriCtct === p && r.BimeCtct === b) || { DebeCtct: 0, RecaCtct: 0, TotaCtct: 0 };
-                const diff = Math.abs(m.TotaCtct - pg.TotaCtct);
-                return { key, p, b, m, pg, diff, hasDiff: diff > 1 };
+                const m = mariaMerged.find(r => r.PeriCtct === p && r.BimeCtct === b) || { DebeCtct: 0, RecaCtct: 0, CredCtct: 0, TotaCtct: 0 };
+                const pg = pgMerged.find(r => r.PeriCtct === p && r.BimeCtct === b) || { DebeCtct: 0, RecaCtct: 0, CredCtct: 0, TotaCtct: 0 };
+                
+                const mTotal = m.DebeCtct + m.RecaCtct;
+                const mSaldo = mTotal - m.CredCtct;
+                const pgTotal = pg.DebeCtct + pg.RecaCtct;
+                const pgSaldo = pgTotal - pg.CredCtct;
+                
+                const diff = Math.abs(mSaldo - pgSaldo);
+                return { key, p, b, m: { ...m, TotaCtct: mTotal, Saldo: mSaldo }, pg: { ...pg, TotaCtct: pgTotal, Saldo: pgSaldo }, diff, hasDiff: diff > 1.5 };
             });
 
             setUnifiedFull(unified);
@@ -137,6 +144,70 @@ const ComparisonReport = () => {
         } finally {
             setFullDetailLoading(false);
         }
+    };
+
+    const generatePDF = () => {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF('l', 'mm', 'a4');
+        
+        doc.setFontSize(16);
+        doc.text(`Informe de Auditoría - Padrón #${selectedAccount.cuenta}`, 15, 20);
+        doc.setFontSize(10);
+        doc.text(`Titular: ${selectedAccount.nombre || 'N/A'} | Oficina: ${selectedOffice}`, 15, 28);
+        doc.text(`Fecha de Reporte: ${new Date().toLocaleString()}`, 15, 34);
+
+        const tableBody = unifiedFull.map(row => [
+            `${row.p}/${row.b === 99 ? 'ANT.' : row.b}`,
+            formatCurrency(row.m.DebeCtct),
+            formatCurrency(row.m.RecaCtct),
+            formatCurrency(row.m.CredCtct),
+            formatCurrency(row.m.Saldo),
+            formatCurrency(row.pg.DebeCtct),
+            formatCurrency(row.pg.RecaCtct),
+            formatCurrency(row.pg.CredCtct),
+            formatCurrency(row.pg.Saldo),
+            formatCurrency(row.diff)
+        ]);
+
+        const totals = {
+            mD: unifiedFull.reduce((s, r) => s + r.m.DebeCtct, 0),
+            mR: unifiedFull.reduce((s, r) => s + r.m.RecaCtct, 0),
+            mC: unifiedFull.reduce((s, r) => s + r.m.CredCtct, 0),
+            mS: unifiedFull.reduce((s, r) => s + r.m.Saldo, 0),
+            pD: unifiedFull.reduce((s, r) => s + r.pg.DebeCtct, 0),
+            pR: unifiedFull.reduce((s, r) => s + r.pg.RecaCtct, 0),
+            pC: unifiedFull.reduce((s, r) => s + r.pg.CredCtct, 0),
+            pS: unifiedFull.reduce((s, r) => s + r.pg.Saldo, 0),
+            diff: unifiedFull.reduce((s, r) => s + r.diff, 0)
+        };
+
+        tableBody.push([
+            'TOTALES',
+            formatCurrency(totals.mD), formatCurrency(totals.mR), formatCurrency(totals.mC), formatCurrency(totals.mS),
+            formatCurrency(totals.pD), formatCurrency(totals.pR), formatCurrency(totals.pC), formatCurrency(totals.pS),
+            formatCurrency(totals.diff)
+        ]);
+
+        doc.autoTable({
+            startY: 40,
+            head: [['Periodo', 'MD Capital', 'MD Interés', 'MD Pagado', 'MD Saldo', 'PG Capital', 'PG Interés', 'PG Pagado', 'PG Saldo', 'Diff']],
+            body: tableBody,
+            theme: 'striped',
+            headStyles: { fillColor: [0, 74, 117], textColor: [255, 255, 255], fontSize: 8 },
+            styles: { fontSize: 7, cellPadding: 2 },
+            columnStyles: {
+                0: { cellWidth: 20 },
+                9: { fontStyle: 'bold' }
+            },
+            didParseCell: function(data) {
+                if (data.row.index === tableBody.length - 1) {
+                    data.cell.styles.fontStyle = 'bold';
+                    data.cell.styles.fillColor = [240, 240, 240];
+                }
+            }
+        });
+
+        doc.save(`Auditoria_Padron_${selectedAccount.cuenta}.pdf`);
     };
 
     const [unifiedFull, setUnifiedFull] = useState([]);
@@ -439,35 +510,56 @@ const ComparisonReport = () => {
                         <div style={{ padding: '1.5rem 2rem', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div>
                                 <h2 style={{ fontSize: '1.5rem', fontWeight: '800', color: 'white', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                                    Desglose Detallado de Cuotas
+                                    Desglose Detallado de Auditoría
                                     <span style={{ fontSize: '0.9rem', color: 'var(--text-dim)', fontWeight: '400' }}>Padrón #{selectedAccount.cuenta} - {selectedAccount.nombre}</span>
                                 </h2>
                             </div>
-                            <button 
-                                onClick={() => setIsFullDetailOpen(false)}
-                                style={{ background: 'rgba(255,255,255,0.05)', border: 'none', color: 'white', padding: '0.6rem', borderRadius: '50%', cursor: 'pointer' }}
-                            >
-                                <X size={24} />
-                            </button>
+                            <div style={{ display: 'flex', gap: '1rem' }}>
+                                <button 
+                                    onClick={generatePDF}
+                                    style={{ 
+                                        background: 'var(--primary)', 
+                                        border: 'none', 
+                                        color: 'white', 
+                                        padding: '0.6rem 1.2rem', 
+                                        borderRadius: '12px', 
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.5rem',
+                                        fontWeight: '700'
+                                    }}
+                                >
+                                    <Download size={18} /> Exportar PDF Auditoría
+                                </button>
+                                <button 
+                                    onClick={() => setIsFullDetailOpen(false)}
+                                    style={{ background: 'rgba(255,255,255,0.05)', border: 'none', color: 'white', padding: '0.6rem', borderRadius: '50%', cursor: 'pointer' }}
+                                >
+                                    <X size={24} />
+                                </button>
+                            </div>
                         </div>
 
                         <div style={{ flex: 1, overflow: 'auto', padding: '1rem' }}>
                             <table style={{ width: '100%', fontSize: '0.85rem', borderCollapse: 'collapse' }}>
-                                <thead style={{ background: '#0d0d12', zIndex: 10 }}>
+                                <thead style={{ background: '#0d0d12', zIndex: 10, position: 'sticky', top: 0 }}>
                                     <tr style={{ borderBottom: '2px solid var(--border)' }}>
                                         <th style={{ padding: '0.75rem', textAlign: 'left', color: 'var(--text-dim)' }}>Periodo</th>
-                                        <th style={{ padding: '0.75rem', textAlign: 'right', background: 'rgba(124, 77, 255, 0.05)', color: 'var(--primary)' }} colSpan="3">MARIA DB</th>
-                                        <th style={{ padding: '0.75rem', textAlign: 'right', background: 'rgba(16, 185, 129, 0.05)', color: '#10b981' }} colSpan="3">POSTGRE SQL</th>
-                                        <th style={{ padding: '0.75rem', textAlign: 'right', color: '#ef4444' }}>DIFF</th>
+                                        <th style={{ padding: '0.75rem', textAlign: 'center', background: 'rgba(124, 77, 255, 0.05)', color: 'var(--primary)' }} colSpan="4">MARIA DB</th>
+                                        <th style={{ padding: '0.75rem', textAlign: 'center', background: 'rgba(16, 185, 129, 0.05)', color: '#10b981' }} colSpan="4">POSTGRE SQL</th>
+                                        <th style={{ padding: '0.75rem', textAlign: 'right', color: '#ef4444' }}>DIFF SALDO</th>
                                     </tr>
                                     <tr style={{ background: 'rgba(255,255,255,0.02)', fontSize: '0.75rem' }}>
                                         <th style={{ padding: '0.5rem' }}>Año/Cuota</th>
-                                        <th style={{ padding: '0.5rem', textAlign: 'right' }}>Capital</th>
-                                        <th style={{ padding: '0.5rem', textAlign: 'right' }}>Interés</th>
-                                        <th style={{ padding: '0.5rem', textAlign: 'right', fontWeight: 'bold' }}>Total MD</th>
-                                        <th style={{ padding: '0.5rem', textAlign: 'right' }}>Capital</th>
-                                        <th style={{ padding: '0.5rem', textAlign: 'right' }}>Interés</th>
-                                        <th style={{ padding: '0.5rem', textAlign: 'right', fontWeight: 'bold' }}>Total PG</th>
+                                        <th style={{ padding: '0.5rem', textAlign: 'right' }}>Capital+Int</th>
+                                        <th style={{ padding: '0.5rem', textAlign: 'right' }}>Pagado</th>
+                                        <th style={{ padding: '0.5rem', textAlign: 'right', fontWeight: 'bold' }}>Saldo MD</th>
+                                        <th style={{ padding: '0.5rem', borderRight: '2px solid var(--border)' }}></th>
+                                        <th style={{ padding: '0.5rem', textAlign: 'right' }}>Capital+Int</th>
+                                        <th style={{ padding: '0.5rem', textAlign: 'right' }}>Pagado</th>
+                                        <th style={{ padding: '0.5rem', textAlign: 'right', fontWeight: 'bold' }}>Saldo PG</th>
+                                        <th style={{ padding: '0.5rem', borderRight: '2px solid var(--border)' }}></th>
                                         <th style={{ padding: '0.5rem' }}></th>
                                     </tr>
                                 </thead>
@@ -483,65 +575,67 @@ const ComparisonReport = () => {
                                             </td>
                                             
                                             {/* MariaDB Side */}
-                                            <td style={{ padding: '0.75rem', textAlign: 'right', opacity: 0.8 }}>{formatCurrency(row.m.DebeCtct)}</td>
-                                            <td style={{ padding: '0.75rem', textAlign: 'right', opacity: 0.8, color: 'var(--primary)' }}>{formatCurrency(row.m.RecaCtct)}</td>
-                                            <td style={{ padding: '0.75rem', textAlign: 'right', fontWeight: '700' }}>{formatCurrency(row.m.TotaCtct)}</td>
+                                            <td style={{ padding: '0.75rem', textAlign: 'right', opacity: 0.8 }}>{formatCurrency(row.m.TotaCtct)}</td>
+                                            <td style={{ padding: '0.75rem', textAlign: 'right', opacity: 0.8, color: '#10b981' }}>{formatCurrency(row.m.CredCtct)}</td>
+                                            <td style={{ padding: '0.75rem', textAlign: 'right', fontWeight: '700' }}>{formatCurrency(row.m.Saldo)}</td>
+                                            <td style={{ borderRight: '2px solid var(--border)' }}></td>
 
                                             {/* Postgres Side */}
-                                            <td style={{ padding: '0.75rem', textAlign: 'right', opacity: 0.8, borderLeft: '1px solid rgba(255,255,255,0.05)' }}>{formatCurrency(row.pg.DebeCtct)}</td>
-                                            <td style={{ padding: '0.75rem', textAlign: 'right', opacity: 0.8, color: '#10b981' }}>{formatCurrency(row.pg.RecaCtct)}</td>
-                                            <td style={{ padding: '0.75rem', textAlign: 'right', fontWeight: '700' }}>{formatCurrency(row.pg.TotaCtct)}</td>
+                                            <td style={{ padding: '0.75rem', textAlign: 'right', opacity: 0.8 }}>{formatCurrency(row.pg.TotaCtct)}</td>
+                                            <td style={{ padding: '0.75rem', textAlign: 'right', opacity: 0.8, color: '#10b981' }}>{formatCurrency(row.pg.CredCtct)}</td>
+                                            <td style={{ padding: '0.75rem', textAlign: 'right', fontWeight: '700' }}>{formatCurrency(row.pg.Saldo)}</td>
+                                            <td style={{ borderRight: '2px solid var(--border)' }}></td>
 
                                             {/* Difference */}
                                             <td style={{ 
                                                 padding: '0.75rem', 
                                                 textAlign: 'right', 
                                                 fontWeight: '800', 
-                                                color: row.hasDiff ? '#ef4444' : '#10b981',
-                                                borderLeft: '2px solid rgba(255,255,255,0.05)'
+                                                color: row.hasDiff ? '#ef4444' : '#10b981'
                                             }}>
                                                 {formatCurrency(row.diff)}
                                             </td>
                                         </tr>
                                     ))}
                                 </tbody>
-                                <tfoot style={{ background: '#13141f', borderTop: '2px solid var(--border)' }}>
+                                <tfoot style={{ background: '#13141f', borderTop: '2px solid var(--border)', position: 'sticky', bottom: 0 }}>
                                     <tr style={{ fontWeight: '800', color: 'white' }}>
                                         <td style={{ padding: '1rem' }}>TOTALES</td>
                                         
                                         {/* MariaDB Totals */}
                                         <td style={{ padding: '1rem', textAlign: 'right' }}>
-                                            {formatCurrency(unifiedFull.reduce((sum, r) => sum + r.m.DebeCtct, 0))}
-                                        </td>
-                                        <td style={{ padding: '1rem', textAlign: 'right', color: 'var(--primary)' }}>
-                                            {formatCurrency(unifiedFull.reduce((sum, r) => sum + r.m.RecaCtct, 0))}
-                                        </td>
-                                        <td style={{ padding: '1rem', textAlign: 'right', background: 'rgba(124, 77, 255, 0.1)' }}>
                                             {formatCurrency(unifiedFull.reduce((sum, r) => sum + r.m.TotaCtct, 0))}
                                         </td>
+                                        <td style={{ padding: '1rem', textAlign: 'right', color: '#10b981' }}>
+                                            {formatCurrency(unifiedFull.reduce((sum, r) => sum + r.m.CredCtct, 0))}
+                                        </td>
+                                        <td style={{ padding: '1rem', textAlign: 'right', background: 'rgba(124, 77, 255, 0.1)' }}>
+                                            {formatCurrency(unifiedFull.reduce((sum, r) => sum + r.m.Saldo, 0))}
+                                        </td>
+                                        <td style={{ borderRight: '2px solid var(--border)' }}></td>
 
                                         {/* Postgres Totals */}
-                                        <td style={{ padding: '1rem', textAlign: 'right', borderLeft: '1px solid rgba(255,255,255,0.05)' }}>
-                                            {formatCurrency(unifiedFull.reduce((sum, r) => sum + r.pg.DebeCtct, 0))}
-                                        </td>
-                                        <td style={{ padding: '1rem', textAlign: 'right', color: '#10b981' }}>
-                                            {formatCurrency(unifiedFull.reduce((sum, r) => sum + r.pg.RecaCtct, 0))}
-                                        </td>
-                                        <td style={{ padding: '1rem', textAlign: 'right', background: 'rgba(16, 185, 129, 0.1)' }}>
+                                        <td style={{ padding: '1rem', textAlign: 'right' }}>
                                             {formatCurrency(unifiedFull.reduce((sum, r) => sum + r.pg.TotaCtct, 0))}
                                         </td>
+                                        <td style={{ padding: '1rem', textAlign: 'right', color: '#10b981' }}>
+                                            {formatCurrency(unifiedFull.reduce((sum, r) => sum + r.pg.CredCtct, 0))}
+                                        </td>
+                                        <td style={{ padding: '1rem', textAlign: 'right', background: 'rgba(16, 185, 129, 0.1)' }}>
+                                            {formatCurrency(unifiedFull.reduce((sum, r) => sum + r.pg.Saldo, 0))}
+                                        </td>
+                                        <td style={{ borderRight: '2px solid var(--border)' }}></td>
 
                                         {/* Total Difference */}
                                         <td style={{ 
                                             padding: '1rem', 
                                             textAlign: 'right', 
                                             background: 'rgba(239, 68, 68, 0.1)', 
-                                            color: '#ef4444',
-                                            borderLeft: '2px solid rgba(255,255,255,0.05)'
+                                            color: '#ef4444'
                                         }}>
                                             {formatCurrency(Math.abs(
-                                                unifiedFull.reduce((sum, r) => sum + r.m.TotaCtct, 0) - 
-                                                unifiedFull.reduce((sum, r) => sum + r.pg.TotaCtct, 0)
+                                                unifiedFull.reduce((sum, r) => sum + r.m.Saldo, 0) - 
+                                                unifiedFull.reduce((sum, r) => sum + r.pg.Saldo, 0)
                                             ))}
                                         </td>
                                     </tr>

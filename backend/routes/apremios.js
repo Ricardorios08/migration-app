@@ -168,4 +168,65 @@ router.get('/search-id/:id', async (req, res) => {
     }
 });
 
+// GET /api/apremios/explorer - Advanced Multi-column search
+router.get('/explorer', async (req, res) => {
+    const { 
+        numeApre, title, account, personId, officeId, status, 
+        recaId, autoApre, dateFrom, dateTo, limit = 50, page = 1 
+    } = req.query;
+    
+    let conn;
+    try {
+        conn = await mariaDB.getConnection();
+        await conn.query(`USE ${DB_RECAUDACION}`);
+        
+        let whereClause = ' WHERE 1=1';
+        const params = [];
+
+        if (numeApre) { whereClause += " AND a.NumeApre = ?"; params.push(parseInt(numeApre)); }
+        if (title) { whereClause += " AND a.TituApre LIKE ?"; params.push(`%${title.trim()}%`); }
+        if (account) { whereClause += " AND a.CuenCtct LIKE ?"; params.push(`%${account.trim()}%`); }
+        if (personId) { whereClause += " AND a.CucuPers = ?"; params.push(personId); }
+        if (officeId) { whereClause += " AND a.CodiOfic = ?"; params.push(parseInt(officeId)); }
+        if (status) { whereClause += " AND a.EstaApre = ?"; params.push(parseInt(status)); }
+        if (recaId) { whereClause += " AND a.CodiReca = ?"; params.push(parseInt(recaId)); }
+        if (autoApre) { whereClause += " AND a.AutoApre = ?"; params.push(parseInt(autoApre)); }
+        if (dateFrom) { whereClause += " AND a.FealApre >= ?"; params.push(dateFrom); }
+        if (dateTo) { whereClause += " AND a.FealApre <= ?"; params.push(dateTo); }
+
+        // Count for pagination
+        const countRes = await conn.query(`SELECT COUNT(*) as total FROM apremio a ${whereClause}`, params);
+        const total = Number(countRes[0].total);
+
+        // Fetch data
+        let query = `
+            SELECT a.*, ea.DetaEsap as EstadoDeta, r.DetaReca as RecaudadorDeta 
+            FROM apremio a 
+            LEFT JOIN estadoapremio ea ON a.EstaApre = ea.CodiEsap 
+            LEFT JOIN recaudador r ON a.CodiReca = r.CodiReca
+            ${whereClause} 
+            ORDER BY a.NumeApre DESC 
+            LIMIT ? OFFSET ?
+        `;
+        
+        const limitVal = Number(limit);
+        const pageVal = Number(page);
+        const offsetVal = (pageVal - 1) * limitVal;
+        
+        const results = await conn.query(query, [...params, limitVal, offsetVal]);
+        
+        res.json({
+            results,
+            pagination: {
+                total,
+                page: pageVal,
+                limit: limitVal,
+                totalPages: Math.ceil(total / limitVal) || 0
+            }
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    } finally { if (conn) conn.release(); }
+});
+
 module.exports = router;

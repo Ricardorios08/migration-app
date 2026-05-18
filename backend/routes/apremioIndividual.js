@@ -112,7 +112,10 @@ router.get('/search', async (req, res) => {
 
         const query = `
             SELECT a.*, p.DetaReca as Recaudador, oj.DetaOfju as OficialJusticia,
-                   o.DetaOfic as Oficina, ea.DetaEsap as EstadoDeta
+                   o.DetaOfic as Oficina, ea.DetaEsap as EstadoDeta,
+                   (SELECT GROUP_CONCAT(DISTINCT PeriCtct ORDER BY PeriCtct ASC SEPARATOR ', ') 
+                    FROM ${SCHEMA}.ctacte 
+                    WHERE CodiOfic = a.CodiOfic AND CuenCtct = a.CuenCtct AND NumeApre = a.NumeApre AND BimeCtct > 0) as PeriodosSummary
             FROM ${SCHEMA}.apremio a
             LEFT JOIN ${SCHEMA}.recaudador p ON a.CodiReca = p.CodiReca
             LEFT JOIN ${SCHEMA}.oficjust oj ON a.CodiOfju = oj.CodiOfju
@@ -164,7 +167,51 @@ router.get('/detail/:numeApre', async (req, res) => {
         
         const apremio = apreResults[0];
 
-        const [instances, debt] = await Promise.all([
+        // Buscar CodiFapa de forma optimizada
+        let codiFapa = 0;
+        const fromPago = await mariaDB.query(`SELECT CodiFapa FROM ${SCHEMA}.pagoapre WHERE NumeApre = ? AND CodiFapa > 0 LIMIT 1`, [numeApre]);
+        
+        if (fromPago.length > 0) {
+            codiFapa = fromPago[0].CodiFapa;
+        } else {
+            // Buscamos en ctacte pero USANDO ÍNDICES (Oficina y Cuenta) para que sea instantáneo
+            const fromCtacte = await mariaDB.query(`
+                SELECT CodiFapa FROM ${SCHEMA}.ctacte 
+                WHERE CodiOfic = ? AND CuenCtct = ? AND NumeApre = ? AND CodiFapa > 0 
+                LIMIT 1
+            `, [apremio.CodiOfic, apremio.CuenCtct, numeApre]);
+            if (fromCtacte.length > 0) codiFapa = fromCtacte[0].CodiFapa;
+        }
+
+        let paymentPlan = null;
+        if (codiFapa > 0) {
+            const [header, installments] = await Promise.all([
+                mariaDB.query(`SELECT * FROM ${SCHEMA}.facipago WHERE CodiFapa = ?`, [codiFapa]),
+                mariaDB.query(`SELECT * FROM ${SCHEMA}.faciapre WHERE CodiFapa = ? AND NumeApre = ? ORDER BY CuotDefa ASC`, [codiFapa, numeApre])
+            ]);
+            paymentPlan = { header: header[0], installments };
+        }
+
+        const apredetaQuery = `
+            SELECT 
+                ad.PeriCtct, ad.BimeCtct,
+                SUM(CASE WHEN c.MoviCtct = 1 THEN c.DebeCtct ELSE 0 END) as Capital,
+                SUM(CASE WHEN c.MoviCtct > 1 THEN c.DebeCtct ELSE 0 END) as Recargo,
+                SUM(c.DebeCtct) as Total,
+                MAX(c.DetaCtct) as Concepto
+            FROM ${SCHEMA}.apredeta ad
+            LEFT JOIN ${SCHEMA}.ctacte c ON 
+                ad.CodiOfic = c.CodiOfic AND 
+                TRIM(ad.CuenCtct) = TRIM(c.CuenCtct) AND 
+                ad.PeriCtct = c.PeriCtct AND 
+                ad.BimeCtct = c.BimeCtct AND 
+                ad.NumeCtct = c.NumeCtct
+            WHERE ad.NumeApre = ?
+            GROUP BY ad.PeriCtct, ad.BimeCtct, ad.NumeCtct
+            ORDER BY ad.PeriCtct DESC, ad.BimeCtct DESC
+        `;
+
+        const [instances, debt, payments, boletoInfo, claimedInstallments] = await Promise.all([
             mariaDB.query(`
                 SELECT ip.*, ij.DetaInju
                 FROM ${SCHEMA}.instapre ip
@@ -176,10 +223,35 @@ router.get('/detail/:numeApre', async (req, res) => {
                 SELECT * FROM ${SCHEMA}.ctacte 
                 WHERE CodiOfic = ? AND CuenCtct = ? AND NumeApre = ?
                 ORDER BY PeriCtct DESC, BimeCtct DESC
-            `, [apremio.CodiOfic, apremio.CuenCtct, numeApre])
+            `, [apremio.CodiOfic, apremio.CuenCtct, numeApre]),
+            mariaDB.query(`
+                SELECT * FROM ${SCHEMA}.pagoapre
+                WHERE NumeApre = ?
+                ORDER BY FeacPaap DESC, NumePaag ASC
+            `, [numeApre]),
+            mariaDB.query(`
+                SELECT b.*, p.FeenAcpa as FechaPago, p.CodiUsua as UsuarioPago, p.NumeAcpa as ActaPago
+                FROM ${SCHEMA}.boleto b
+                LEFT JOIN ${SCHEMA}.pago p ON b.PeriBole = p.PeriBole AND b.NumeBole = p.NumeBole
+                WHERE b.PeriBole = ? AND b.NumeBole = ?
+                LIMIT 1
+            `, [apremio.PeriBole, apremio.NumeBole]),
+            mariaDB.query(apredetaQuery, [numeApre])
         ]);
 
-        res.json({ apremio, instances, debt });
+        res.json({ 
+            apremio, 
+            instances, 
+            debt, 
+            payments, 
+            boleto: boletoInfo[0] || null,
+            paymentPlan,
+            claimedInstallments,
+            debug: {
+                apredetaSql: apredetaQuery,
+                params: [numeApre]
+            }
+        });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

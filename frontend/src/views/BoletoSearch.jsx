@@ -13,6 +13,7 @@ const BoletoSearch = ({ currentUser }) => {
         numeBole: ''
     });
     const [results, setResults] = useState([]);
+    const [pagination, setPagination] = useState({ total: 0, page: 1, totalPages: 0 });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const abortControllerRef = useRef(null);
@@ -22,16 +23,16 @@ const BoletoSearch = ({ currentUser }) => {
     const [boletoData, setBoletoData] = useState(null); // { header, concepts, reprints }
     const [loadingDetails, setLoadingDetails] = useState(false);
 
-    const handleSearch = async (e) => {
+    const handleSearch = async (e, pageNum = 1) => {
         if (e) e.preventDefault();
         setLoading(true);
         setError(null);
-        setResults([]);
+        if (pageNum === 1) setResults([]);
         
         abortControllerRef.current = new AbortController();
 
         try {
-            const params = {};
+            const params = { page: pageNum, limit: 50 };
             if (filters.officeId) params.officeId = filters.officeId;
             if (filters.account) params.account = filters.account;
             if (filters.personId) params.personId = filters.personId;
@@ -43,7 +44,9 @@ const BoletoSearch = ({ currentUser }) => {
                 params,
                 signal: abortControllerRef.current.signal
             });
-            setResults(res.data);
+            
+            setResults(res.data.results);
+            setPagination(res.data.pagination);
         } catch (err) {
             if (axios.isCancel(err)) {
                 setError('Búsqueda cancelada por el usuario.');
@@ -202,7 +205,7 @@ const BoletoSearch = ({ currentUser }) => {
             )}
 
             {/* Results Table */}
-            <div className="data-card" style={{ overflow: 'hidden' }}>
+            <div className="data-card" style={{ overflow: 'hidden', marginBottom: '1rem' }}>
                 <table className="user-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                         <tr style={{ background: 'rgba(255,255,255,0.02)' }}>
@@ -283,6 +286,36 @@ const BoletoSearch = ({ currentUser }) => {
                     </tbody>
                 </table>
             </div>
+
+            {/* Pagination Controls */}
+            {pagination.totalPages > 1 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', background: 'var(--card)', borderRadius: '12px', border: '1px solid var(--border)' }}>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-dim)' }}>
+                        Mostrando <span style={{ color: 'white', fontWeight: '600' }}>{results.length}</span> de <span style={{ color: 'white', fontWeight: '600' }}>{pagination.total}</span> boletos
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                        <button 
+                            disabled={pagination.page <= 1 || loading}
+                            onClick={() => handleSearch(null, pagination.page - 1)}
+                            className="btn btn-secondary"
+                            style={{ padding: '0.5rem 1rem', opacity: pagination.page <= 1 ? 0.5 : 1 }}
+                        >
+                            Anterior
+                        </button>
+                        <span style={{ fontSize: '0.9rem', margin: '0 0.5rem' }}>
+                            Página <span style={{ color: 'var(--primary)', fontWeight: '700' }}>{pagination.page}</span> de {pagination.totalPages}
+                        </span>
+                        <button 
+                            disabled={pagination.page >= pagination.totalPages || loading}
+                            onClick={() => handleSearch(null, pagination.page + 1)}
+                            className="btn btn-secondary"
+                            style={{ padding: '0.5rem 1rem', opacity: pagination.page >= pagination.totalPages ? 0.5 : 1 }}
+                        >
+                            Siguiente
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* InfoBoleto Modal */}
             {showModal && (
@@ -395,6 +428,31 @@ const BoletoSearch = ({ currentUser }) => {
                                                 </div>
                                             )}
                                         </div>
+
+                                        {/* Legal Payments (pagoapre) */}
+                                        {boletoData.legalPayments && boletoData.legalPayments.length > 0 && (
+                                            <div className="data-card" style={{ padding: '1.25rem', borderLeft: '4px solid #10b981', background: 'rgba(16, 185, 129, 0.05)' }}>
+                                                <h4 style={{ fontSize: '0.8rem', color: '#10b981', marginBottom: '1rem', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                    <DollarSign size={16} /> Pagos Apremio / Honorarios
+                                                </h4>
+                                                <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                                                    {boletoData.legalPayments.map((lp, i) => (
+                                                        <div key={i} style={{ padding: '0.75rem 0', borderBottom: '1px solid rgba(16, 185, 129, 0.2)', fontSize: '0.8rem' }}>
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                                                                <span style={{ fontWeight: '700' }}>{formatDate(lp.FeacPaap)}</span>
+                                                                <span style={{ color: '#10b981', fontWeight: '800' }}>{formatCurrency(parseFloat(lp.Honorarios) + parseFloat(lp.Gastos) + parseFloat(lp.Interes))}</span>
+                                                            </div>
+                                                            <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                                                                <span>Hon: {formatCurrency(lp.Honorarios)}</span>
+                                                                <span>Gastos: {formatCurrency(lp.Gastos)}</span>
+                                                                <span>Int: {formatCurrency(lp.Interes)}</span>
+                                                                <span>Usu: {lp.AltaUsua}</span>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
 
                                         {/* Reprint History */}
                                         <div className="data-card" style={{ padding: '1.25rem' }}>

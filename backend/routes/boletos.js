@@ -4,8 +4,8 @@ const mariaDB = require('../db/maria');
 const { logAction } = require('../utils/logger');
 const jwt = require('jsonwebtoken');
 
-const DB_NAME = 'recaudacion2'; 
-const DB_RECAUDACION = 'recaudacion2'; 
+const DB_NAME = 'recaudacion2';
+const DB_RECAUDACION = 'recaudacion2';
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
 
 // Middleware de seguridad estricto
@@ -25,7 +25,7 @@ router.use(ensureAuth);
 
 // GET /api/boletos/search
 router.get('/search', async (req, res) => {
-    const { officeId, account, personId, period, status, numeBole, limit = 100 } = req.query;
+    const { officeId, account, personId, period, status, numeBole, limit = 50, page = 1 } = req.query;
     let conn;
     try {
         conn = await mariaDB.getConnection();
@@ -37,22 +37,52 @@ router.get('/search', async (req, res) => {
         });
 
         await conn.query(`USE ${DB_RECAUDACION}`);
-        let query = `SELECT b.PeriBole, b.NumeBole, b.CodiOfic, b.CuenCtct, b.CucuPers, b.FealBole, b.FeveBole, b.EstaBole, b.TotaBole, b.TipoBole, p.FechaPagoReal, p.ActaPago, per.DetaPers as NombreContribuyente FROM boleto b LEFT JOIN (SELECT PeriBole, NumeBole, MAX(FeenAcpa) as FechaPagoReal, MAX(NumeAcpa) as ActaPago FROM pago GROUP BY PeriBole, NumeBole) p ON b.PeriBole = p.PeriBole AND b.NumeBole = p.NumeBole LEFT JOIN infogov.persona per ON b.CucuPers = per.CucuPers WHERE 1=1`;
+
+        let whereClause = ' WHERE 1=1';
         const params = [];
 
-        if (officeId) { query += " AND b.CodiOfic = ?"; params.push(parseInt(officeId)); }
-        if (account) { const accountTrim = account.trim(); query += " AND (TRIM(b.CuenCtct) = ? OR b.CuenCtct = ?)"; params.push(accountTrim, accountTrim.padStart(10, ' ')); }
-        if (personId) { query += " AND b.CucuPers = ?"; params.push(personId); }
-        if (period) { query += " AND b.PeriBole = ?"; params.push(period); }
-        if (status) { query += " AND b.EstaBole = ?"; params.push(status); }
-        if (numeBole) { query += " AND b.NumeBole = ?"; params.push(parseInt(numeBole)); }
+        if (officeId) { whereClause += " AND b.CodiOfic = ?"; params.push(parseInt(officeId)); }
+        if (account) { const accountTrim = account.trim(); whereClause += " AND (TRIM(b.CuenCtct) = ? OR b.CuenCtct = ?)"; params.push(accountTrim, accountTrim.padStart(10, ' ')); }
+        if (personId) { whereClause += " AND b.CucuPers = ?"; params.push(personId); }
+        if (period) { whereClause += " AND b.PeriBole = ?"; params.push(period); }
+        if (status) { whereClause += " AND b.EstaBole = ?"; params.push(status); }
+        if (numeBole) { whereClause += " AND b.NumeBole = ?"; params.push(parseInt(numeBole)); }
 
-        query += " ORDER BY b.PeriBole DESC, b.NumeBole DESC LIMIT ?";
-        params.push(parseInt(limit));
+        // Count total results for pagination
+        const countQuery = `SELECT COUNT(*) as total FROM boleto b ${whereClause}`;
+        const countResult = await conn.query(countQuery, params);
+        const total = Number(countResult[0].total);
 
-        const results = await conn.query(query, params);
+        // Fetch paginated results
+        let query = `
+            SELECT 
+                b.PeriBole, b.NumeBole, b.CodiOfic, b.CuenCtct, b.CucuPers, b.FealBole, b.FeveBole, b.EstaBole, b.TotaBole, b.TipoBole,
+                (SELECT MAX(FeenAcpa) FROM pago p WHERE p.PeriBole = b.PeriBole AND p.NumeBole = b.NumeBole) as FechaPagoReal,
+                (SELECT MAX(NumeAcpa) FROM pago p WHERE p.PeriBole = b.PeriBole AND p.NumeBole = b.NumeBole) as ActaPago,
+                per.DetaPers as NombreContribuyente 
+            FROM boleto b 
+            LEFT JOIN infogov.persona per ON b.CucuPers = per.CucuPers 
+            ${whereClause}
+        `;
+
+        query += " ORDER BY b.PeriBole DESC, b.NumeBole DESC LIMIT ? OFFSET ?";
+
+        const limitVal = Number(limit);
+        const pageVal = Number(page);
+        const offsetVal = (pageVal - 1) * limitVal;
+        
+        const results = await conn.query(query, [...params, limitVal, offsetVal]);
         logAction(req.user.nombre_usuario, 'SEARCH_BOLETO', `Búsqueda Boletos: ${JSON.stringify(req.query)}`, req);
-        res.json(results);
+
+        res.json({
+            results,
+            pagination: {
+                total: total,
+                page: pageVal,
+                limit: limitVal,
+                totalPages: Math.ceil(total / limitVal) || 0
+            }
+        });
     } catch (err) {
         if (err.code === 'ER_QUERY_INTERRUPTED') return res.status(499).json({ error: 'Búsqueda cancelada' });
         res.status(500).json({ error: err.message });
@@ -70,8 +100,16 @@ router.get('/details/:peri/:nume', async (req, res) => {
         const concepts = await conn.query(`SELECT db.PeriCtct, db.BimeCtct, db.NumeCtct, db.CodiConc, c.DetaConc, db.CapiDebo as Capital, db.RecaDebo as Recargo, db.InteDebo as Interes, db.DereDebo as Derecho, db.TotaDebo as Total FROM ${DB_NAME}.detabole db LEFT JOIN ${DB_NAME}.concepto c ON c.PeriInfo = db.PeriInfo AND c.CodiConc = db.CodiConc WHERE db.PeriBole = ? AND db.NumeBole = ?`, [peri, nume]);
         const reprints = await conn.query(`SELECT AltaUsua, AltaFeho FROM ${DB_NAME}.ticket WHERE PeriBole = ? AND NumeBole = ? ORDER BY AltaFeho DESC`, [peri, nume]);
         
+        // Nuevo: Pagos de Apremio asociados a este boleto
+        const legalPayments = await conn.query(`
+            SELECT FeacPaap, NumePaag, EstaPaap, CoadPaap as Honorarios, AplePaap as Gastos, IcomPaap as Interes, AltaUsua 
+            FROM ${DB_NAME}.pagoapre 
+            WHERE PeriBole = ? AND NumeBole = ?
+            ORDER BY FeacPaap DESC
+        `, [peri, nume]);
+
         logAction(req.user.nombre_usuario, 'VIEW_BOLETO_DETAIL', `Detalle Boleto: ${peri}/${nume}`, req);
-        res.json({ header: header[0], concepts, reprints });
+        res.json({ header: header[0], concepts, reprints, legalPayments });
     } catch (err) {
         res.status(500).json({ error: err.message });
     } finally { if (conn) conn.release(); }
@@ -88,6 +126,64 @@ router.post('/audit-print', async (req, res) => {
         await conn.query(`INSERT INTO ticket (PeriBole, NumeBole, AltaUsua) VALUES (?, ?, ?)`, [periBole, numeBole, user]);
         logAction(user, 'PRINT_BOLETO', `Reimpresión Boleto: ${periBole}/${numeBole}`, req);
         res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    } finally { if (conn) conn.release(); }
+});
+
+// GET /api/boletos/explorer - Advanced Multi-column search
+router.get('/explorer', async (req, res) => {
+    const { 
+        officeId, account, personId, period, status, type, numeBole, 
+        userAlta, dateFrom, dateTo, limit = 50, page = 1 
+    } = req.query;
+    
+    console.log('[EXPLORER DEBUG] Filters received:', req.query);
+    
+    let conn;
+    try {
+        conn = await mariaDB.getConnection();
+        await conn.query(`USE ${DB_RECAUDACION}`);
+        
+        let whereClause = ' WHERE 1=1';
+        const params = [];
+
+        if (officeId) { whereClause += " AND b.CodiOfic = ?"; params.push(parseInt(officeId)); }
+        if (account) { whereClause += " AND b.CuenCtct LIKE ?"; params.push(`%${account.trim()}%`); }
+        if (personId) { whereClause += " AND b.CucuPers = ?"; params.push(personId); }
+        if (period) { whereClause += " AND b.PeriBole = ?"; params.push(period); }
+        if (status) { whereClause += " AND b.EstaBole = ?"; params.push(status); }
+        if (type) { whereClause += " AND b.TipoBole = ?"; params.push(type); }
+        if (numeBole) { whereClause += " AND b.NumeBole = ?"; params.push(parseInt(numeBole)); }
+        if (userAlta) { whereClause += " AND b.CodiUsua = ?"; params.push(userAlta); }
+        if (dateFrom) { whereClause += " AND b.FealBole >= ?"; params.push(dateFrom); }
+        if (dateTo) { whereClause += " AND b.FealBole <= ?"; params.push(dateTo); }
+
+        // Count for pagination
+        const countRes = await conn.query(`SELECT COUNT(*) as total FROM boleto b ${whereClause}`, params);
+        const total = Number(countRes[0].total);
+
+        // Fetch data (Pure boleto table for now)
+        let query = `SELECT * FROM boleto b ${whereClause} ORDER BY b.PeriBole DESC, b.NumeBole DESC LIMIT ? OFFSET ?`;
+        const limitVal = Number(limit);
+        const pageVal = Number(page);
+        const offsetVal = (pageVal - 1) * limitVal;
+        
+        console.log('[EXPLORER DEBUG] Executing Query:', query);
+        console.log('[EXPLORER DEBUG] Params:', [...params, limitVal, offsetVal]);
+
+        const results = await conn.query(query, [...params, limitVal, offsetVal]);
+        console.log(`[EXPLORER DEBUG] Found ${results.length} rows. Total: ${total}`);
+        
+        res.json({
+            results,
+            pagination: {
+                total: total,
+                page: pageVal,
+                limit: limitVal,
+                totalPages: Math.ceil(total / limitVal) || 0
+            }
+        });
     } catch (err) {
         res.status(500).json({ error: err.message });
     } finally { if (conn) conn.release(); }
