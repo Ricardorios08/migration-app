@@ -4,6 +4,24 @@ import { Scale, FileText, Database, ChevronRight, BookOpen, ArrowRight, Search, 
 const ApremioDashboard = ({ setView }) => {
   const cards = [
     {
+      id: 'apremio_individual',
+      title: 'Reporte Individual',
+      description: 'Historial completo de un apremio, cronología de instancias judiciales y desglose de deuda.',
+      icon: FileText,
+      color: '#3b82f6',
+      gradient: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+      features: ['Historial instancias', 'Detalle de deuda', 'Estado judicial', 'Impresión de reporte']
+    },
+    {
+      id: 'gastos_apremio_real',
+      title: 'Calculadora Real de Gastos',
+      description: 'Calculadora dinámica que utiliza los porcentajes y parámetros reales de la base de datos para simular liquidaciones.',
+      icon: Calculator,
+      color: '#10b981',
+      gradient: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+      features: ['Cálculo dinámico', 'Validación instjudi', 'Topes paraapre', 'Auditoría real']
+    },
+    {
       id: 'apremios',
       title: 'Panel de Apremios & Cédulas',
       description: 'Buscar y gestionar apremios activos, visualizar cédulas de notificación, instancias judiciales y estados.',
@@ -21,15 +39,7 @@ const ApremioDashboard = ({ setView }) => {
       gradient: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
       features: ['Fórmula de cálculo', 'Parámetros vigentes', 'Tablas de configuración', 'Escalas y topes']
     },
-    {
-      id: 'apremio_tables',
-      title: 'Configuración y Tablas',
-      description: 'Explorador de tablas maestras: paraapre, instjudi, escaapre e histórico de instancias registradas.',
-      icon: Database,
-      color: '#10b981',
-      gradient: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-      features: ['Vista de tablas', 'Búsqueda rápida', 'Parámetros de ley', 'Instancias judiciales']
-    },
+
     {
       id: 'apremio_search',
       title: 'Buscador de Paridad',
@@ -38,24 +48,6 @@ const ApremioDashboard = ({ setView }) => {
       color: '#ef4444',
       gradient: 'linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)',
       features: ['Búsqueda por ID', 'Comparación MariaDB/PG', 'Validación de saldos', 'Estado de migración']
-    },
-    {
-      id: 'gastos_apremio_real',
-      title: 'Calculadora Real de Gastos',
-      description: 'Calculadora dinámica que utiliza los porcentajes y parámetros reales de la base de datos para simular liquidaciones.',
-      icon: Calculator,
-      color: '#10b981',
-      gradient: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-      features: ['Cálculo dinámico', 'Validación instjudi', 'Topes paraapre', 'Auditoría real']
-    },
-    {
-      id: 'apremio_individual',
-      title: 'Reporte Individual',
-      description: 'Historial completo de un apremio, cronología de instancias judiciales y desglose de deuda.',
-      icon: FileText,
-      color: '#3b82f6',
-      gradient: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
-      features: ['Historial instancias', 'Detalle de deuda', 'Estado judicial', 'Impresión de reporte']
     }
   ];
 

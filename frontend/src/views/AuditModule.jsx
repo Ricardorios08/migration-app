@@ -9,7 +9,7 @@ import {
   ClipboardCheck
 } from 'lucide-react';
 
-const AuditModule = ({ setView }) => {
+const AuditModule = ({ setView, user }) => {
   const cards = [
     {
       id: 'dashboard',
@@ -56,7 +56,22 @@ const AuditModule = ({ setView }) => {
       gradient: 'linear-gradient(135deg, #64748b 0%, #475569 100%)',
       features: ['Logs de SQL', 'Acceso de Usuarios', 'Eventos Críticos']
     }
-  ];
+  ].filter(card => {
+    // Si es rol 'usuario', ocultar integridad, comparativo y auditoría de sistema (logs)
+    if (user?.rol === 'usuario') {
+      if (['integrity', 'comparison', 'logs'].includes(card.id)) {
+        return false;
+      }
+    }
+    // Si es rol 'admin', ocultar únicamente integridad y comparativo
+    if (user?.rol === 'admin') {
+      if (['integrity', 'comparison'].includes(card.id)) {
+        return false;
+      }
+    }
+    // El rol 'superadmin' ve absolutamente todo
+    return true;
+  });
 
   return (
     <div style={{ height: '100%', overflow: 'auto', padding: '2rem' }}>

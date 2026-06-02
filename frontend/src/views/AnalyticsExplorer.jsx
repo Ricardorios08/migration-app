@@ -17,7 +17,8 @@ import {
   AlertCircle,
   X,
   Search,
-  ArrowRight
+  ArrowRight,
+  Link2
 } from 'lucide-react';
 import axios from 'axios';
 import { API_URL } from '../config';
@@ -27,9 +28,21 @@ const AnalyticsExplorer = () => {
   const getRowVal = (row, key) => {
     if (!row) return null;
     if (row[key] !== undefined) return row[key];
+    
+    // Check case-insensitive exact key
     const lowerKey = key.toLowerCase();
-    const foundKey = Object.keys(row).find(k => k.toLowerCase() === lowerKey);
-    return foundKey !== undefined ? row[foundKey] : null;
+    let foundKey = Object.keys(row).find(k => k.toLowerCase() === lowerKey);
+    if (foundKey !== undefined) return row[foundKey];
+
+    // If key has a dot (e.g. 'table.column'), try matching only the column name part
+    if (key.includes('.')) {
+      const parts = key.split('.');
+      const colPart = parts[parts.length - 1].toLowerCase();
+      foundKey = Object.keys(row).find(k => k.toLowerCase() === colPart);
+      if (foundKey !== undefined) return row[foundKey];
+    }
+
+    return null;
   };
 
   // DB & Table Selectors
@@ -37,9 +50,40 @@ const AnalyticsExplorer = () => {
   const [db, setDb] = useState(import.meta.env.VITE_MARIA_DB_NAME || 'recaudacion2');
   const [tables, setTables] = useState([]);
   const [selectedTable, setSelectedTable] = useState('');
-  const [columns, setColumns] = useState([]);
+  const [baseColumns, setBaseColumns] = useState([]);
+  const [joinedColumns, setJoinedColumns] = useState([]);
+  const [potentialRelations, setPotentialRelations] = useState([]);
+  const [activeJoins, setActiveJoins] = useState([]);
+  const [relationsLoading, setRelationsLoading] = useState(false);
+  const [selectedRelationDb, setSelectedRelationDb] = useState('all');
+  const [selectedJoinColumn, setSelectedJoinColumn] = useState('all');
+
+  const toggleJoinColumn = (colName) => {
+    if (selectedJoinColumn === 'all') {
+      setSelectedJoinColumn([colName]);
+    } else {
+      const isAlreadySelected = selectedJoinColumn.includes(colName);
+      let updated;
+      if (isAlreadySelected) {
+        updated = selectedJoinColumn.filter(c => c !== colName);
+      } else {
+        updated = [...selectedJoinColumn, colName];
+      }
+      if (updated.length === 0) {
+        setSelectedJoinColumn('all');
+      } else {
+        setSelectedJoinColumn(updated);
+      }
+    }
+  };
+
+  const columns = [
+    ...(activeJoins.length > 0 ? baseColumns.map(c => ({ ...c, name: `${selectedTable}.${c.name}` })) : baseColumns),
+    ...joinedColumns
+  ];
   
   // Pivot & Query Configuration
+  const [columnSearch, setColumnSearch] = useState('');
   const [groupByCols, setGroupByCols] = useState([]);
   const [measures, setMeasures] = useState([]);
   const [filters, setFilters] = useState([]);
@@ -50,10 +94,15 @@ const AnalyticsExplorer = () => {
   const [tablesLoading, setTablesLoading] = useState(false);
   const [error, setError] = useState(null);
   const [queryResult, setQueryResult] = useState(null);
+  const [executedConfig, setExecutedConfig] = useState({
+    groupByCols: [],
+    measures: []
+  });
   const [activeTab, setActiveTab] = useState('chart'); // 'chart' | 'grid'
   const [chartType, setChartType] = useState('bar'); // 'bar' | 'donut'
   const [hoveredBarIndex, setHoveredBarIndex] = useState(null);
   const [searchTableQuery, setSearchTableQuery] = useState('');
+  const [relationSearch, setRelationSearch] = useState('');
 
   // Drill Down detailed records state
   const [drillDownData, setDrillDownData] = useState(null);
@@ -97,7 +146,13 @@ const AnalyticsExplorer = () => {
     };
     fetchTables();
     setSelectedTable('');
-    setColumns([]);
+    setBaseColumns([]);
+    setJoinedColumns([]);
+    setActiveJoins([]);
+    setPotentialRelations([]);
+    setSelectedRelationDb('all');
+    setSelectedJoinColumn('all');
+    setRelationSearch('');
     setQueryResult(null);
     setGroupByCols([]);
     setMeasures([]);
@@ -111,7 +166,7 @@ const AnalyticsExplorer = () => {
       setLoading(true);
       try {
         const res = await axios.get(`${API_URL}/explorer/${engine}/${db}/columns/${selectedTable}`, { headers: getAuthHeaders() });
-        setColumns(res.data || []);
+        setBaseColumns(res.data || []);
         
         // Auto-configure a default measure (COUNT of records) and a default dimension if available
         const defaultMeasures = [{ col: '*', op: 'COUNT', alias: 'Cantidad_Registros' }];
@@ -136,6 +191,240 @@ const AnalyticsExplorer = () => {
     fetchColumns();
   }, [selectedTable]);
 
+  // Fetch potential relations when selectedTable changes
+  useEffect(() => {
+    if (!selectedTable) {
+      setPotentialRelations([]);
+      setActiveJoins([]);
+      setSelectedRelationDb('all');
+      setSelectedJoinColumn('all');
+      return;
+    }
+    const fetchRelations = async () => {
+      setRelationsLoading(true);
+      try {
+        const res = await axios.get(`${API_URL}/explorer/${engine}/${db}/relations/${selectedTable}`, { headers: getAuthHeaders() });
+        setPotentialRelations(res.data || []);
+      } catch (err) {
+        console.error('Error fetching relations:', err);
+      } finally {
+        setRelationsLoading(false);
+      }
+    };
+    fetchRelations();
+    setActiveJoins([]);
+    setSelectedRelationDb('all');
+    setSelectedJoinColumn('all');
+    setRelationSearch('');
+  }, [selectedTable, engine, db]);
+
+  // Fetch columns of all joined tables dynamically
+  useEffect(() => {
+    if (!selectedTable) return;
+    
+    const fetchJoinedColumns = async () => {
+      if (activeJoins.length === 0) {
+        setJoinedColumns([]);
+        return;
+      }
+      
+      const newJoinedColumns = [];
+      for (const join of activeJoins) {
+        try {
+          let joinDb = db;
+          let joinTable = join.table;
+          if (join.table.includes('.')) {
+            const parts = join.table.split('.');
+            joinDb = parts[0];
+            joinTable = parts[1];
+          }
+          const res = await axios.get(`${API_URL}/explorer/${engine}/${joinDb}/columns/${joinTable}`, { headers: getAuthHeaders() });
+          
+          if (Array.isArray(res.data)) {
+            const qualified = res.data.map(c => ({
+              name: `${join.table}.${c.name}`,
+              type: c.type,
+              nullable: c.nullable,
+              originTable: join.table
+            }));
+            newJoinedColumns.push(...qualified);
+          }
+        } catch (err) {
+          console.error(`Error fetching columns for joined table ${join.table}:`, err);
+        }
+      }
+      setJoinedColumns(newJoinedColumns);
+    };
+    
+    fetchJoinedColumns();
+  }, [activeJoins, selectedTable, engine, db]);
+
+  const addJoin = (type, rel) => {
+    const leftCols = rel.matches.map(m => m.leftCol);
+    const rightCols = rel.matches.map(m => m.rightCol);
+    
+    const newJoin = {
+      type,
+      table: rel.table,
+      leftCol: leftCols.length === 1 ? leftCols[0] : leftCols,
+      rightCol: rightCols.length === 1 ? rightCols[0] : rightCols
+    };
+    setActiveJoins([...activeJoins, newJoin]);
+  };
+
+  const removeJoin = (index) => {
+    setActiveJoins(activeJoins.filter((_, i) => i !== index));
+  };
+
+  // Reset selected dimensions, measures, filters on join change to prevent syntax errors
+  useEffect(() => {
+    if (!selectedTable) return;
+    
+    // Clear dimensions, filters, and results
+    setGroupByCols([]);
+    setFilters([]);
+    setQueryResult(null);
+    setExecutedConfig({ groupByCols: [], measures: [] });
+    
+    // Reset measures to default Count
+    const defaultMeasures = [{ col: '*', op: 'COUNT', alias: 'Cantidad_Registros' }];
+    setMeasures(defaultMeasures);
+    
+    // Select the first base column fully qualified
+    if (baseColumns.length > 0) {
+      const prefix = activeJoins.length > 0 ? `${selectedTable}.` : '';
+      const promisingDim = baseColumns.find(c => 
+        ['PeriCtct', 'BimeCtct', 'CodiOfic', 'EstaCtct', 'CodiConc', 'Source', 'engine'].includes(c.name)
+      ) || baseColumns[0];
+      if (promisingDim) {
+        setGroupByCols([`${prefix}${promisingDim.name}`]);
+      }
+    }
+  }, [activeJoins.length, selectedTable]);
+
+  // Generate real-time copyable SQL query matching backend query builder algorithm
+  const generateSQLPreview = () => {
+    if (!selectedTable) return '-- Selecciona una tabla para construir la consulta...';
+
+    const sanitize = (val) => val.replace(/[^a-zA-Z0-9_*.]/g, '');
+    const cleanSelect = groupByCols.map(sanitize);
+    const cleanGroupBy = groupByCols.map(sanitize);
+    
+    let projections = [];
+    if (cleanSelect.length > 0) {
+      if (engine === 'pg') {
+        projections.push(...cleanSelect.map(col => {
+          if (col === '*') return '*';
+          return col.split('.').map(p => p === '*' ? '*' : `"${p}"`).join('.');
+        }));
+      } else {
+        projections.push(...cleanSelect);
+      }
+    }
+    
+    measures.forEach(agg => {
+      const op = agg.op.toUpperCase();
+      const targetCol = agg.col === '*' ? '*' : sanitize(agg.col);
+      const alias = sanitize(agg.alias || `${op}_${targetCol.replace('.', '_')}`);
+      if (engine === 'pg') {
+        const pgCol = targetCol === '*' ? '*' : targetCol.split('.').map(p => p === '*' ? '*' : `"${p}"`).join('.');
+        projections.push(`${op}(${pgCol}) as "${alias}"`);
+      } else {
+        projections.push(`${op}(${targetCol}) as \`${alias}\``);
+      }
+    });
+
+    if (projections.length === 0) {
+      projections.push('*');
+    }
+
+    let fromClause = '';
+    if (engine === 'pg') {
+      fromClause = `FROM "${selectedTable}"`;
+      activeJoins.forEach(j => {
+        const type = j.type || 'INNER JOIN';
+        const rightTable = sanitize(j.table);
+        
+        let onConditions = [];
+        if (Array.isArray(j.leftCol) && Array.isArray(j.rightCol)) {
+          j.leftCol.forEach((lc, idx) => {
+            const rc = j.rightCol[idx];
+            if (lc && rc) {
+              onConditions.push(`"${selectedTable}"."${sanitize(lc)}" = "${rightTable}"."${sanitize(rc)}"`);
+            }
+          });
+        } else {
+          const leftCol = sanitize(j.leftCol);
+          const rightCol = sanitize(j.rightCol);
+          onConditions.push(`"${selectedTable}"."${leftCol}" = "${rightTable}"."${rightCol}"`);
+        }
+        
+        fromClause += `\n${type} "${rightTable}" ON ${onConditions.join(' AND ')}`;
+      });
+    } else {
+      fromClause = `FROM ${db}.${selectedTable}`;
+      activeJoins.forEach(j => {
+        const type = j.type || 'INNER JOIN';
+        const rightTable = sanitize(j.table);
+        const rightTableQualified = rightTable.includes('.') ? rightTable : `${db}.${rightTable}`;
+        
+        let onConditions = [];
+        if (Array.isArray(j.leftCol) && Array.isArray(j.rightCol)) {
+          j.leftCol.forEach((lc, idx) => {
+            const rc = j.rightCol[idx];
+            if (lc && rc) {
+              onConditions.push(`${db}.${selectedTable}.${sanitize(lc)} = ${rightTableQualified}.${sanitize(rc)}`);
+            }
+          });
+        } else {
+          const leftCol = sanitize(j.leftCol);
+          const rightCol = sanitize(j.rightCol);
+          onConditions.push(`${db}.${selectedTable}.${leftCol} = ${rightTableQualified}.${rightCol}`);
+        }
+        
+        fromClause += `\n${type} ${rightTableQualified} ON ${onConditions.join(' AND ')}`;
+      });
+    }
+
+    let sql = `SELECT ${projections.join(', ')}\n${fromClause}`;
+
+    let whereClauses = [];
+    filters.forEach(filter => {
+      const col = sanitize(filter.col);
+      const op = filter.op;
+      const val = filter.val;
+      if (!col || !op) return;
+
+      if (['=', '>', '<', '<=', '>=', '!=', 'LIKE'].includes(op)) {
+        let valueStr = op === 'LIKE' ? `'%${val}%'` : `'${val}'`;
+        if (val && !isNaN(val)) {
+          valueStr = val;
+        }
+        if (engine === 'pg') {
+          const pgCol = col.split('.').map(p => p === '*' ? '*' : `"${p}"`).join('.');
+          whereClauses.push(`${pgCol}::text ${op} ${valueStr}`);
+        } else {
+          whereClauses.push(`${col} ${op} ${valueStr}`);
+        }
+      }
+    });
+
+    if (whereClauses.length > 0) {
+      sql += `\nWHERE ${whereClauses.join(' AND ')}`;
+    }
+
+    if (cleanGroupBy.length > 0) {
+      if (engine === 'pg') {
+        sql += `\nGROUP BY ${cleanGroupBy.map(col => col.split('.').map(p => p === '*' ? '*' : `"${p}"`).join('.')).join(', ')}`;
+      } else {
+        sql += `\nGROUP BY ${cleanGroupBy.join(', ')}`;
+      }
+    }
+
+    sql += `\nLIMIT ${limit};`;
+    return sql;
+  };
+
   // Run dynamic analysis query
   const executeAnalysis = async () => {
     if (!selectedTable) return;
@@ -150,11 +439,16 @@ const AnalyticsExplorer = () => {
         aggregates: measures,
         groupBy: groupByCols,
         filters: filters,
+        joins: activeJoins,
         limit
       };
 
       const res = await axios.post(`${API_URL}/explorer/query`, payload, { headers: getAuthHeaders() });
       setQueryResult(res.data);
+      setExecutedConfig({
+        groupByCols: [...groupByCols],
+        measures: [...measures]
+      });
     } catch (err) {
       setError(err.response?.data?.error || err.message);
     } finally {
@@ -170,7 +464,7 @@ const AnalyticsExplorer = () => {
     setDrillDownPage(0);
     setDrillDownSearchQuery('');
 
-    const groupDesc = groupByCols.map(col => {
+    const groupDesc = executedConfig.groupByCols.map(col => {
       const val = getRowVal(groupRow, col);
       return `${col}: ${val === null ? 'N/A' : val}`;
     }).join(', ') || 'Todo';
@@ -181,7 +475,7 @@ const AnalyticsExplorer = () => {
 
     try {
       const groupFilters = [...filters];
-      groupByCols.forEach(col => {
+      executedConfig.groupByCols.forEach(col => {
         const val = getRowVal(groupRow, col);
         if (val !== undefined && val !== null) {
           groupFilters.push({
@@ -315,14 +609,14 @@ const AnalyticsExplorer = () => {
     
     // X axis label comes from grouping columns
     // Y value comes from the first measure
-    const xKey = groupByCols.join(' - ') || 'Fila';
-    const yKey = measures.length > 0 ? measures[0].alias || `${measures[0].op}_${measures[0].col}` : '';
+    const xKey = executedConfig.groupByCols.join(' - ') || 'Fila';
+    const yKey = executedConfig.measures.length > 0 ? executedConfig.measures[0].alias || `${executedConfig.measures[0].op}_${executedConfig.measures[0].col}` : '';
     
     if (!yKey) return [];
 
     return queryResult.data.map((row, idx) => {
       // Build an X label by concatenating the group columns
-      const label = groupByCols.map(c => String(row[c] === null ? 'N/A' : row[c])).join(' / ') || `Fila ${idx+1}`;
+      const label = executedConfig.groupByCols.map(c => String(getRowVal(row, c) === null ? 'N/A' : getRowVal(row, c))).join(' / ') || `Fila ${idx+1}`;
       const value = parseFloat(row[yKey]) || 0;
       return { label, value, row };
     });
@@ -506,13 +800,57 @@ const AnalyticsExplorer = () => {
                 <AlertCircle size={18} style={{ flexShrink: 0 }} />
                 <div style={{ fontSize: '0.8rem', lineHeight: '1.4' }}>
                   <strong>Tabla Grande Detectada:</strong> Esta tabla contiene <strong>{selectedTableObj.rows.toLocaleString()}</strong> registros. 
-                  Para evitar demoras o límites de tiempo (20s), se recomienda aplicar <strong>Filtros Lógicos (Paso 3)</strong> para reducir el volumen de datos.
+                  Para evitar demoras o límites de tiempo (90s), se recomienda aplicar <strong>Filtros Lógicos (Paso 4)</strong> para reducir el volumen de datos.
                 </div>
               </div>
             )}
 
-            {/* Pivot configuration cards */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+            {/* Sleek Column & Parameter Search Input */}
+            <div style={{ 
+              background: 'rgba(13, 13, 20, 0.5)', 
+              backdropFilter: 'blur(12px)', 
+              borderRadius: '20px', 
+              border: '1px solid rgba(99, 102, 241, 0.12)', 
+              padding: '1rem',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.5rem',
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.7rem', color: '#818cf8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px' }}>🔍 Filtrar Campos y Columnas</span>
+                {columnSearch && (
+                  <button 
+                    onClick={() => setColumnSearch('')}
+                    style={{ background: 'transparent', border: 'none', color: '#f87171', fontSize: '0.7rem', cursor: 'pointer', fontWeight: 600 }}
+                  >
+                    Limpiar Filtro ✕
+                  </button>
+                )}
+              </div>
+              <input
+                type="text"
+                placeholder="Escribe para buscar columnas al vuelo (ej: peri, nume, codi, obse, cuen)..."
+                value={columnSearch}
+                onChange={(e) => setColumnSearch(e.target.value)}
+                style={{
+                  width: '100%',
+                  background: '#0a0a0f',
+                  border: '1px solid rgba(255,255,255,0.06)',
+                  borderRadius: '12px',
+                  padding: '0.75rem 1rem',
+                  color: 'white',
+                  fontSize: '0.8rem',
+                  outline: 'none',
+                  transition: 'all 0.2s'
+                }}
+                onFocus={(e) => { e.currentTarget.style.border = '1px solid rgba(99, 102, 241, 0.4)'; e.currentTarget.style.boxShadow = '0 0 10px rgba(99, 102, 241, 0.15)' }}
+                onBlur={(e) => { e.currentTarget.style.border = '1px solid rgba(255,255,255,0.06)'; e.currentTarget.style.boxShadow = 'none' }}
+              />
+            </div>
+
+            {/* Top Grid: Dimensions & Join Key */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
               
               {/* Group By Columns (Dimensions) */}
               <div style={{ background: 'rgba(13, 13, 20, 0.7)', backdropFilter: 'blur(12px)', borderRadius: '24px', border: '1px solid rgba(255,255,255,0.05)', padding: '1.5rem' }}>
@@ -524,8 +862,10 @@ const AnalyticsExplorer = () => {
                 <p style={{ fontSize: '0.8rem', color: '#9ca3af', margin: '-0.5rem 0 1.25rem 0' }}>Elige las columnas base para categorizar el resumen (e.g. Año, Oficina).</p>
                 
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', maxHeight: '180px', overflowY: 'auto', paddingRight: '0.25rem' }}>
-                  {columns.map(col => {
-                    const active = groupByCols.includes(col.name);
+                  {columns
+                    .filter(c => c.name.toLowerCase().includes(columnSearch.toLowerCase()))
+                    .map(col => {
+                      const active = groupByCols.includes(col.name);
                     return (
                       <button
                         key={col.name}
@@ -554,12 +894,79 @@ const AnalyticsExplorer = () => {
                 </div>
               </div>
 
+              {/* Card 2: Campo Relacional para Cruces (Join Key) */}
+              <div style={{ background: 'rgba(13, 13, 20, 0.7)', backdropFilter: 'blur(12px)', borderRadius: '24px', border: '1px solid rgba(255,255,255,0.05)', padding: '1.5rem' }}>
+                <h3 style={{ margin: '0 0 1rem 0', fontSize: '0.95rem', fontWeight: 700, color: 'white', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Link2 size={16} style={{ color: '#ec4899' }} />
+                  2. Campo Relacional para Cruces (Join Key)
+                </h3>
+                
+                <p style={{ fontSize: '0.8rem', color: '#9ca3af', margin: '-0.5rem 0 1.25rem 0' }}>Elige un campo específico para enfocar el escaneo de relaciones en la tarjeta 5, o déjalo en amplio.</p>
+                
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', maxHeight: '180px', overflowY: 'auto', paddingRight: '0.25rem' }}>
+                  <button
+                    onClick={() => setSelectedJoinColumn('all')}
+                    style={{
+                      padding: '0.4rem 0.8rem',
+                      borderRadius: '10px',
+                      border: selectedJoinColumn === 'all' ? '1px solid rgba(236, 72, 153, 0.4)' : '1px solid rgba(255,255,255,0.08)',
+                      background: selectedJoinColumn === 'all' ? 'rgba(236, 72, 153, 0.15)' : 'transparent',
+                      color: selectedJoinColumn === 'all' ? '#f472b6' : '#e4e4e7',
+                      fontSize: '0.75rem',
+                      fontWeight: selectedJoinColumn === 'all' ? 600 : 400,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.35rem',
+                      transition: 'all 0.15s'
+                    }}
+                  >
+                    {selectedJoinColumn === 'all' && <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#f472b6' }}></span>}
+                    Todos los campos 🌐
+                  </button>
+
+                  {columns
+                    .filter(c => c.name.toLowerCase().includes(columnSearch.toLowerCase()))
+                    .map(col => {
+                      const active = Array.isArray(selectedJoinColumn) && selectedJoinColumn.includes(col.name);
+                      return (
+                      <button
+                        key={col.name}
+                        onClick={() => toggleJoinColumn(col.name)}
+                        style={{
+                          padding: '0.4rem 0.8rem',
+                          borderRadius: '10px',
+                          border: active ? '1px solid rgba(236, 72, 153, 0.4)' : '1px solid rgba(255,255,255,0.08)',
+                          background: active ? 'rgba(236, 72, 153, 0.15)' : 'transparent',
+                          color: active ? '#f472b6' : '#e4e4e7',
+                          fontSize: '0.75rem',
+                          fontWeight: active ? 600 : 400,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.35rem',
+                          transition: 'all 0.15s'
+                        }}
+                      >
+                        {active && <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#f472b6' }}></span>}
+                        {col.name}
+                        <span style={{ fontSize: '0.65rem', opacity: 0.4 }}>({col.type.split('(')[0]})</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Middle Grid: Calculations & Filters */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
+              
               {/* Calculations (Measures) */}
               <div style={{ background: 'rgba(13, 13, 20, 0.7)', backdropFilter: 'blur(12px)', borderRadius: '24px', border: '1px solid rgba(255,255,255,0.05)', padding: '1.5rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                   <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: 'white', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <Hash size={16} style={{ color: '#10b981' }} />
-                    2. Métricas y Operaciones (Measures)
+                    3. Métricas y Operaciones (Measures)
                   </h3>
                   
                   <button 
@@ -596,7 +1003,7 @@ const AnalyticsExplorer = () => {
                         onChange={(e) => {
                           const updated = [...measures];
                           updated[idx].col = e.target.value;
-                          updated[idx].alias = `${updated[idx].op}_${e.target.value.replace('*', 'Regs')}`;
+                          updated[idx].alias = `${updated[idx].op}_${e.target.value.replace('*', 'Regs').replace(/\./g, '_')}`;
                           setMeasures(updated);
                         }}
                         style={{ flex: 1, background: '#13131f', color: 'white', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', fontSize: '0.75rem', padding: '0.3rem 0.5rem' }}
@@ -632,82 +1039,427 @@ const AnalyticsExplorer = () => {
                   )}
                 </div>
               </div>
+
+              {/* Filters panel */}
+              <div style={{ background: 'rgba(13, 13, 20, 0.7)', backdropFilter: 'blur(12px)', borderRadius: '24px', border: '1px solid rgba(255,255,255,0.05)', padding: '1.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                  <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: 'white', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <Filter size={16} style={{ color: '#3b82f6' }} />
+                    4. Filtros Lógicos Ad-Hoc
+                  </h3>
+                  <button 
+                    onClick={addFilter}
+                    style={{ background: 'rgba(59, 130, 246, 0.1)', border: 'none', color: '#60a5fa', width: '28px', height: '28px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                  >
+                    <Plus size={16} />
+                  </button>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxHeight: '200px', overflowY: 'auto', paddingRight: '0.25rem' }}>
+                  {filters.map((f, idx) => (
+                    <div key={idx} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', background: 'rgba(255,255,255,0.02)', padding: '0.5rem 0.75rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.04)' }}>
+                      <span style={{ fontSize: '0.7rem', color: '#3b82f6', fontWeight: 700, minWidth: '55px', textTransform: 'uppercase' }}>
+                        {idx === 0 ? 'DONDE' : 'Y'}
+                      </span>
+                      
+                      <select
+                        value={f.col}
+                        onChange={(e) => {
+                          const updated = [...filters];
+                          updated[idx].col = e.target.value;
+                          setFilters(updated);
+                        }}
+                        style={{ flex: 1.5, background: '#13131f', color: 'white', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', fontSize: '0.75rem', padding: '0.35rem 0.5rem', minWidth: '120px' }}
+                      >
+                        {columns.map(c => (
+                          <option key={c.name} value={c.name}>{c.name}</option>
+                        ))}
+                      </select>
+
+                      <select
+                        value={f.op}
+                        onChange={(e) => {
+                          const updated = [...filters];
+                          updated[idx].op = e.target.value;
+                          setFilters(updated);
+                        }}
+                        style={{ width: '100px', background: '#13131f', color: 'white', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', fontSize: '0.75rem', padding: '0.35rem 0.5rem' }}
+                      >
+                        <option value="=">=</option>
+                        <option value="LIKE">LIKE (Contiene)</option>
+                        <option value=">">&gt;</option>
+                        <option value="<">&lt;</option>
+                        <option value=">=">&gt;=</option>
+                        <option value="<=">&lt;=</option>
+                        <option value="!=">!=</option>
+                      </select>
+
+                      <input
+                        type="text"
+                        placeholder="Escribe el valor..."
+                        value={f.val}
+                        onChange={(e) => {
+                          const updated = [...filters];
+                          updated[idx].val = e.target.value;
+                          setFilters(updated);
+                        }}
+                        style={{ flex: 1, background: '#13131f', color: 'white', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', fontSize: '0.75rem', padding: '0.35rem 0.5rem', minWidth: '100px' }}
+                      />
+
+                      <button 
+                        onClick={() => removeFilter(idx)}
+                        style={{ background: 'rgba(239, 68, 68, 0.1)', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '0.35rem', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                  {filters.length === 0 && (
+                    <div style={{ opacity: 0.4, fontSize: '0.75rem', padding: '0.5rem 0', textAlign: 'center' }}>No hay filtros aplicados. Todo el universo de la tabla está incluido.</div>
+                  )}
+                </div>
+              </div>
+
             </div>
 
-            {/* Filters panel */}
+            {/* 5. Relaciones e Intersecciones Dinámicas (Joins) */}
             <div style={{ background: 'rgba(13, 13, 20, 0.7)', backdropFilter: 'blur(12px)', borderRadius: '24px', border: '1px solid rgba(255,255,255,0.05)', padding: '1.5rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: 'white', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <Filter size={16} style={{ color: '#3b82f6' }} />
-                  3. Filtros Lógicos Ad-Hoc
-                </h3>
-                <button 
-                  onClick={addFilter}
-                  style={{ background: 'rgba(59, 130, 246, 0.1)', border: 'none', color: '#60a5fa', width: '28px', height: '28px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+              <h3 style={{ margin: '0 0 1rem 0', fontSize: '0.95rem', fontWeight: 700, color: 'white', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <TrendingUp size={16} style={{ color: '#a78bfa' }} />
+                5. Relaciones e Intersecciones Dinámicas (Joins)
+              </h3>
+              
+              <p style={{ fontSize: '0.8rem', color: '#9ca3af', margin: '-0.5rem 0 1.25rem 0' }}>
+                El motor ha escaneado la base de datos y encontrado tablas con columnas en común. Elige relaciones para mezclar campos.
+              </p>
+
+              {relationsLoading ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '1rem', opacity: 0.5 }}>
+                  <RefreshCw className="animate-spin" size={16} />
+                  <span style={{ fontSize: '0.75rem' }}>Escaneando relaciones en la base de datos...</span>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  
+                  {/* Active Joins Badge List */}
+                  {activeJoins.length > 0 && (
+                    <div>
+                      <span style={{ fontSize: '0.7rem', color: '#a78bfa', fontWeight: 700, display: 'block', marginBottom: '0.5rem', textTransform: 'uppercase' }}>RELACIONES ACTIVAS EN LA CONSULTA:</span>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                        {activeJoins.map((j, idx) => (
+                          <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(167, 139, 250, 0.15)', border: '1px solid rgba(167, 139, 250, 0.3)', borderRadius: '10px', padding: '0.4rem 0.8rem', fontSize: '0.75rem', color: '#c4b5fd' }}>
+                            <strong>{j.type}</strong>
+                            <span>
+                              {Array.isArray(j.leftCol)
+                                ? j.leftCol.map((lc, i) => `${selectedTable}.${lc} = ${j.table}.${j.rightCol[i]}`).join(' AND ')
+                                : `${selectedTable}.${j.leftCol} = ${j.table}.${j.rightCol}`
+                              }
+                            </span>
+                            <button 
+                              onClick={() => removeJoin(idx)}
+                              style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '0.1rem' }}
+                            >
+                              <X size={12} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Potential Relations Selector / Cards */}
+                  <div>
+                    {(() => {
+                      const getDbOfRelation = (relTable) => {
+                        if (!relTable) return '';
+                        if (relTable.includes('.')) {
+                          return relTable.split('.')[0];
+                        }
+                        return engine === 'pg' ? 'public' : db;
+                      };
+                      
+                      // 1. First, filter by selected join column (Card 2)
+                      const relationsFilteredByCol = selectedJoinColumn === 'all'
+                        ? potentialRelations
+                        : potentialRelations.filter(rel => 
+                            Array.isArray(selectedJoinColumn)
+                              ? selectedJoinColumn.some(col => col.toLowerCase() === rel.matchingCol.toLowerCase())
+                              : rel.matchingCol.toLowerCase() === selectedJoinColumn.toLowerCase()
+                          );
+
+                      // 2. Next, extract unique databases from these filtered relations
+                      const relatedDbs = Array.from(new Set(relationsFilteredByCol.map(rel => getDbOfRelation(rel.table))));
+                      
+                      // 3. Finally, filter by database select dropdown (Card 5 selector)
+                      const displayedRelations = selectedRelationDb === 'all'
+                        ? relationsFilteredByCol
+                        : relationsFilteredByCol.filter(rel => getDbOfRelation(rel.table) === selectedRelationDb);
+
+                      // 4. Additionally filter by relationSearch text keyword
+                      const searchedRelations = relationSearch
+                        ? displayedRelations.filter(rel => rel.table.toLowerCase().includes(relationSearch.toLowerCase()))
+                        : displayedRelations;
+
+                      // Group displayed relations by table name to handle composite keys beautifully!
+                      const groupedRelationsMap = {};
+                      searchedRelations.forEach(rel => {
+                        if (!groupedRelationsMap[rel.table]) {
+                          groupedRelationsMap[rel.table] = {
+                            table: rel.table,
+                            matches: []
+                          };
+                        }
+                        if (!groupedRelationsMap[rel.table].matches.some(m => m.leftCol === rel.matchingCol && m.rightCol === rel.column)) {
+                          groupedRelationsMap[rel.table].matches.push({
+                            leftCol: rel.matchingCol,
+                            rightCol: rel.column
+                          });
+                        }
+                      });
+                      const groupedRelationsList = Object.values(groupedRelationsMap);
+
+                      return (
+                        <>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+                            <span style={{ fontSize: '0.7rem', color: '#9ca3af', fontWeight: 700, textTransform: 'uppercase' }}>RELACIONES DISPONIBLES ENCONTRADAS:</span>
+                            
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                              {/* Table relation search bar! */}
+                              <input
+                                type="text"
+                                placeholder="🔍 Buscar tabla..."
+                                value={relationSearch}
+                                onChange={(e) => setRelationSearch(e.target.value)}
+                                style={{
+                                  background: '#13131f',
+                                  color: 'white',
+                                  border: '1px solid rgba(255,255,255,0.08)',
+                                  borderRadius: '8px',
+                                  fontSize: '0.7rem',
+                                  padding: '0.25rem 0.5rem',
+                                  outline: 'none',
+                                  width: '130px',
+                                  transition: 'all 0.2s'
+                                }}
+                                onFocus={(e) => e.currentTarget.style.border = '1px solid rgba(167, 139, 250, 0.4)'}
+                                onBlur={(e) => e.currentTarget.style.border = '1px solid rgba(255,255,255,0.08)'}
+                              />
+
+                              {relatedDbs.length > 0 && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                  <span style={{ fontSize: '0.7rem', color: '#6b7280' }}>Base:</span>
+                                  <select
+                                    value={selectedRelationDb}
+                                    onChange={(e) => setSelectedRelationDb(e.target.value)}
+                                    style={{
+                                      background: '#13131f',
+                                      color: 'white',
+                                      border: '1px solid rgba(255,255,255,0.08)',
+                                      borderRadius: '8px',
+                                      fontSize: '0.7rem',
+                                      padding: '0.25rem 0.5rem',
+                                      cursor: 'pointer',
+                                      outline: 'none'
+                                    }}
+                                  >
+                                    <option value="all">Todas ({potentialRelations.length})</option>
+                                    {relatedDbs.map(d => {
+                                      const count = potentialRelations.filter(r => getDbOfRelation(r.table) === d).length;
+                                      return (
+                                        <option key={d} value={d}>{d} ({count})</option>
+                                      );
+                                    })}
+                                  </select>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          
+                          {groupedRelationsList.length === 0 ? (
+                            <div style={{ padding: '1rem', background: 'rgba(255,255,255,0.01)', border: '1px dashed rgba(255,255,255,0.05)', borderRadius: '12px', textAlign: 'center', fontSize: '0.75rem', color: '#9ca3af', opacity: 0.5 }}>
+                              {potentialRelations.length === 0 
+                                ? 'No se detectaron tablas con columnas cruzadas directas. ¡Puedes agrupar y analizar sobre los campos de esta tabla!'
+                                : 'No hay relaciones disponibles en la base de datos seleccionada.'}
+                            </div>
+                          ) : (
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '0.75rem', maxHeight: '350px', overflowY: 'auto', paddingRight: '0.25rem' }}>
+                              {groupedRelationsList.map((rel, idx) => {
+                                const isAlreadyActive = activeJoins.some(j => j.table === rel.table);
+                                return (
+                                  <div 
+                                    key={idx}
+                                    style={{ 
+                                      background: 'rgba(255,255,255,0.02)', 
+                                      border: '1px solid rgba(255,255,255,0.05)', 
+                                      borderRadius: '12px', 
+                                      padding: '0.75rem',
+                                      display: 'flex',
+                                      flexDirection: 'column',
+                                      justifyContent: 'space-between',
+                                      gap: '0.5rem',
+                                      opacity: isAlreadyActive ? 0.5 : 1
+                                    }}
+                                  >
+                                    <div>
+                                      <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        Tabla: {rel.table}
+                                      </div>
+                                      <div style={{ fontSize: '0.7rem', color: '#9ca3af', marginTop: '0.25rem' }}>
+                                        Vínculos:
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', marginTop: '0.25rem' }}>
+                                          {rel.matches.map((m, mIdx) => (
+                                            <div key={mIdx} style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                                              <code style={{ background: 'rgba(0,0,0,0.3)', padding: '0.1rem 0.25rem', borderRadius: '4px', color: '#f43f5e', fontSize: '0.65rem' }}>{m.leftCol}</code>
+                                              <span style={{ fontSize: '0.65rem', opacity: 0.5 }}>➔</span>
+                                              <code style={{ background: 'rgba(0,0,0,0.3)', padding: '0.1rem 0.25rem', borderRadius: '4px', color: '#34d399', fontSize: '0.65rem' }}>{m.rightCol}</code>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.5rem' }}>
+                                      <button
+                                        disabled={isAlreadyActive}
+                                        onClick={() => addJoin('INNER JOIN', rel)}
+                                        style={{ 
+                                          flex: 1,
+                                          background: 'rgba(167, 139, 250, 0.1)', 
+                                          border: '1px solid rgba(167, 139, 250, 0.2)', 
+                                          color: '#c4b5fd', 
+                                          borderRadius: '8px', 
+                                          padding: '0.3rem 0.5rem', 
+                                          fontSize: '0.7rem', 
+                                          fontWeight: 600,
+                                          cursor: isAlreadyActive ? 'not-allowed' : 'pointer',
+                                          transition: 'all 0.2s'
+                                        }}
+                                        onMouseOver={(e) => { if(!isAlreadyActive) e.currentTarget.style.background = 'rgba(167, 139, 250, 0.2)' }}
+                                        onMouseOut={(e) => { if(!isAlreadyActive) e.currentTarget.style.background = 'rgba(167, 139, 250, 0.1)' }}
+                                      >
+                                        Inner Join 🔗
+                                      </button>
+                                      <button
+                                        disabled={isAlreadyActive}
+                                        onClick={() => addJoin('LEFT JOIN', rel)}
+                                        style={{ 
+                                          flex: 1,
+                                          background: 'rgba(59, 130, 246, 0.1)', 
+                                          border: '1px solid rgba(59, 130, 246, 0.2)', 
+                                          color: '#93c5fd', 
+                                          borderRadius: '8px', 
+                                          padding: '0.3rem 0.5rem', 
+                                          fontSize: '0.7rem', 
+                                          fontWeight: 600,
+                                          cursor: isAlreadyActive ? 'not-allowed' : 'pointer',
+                                          transition: 'all 0.2s'
+                                        }}
+                                        onMouseOver={(e) => { if(!isAlreadyActive) e.currentTarget.style.background = 'rgba(59, 130, 246, 0.2)' }}
+                                        onMouseOut={(e) => { if(!isAlreadyActive) e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)' }}
+                                      >
+                                        Left Join ⛓️
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Real-time SQL Query Preview Card */}
+            <div style={{ 
+              background: 'rgba(13, 13, 20, 0.75)', 
+              backdropFilter: 'blur(12px)', 
+              borderRadius: '24px', 
+              border: '1px solid rgba(99, 102, 241, 0.15)', 
+              padding: '1.5rem', 
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
+              position: 'relative',
+              overflow: 'hidden'
+            }}>
+              {/* Subtle glowing background effect */}
+              <div style={{ position: 'absolute', top: '-50px', right: '-50px', width: '150px', height: '150px', borderRadius: '50%', background: 'rgba(99, 102, 241, 0.08)', filter: 'blur(40px)', pointerEvents: 'none' }} />
+              
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ fontSize: '0.65rem', background: 'rgba(99, 102, 241, 0.15)', color: '#818cf8', padding: '0.15rem 0.5rem', borderRadius: '50px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    {engine === 'pg' ? 'PostgreSQL' : 'MariaDB'}
+                  </span>
+                  <h4 style={{ margin: 0, fontSize: '0.85rem', fontWeight: 700, color: 'white' }}>
+                    Consulta SQL Generada al Vuelo (Live Preview)
+                  </h4>
+                </div>
+                
+                <button
+                  onClick={() => {
+                    const sqlText = generateSQLPreview();
+                    navigator.clipboard.writeText(sqlText);
+                    const btn = document.getElementById('sql-copy-btn');
+                    if (btn) {
+                      const originalHTML = btn.innerHTML;
+                      btn.innerHTML = '¡Copiado! ✓';
+                      btn.style.color = '#34d399';
+                      btn.style.background = 'rgba(52, 211, 153, 0.15)';
+                      btn.style.border = '1px solid rgba(52, 211, 153, 0.3)';
+                      setTimeout(() => {
+                        btn.innerHTML = originalHTML;
+                        btn.style.color = '#c4b5fd';
+                        btn.style.background = 'rgba(167, 139, 250, 0.1)';
+                        btn.style.border = '1px solid rgba(167, 139, 250, 0.2)';
+                      }, 2000);
+                    }
+                  }}
+                  id="sql-copy-btn"
+                  style={{
+                    background: 'rgba(167, 139, 250, 0.1)',
+                    border: '1px solid rgba(167, 139, 250, 0.2)',
+                    borderRadius: '8px',
+                    color: '#c4b5fd',
+                    fontSize: '0.7rem',
+                    fontWeight: 600,
+                    padding: '0.3rem 0.6rem',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.35rem'
+                  }}
+                  onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(167, 139, 250, 0.18)' }}
+                  onMouseOut={(e) => { e.currentTarget.style.background = 'rgba(167, 139, 250, 0.1)' }}
                 >
-                  <Plus size={16} />
+                  Copiar SQL 📋
                 </button>
               </div>
 
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', maxHeight: '150px', overflowY: 'auto' }}>
-                {filters.map((f, idx) => (
-                  <div key={idx} style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', background: 'rgba(255,255,255,0.02)', padding: '0.4rem 0.6rem', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.04)' }}>
-                    <select
-                      value={f.col}
-                      onChange={(e) => {
-                        const updated = [...filters];
-                        updated[idx].col = e.target.value;
-                        setFilters(updated);
-                      }}
-                      style={{ background: '#13131f', color: 'white', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', fontSize: '0.75rem', padding: '0.2rem 0.4rem' }}
-                    >
-                      {columns.map(c => (
-                        <option key={c.name} value={c.name}>{c.name}</option>
-                      ))}
-                    </select>
-
-                    <select
-                      value={f.op}
-                      onChange={(e) => {
-                        const updated = [...filters];
-                        updated[idx].op = e.target.value;
-                        setFilters(updated);
-                      }}
-                      style={{ background: '#13131f', color: 'white', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', fontSize: '0.75rem', padding: '0.2rem 0.4rem' }}
-                    >
-                      <option value="=">=</option>
-                      <option value="LIKE">LIKE (Contiene)</option>
-                      <option value=">">&gt;</option>
-                      <option value="<">&lt;</option>
-                      <option value=">=">&gt;=</option>
-                      <option value="<=">&lt;=</option>
-                      <option value="!=">!=</option>
-                    </select>
-
-                    <input
-                      type="text"
-                      placeholder="Valor..."
-                      value={f.val}
-                      onChange={(e) => {
-                        const updated = [...filters];
-                        updated[idx].val = e.target.value;
-                        setFilters(updated);
-                      }}
-                      style={{ width: '100px', background: '#13131f', color: 'white', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', fontSize: '0.75rem', padding: '0.2rem 0.4rem' }}
-                    />
-
-                    <button 
-                      onClick={() => removeFilter(idx)}
-                      style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '0.15rem' }}
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
-                ))}
-                {filters.length === 0 && (
-                  <div style={{ opacity: 0.4, fontSize: '0.75rem', padding: '0.25rem 0' }}>No hay filtros aplicados. Todo el universo de la tabla está incluido.</div>
-                )}
+              <div style={{ position: 'relative' }}>
+                <pre style={{ 
+                  margin: 0, 
+                  background: '#0a0a0f', 
+                  border: '1px solid rgba(255,255,255,0.03)', 
+                  borderRadius: '12px', 
+                  padding: '1rem', 
+                  fontSize: '0.75rem', 
+                  color: '#e2e8f0', 
+                  fontFamily: 'Consolas, Monaco, monospace', 
+                  overflowX: 'auto',
+                  maxHeight: '180px',
+                  lineHeight: '1.45',
+                  scrollbarWidth: 'thin'
+                }}>
+                  {generateSQLPreview()}
+                </pre>
               </div>
+              
+              <span style={{ fontSize: '0.62rem', color: '#6b7280', display: 'block', marginTop: '0.5rem', textAlign: 'right' }}>
+                💡 Puedes copiar esta sentencia directamente y ejecutarla en DBeaver o tu consola de base de datos.
+              </span>
             </div>
 
             {/* Error Message */}
@@ -718,8 +1470,62 @@ const AnalyticsExplorer = () => {
               </div>
             )}
 
+            {/* Query Loading Spinner Card */}
+            {loading && (
+              <div style={{ 
+                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(139, 92, 246, 0.04) 100%)', 
+                backdropFilter: 'blur(16px)', 
+                border: '1px solid rgba(99, 102, 241, 0.25)', 
+                borderRadius: '24px', 
+                padding: '2.5rem 2rem', 
+                display: 'flex', 
+                flexDirection: 'column',
+                alignItems: 'center', 
+                justifyContent: 'center',
+                gap: '1.25rem',
+                boxShadow: '0 8px 32px rgba(99, 102, 241, 0.05)',
+                marginTop: '0.5rem'
+              }}>
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {/* Glowing background ring */}
+                  <div style={{ 
+                    position: 'absolute', 
+                    width: '56px', 
+                    height: '56px', 
+                    borderRadius: '50%', 
+                    border: '2px dashed rgba(99, 102, 241, 0.2)', 
+                  }} />
+                  {/* Spinner icon */}
+                  <RefreshCw 
+                    size={36} 
+                    className="animate-spin"
+                    style={{ 
+                      color: '#818cf8', 
+                      filter: 'drop-shadow(0 0 8px rgba(99, 102, 241, 0.5))' 
+                    }} 
+                  />
+                </div>
+                
+                <div style={{ textAlign: 'center' }}>
+                  <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: 'white' }}>
+                    Consultando Base de Datos...
+                  </h4>
+                  <p style={{ margin: '0.4rem 0 0 0', fontSize: '0.8rem', color: '#9ca3af', maxWidth: '420px', lineHeight: '1.4' }}>
+                    Procesando registros en {engine === 'pg' ? 'PostgreSQL' : 'MariaDB'} ({db}). Las consultas complejas o uniones (Joins) pesadas pueden tomar unos segundos.
+                  </p>
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', background: 'rgba(255,255,255,0.03)', padding: '0.35rem 0.75rem', borderRadius: '100px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981' }}></span>
+                  <span style={{ fontSize: '0.7rem', color: '#a7f3d0', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                    Límite máximo de consulta: 90 segundos
+                  </span>
+                </div>
+              </div>
+            )}
+
             {/* 3. Output - KPIs & Visualizations */}
-            {queryResult && queryResult.data && (
+            {queryResult && queryResult.data && !loading && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', marginTop: '0.5rem' }}>
                 
                 {/* Dynamic Key Performance Indicators (KPIs) */}
@@ -733,26 +1539,26 @@ const AnalyticsExplorer = () => {
                   </div>
 
                   {/* Primary Sum Metric Card */}
-                  {measures.length > 0 && (
+                  {executedConfig.measures.length > 0 && (
                     <div style={{ background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, rgba(16, 185, 129, 0.01) 100%)', backdropFilter: 'blur(12px)', border: '1px solid rgba(16, 185, 129, 0.15)', borderRadius: '20px', padding: '1.25rem' }}>
                       <span style={{ fontSize: '0.7rem', color: '#34d399', fontWeight: 700, letterSpacing: '1px' }}>
-                        {measures[0].alias.toUpperCase()} (SUMA)
+                        {executedConfig.measures[0].alias.toUpperCase()} (SUMA)
                       </span>
                       <h2 style={{ fontSize: '2rem', fontWeight: 800, margin: '0.25rem 0 0 0', color: 'white' }}>
-                        {formatVal(queryResult.data.reduce((acc, row) => acc + (parseFloat(row[measures[0].alias]) || 0), 0))}
+                        {formatVal(queryResult.data.reduce((acc, row) => acc + (parseFloat(getRowVal(row, executedConfig.measures[0].alias)) || 0), 0))}
                       </h2>
                       <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.7rem', color: '#9ca3af' }}>Métrica de mayor peso analítico</p>
                     </div>
                   )}
 
                   {/* Secondary Sum Metric Card */}
-                  {measures.length > 1 && (
+                  {executedConfig.measures.length > 1 && (
                     <div style={{ background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, rgba(59, 130, 246, 0.01) 100%)', backdropFilter: 'blur(12px)', border: '1px solid rgba(59, 130, 246, 0.15)', borderRadius: '20px', padding: '1.25rem' }}>
                       <span style={{ fontSize: '0.7rem', color: '#60a5fa', fontWeight: 700, letterSpacing: '1px' }}>
-                        {measures[1].alias.toUpperCase()}
+                        {executedConfig.measures[1].alias.toUpperCase()}
                       </span>
                       <h2 style={{ fontSize: '2rem', fontWeight: 800, margin: '0.25rem 0 0 0' }}>
-                        {formatVal(queryResult.data.reduce((acc, row) => acc + (parseFloat(row[measures[1].alias]) || 0), 0))}
+                        {formatVal(queryResult.data.reduce((acc, row) => acc + (parseFloat(getRowVal(row, executedConfig.measures[1].alias)) || 0), 0))}
                       </h2>
                       <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.7rem', color: '#9ca3af' }}>Suma consolidada secundaria</p>
                     </div>
@@ -1003,13 +1809,13 @@ const AnalyticsExplorer = () => {
                         <thead>
                           <tr style={{ background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
                             {/* Grouping Columns */}
-                            {groupByCols.map(col => (
+                            {executedConfig.groupByCols.map(col => (
                               <th key={col} style={{ padding: '1rem', textAlign: 'left', fontWeight: 700, color: '#818cf8', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.5px' }}>
                                 {col}
                               </th>
                             ))}
                             {/* Measures */}
-                            {measures.map(m => (
+                            {executedConfig.measures.map(m => (
                               <th key={m.alias} style={{ padding: '1rem', textAlign: 'right', fontWeight: 700, color: '#34d399', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.5px' }}>
                                 {m.alias}
                               </th>
@@ -1026,12 +1832,12 @@ const AnalyticsExplorer = () => {
                               onMouseOver={(e) => e.currentTarget.style.background = 'rgba(99, 102, 241, 0.08)'} 
                               onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
                             >
-                              {groupByCols.map(col => (
+                              {executedConfig.groupByCols.map(col => (
                                 <td key={col} style={{ padding: '1rem', color: '#f3f4f6', fontWeight: 500 }}>
                                   {String(getRowVal(row, col) ?? 'N/A')}
                                 </td>
                               ))}
-                              {measures.map(m => (
+                              {executedConfig.measures.map(m => (
                                 <td key={m.alias} style={{ padding: '1rem', textAlign: 'right', fontWeight: 700, color: '#f3f4f6' }}>
                                   {formatVal(getRowVal(row, m.alias))}
                                 </td>

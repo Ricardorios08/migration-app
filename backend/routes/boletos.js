@@ -25,7 +25,7 @@ router.use(ensureAuth);
 
 // GET /api/boletos/search
 router.get('/search', async (req, res) => {
-    const { officeId, account, personId, period, status, numeBole, limit = 50, page = 1 } = req.query;
+    const { officeId, account, personId, period, status, numeBole, limit = 20, page = 1 } = req.query;
     let conn;
     try {
         conn = await mariaDB.getConnection();
@@ -42,7 +42,7 @@ router.get('/search', async (req, res) => {
         const params = [];
 
         if (officeId) { whereClause += " AND b.CodiOfic = ?"; params.push(parseInt(officeId)); }
-        if (account) { const accountTrim = account.trim(); whereClause += " AND (TRIM(b.CuenCtct) = ? OR b.CuenCtct = ?)"; params.push(accountTrim, accountTrim.padStart(10, ' ')); }
+        if (account) { const accountTrim = account.trim(); whereClause += " AND (b.CuenCtct = ? OR b.CuenCtct = ?)"; params.push(accountTrim, accountTrim.padStart(10, ' ')); }
         if (personId) { whereClause += " AND b.CucuPers = ?"; params.push(personId); }
         if (period) { whereClause += " AND b.PeriBole = ?"; params.push(period); }
         if (status) { whereClause += " AND b.EstaBole = ?"; params.push(status); }
@@ -135,7 +135,7 @@ router.post('/audit-print', async (req, res) => {
 router.get('/explorer', async (req, res) => {
     const { 
         officeId, account, personId, period, status, type, numeBole, 
-        userAlta, dateFrom, dateTo, limit = 50, page = 1 
+        userAlta, dateFrom, dateTo, limit = 20, page = 1 
     } = req.query;
     
     console.log('[EXPLORER DEBUG] Filters received:', req.query);

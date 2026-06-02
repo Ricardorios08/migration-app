@@ -1,7 +1,7 @@
-const BACKEND_PORT = 3006;
+const BACKEND_PORT = import.meta.env.VITE_BACKEND_PORT || 3000;
 
-// Detect if we are in development (Vite port)
-const isDevelopment = window.location.port === '5173' || window.location.port === '3000';
+// Detect if we are in development using Vite's built-in env variable
+const isDevelopment = import.meta.env.DEV;
 
 const API_BASE_URL = isDevelopment
     ? `http://${window.location.hostname}:${BACKEND_PORT}`

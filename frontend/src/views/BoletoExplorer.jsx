@@ -31,7 +31,7 @@ const BoletoExplorer = () => {
         setError(null);
         
         try {
-            const params = { ...filters, page: pageNum, limit: 50 };
+            const params = { ...filters, page: pageNum, limit: 20 };
             // Clean empty params
             Object.keys(params).forEach(key => (params[key] === '' || params[key] == null) && delete params[key]);
 

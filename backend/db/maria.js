@@ -25,7 +25,6 @@ const superadminPool = mariadb.createPool({
     user: process.env.SUPERADMIN_MARIA_USER || process.env.MARIA_USER,
     password: process.env.SUPERADMIN_MARIA_PASS || process.env.MARIA_PASS,
     port: parseInt(process.env.MARIA_PORT || "3306"),
-    database: DB_NAME,
     connectionLimit: 5,
     connectTimeout: 10000,
     acquireTimeout: 10000,

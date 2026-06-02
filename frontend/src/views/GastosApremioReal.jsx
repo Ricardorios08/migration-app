@@ -138,6 +138,17 @@ const GastosApremioReal = ({ setView }) => {
   const [liveDebt, setLiveDebt] = useState({ capital: 1172.88, recargo: 586.44, numeApre: null });
   const [searching, setSearching] = useState(false);
 
+  const formatMoney = (v) => {
+    if (v === undefined || v === null || isNaN(v)) return '$0,00';
+    return '$' + parseFloat(v).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
+  const formatPercent = (pct) => {
+    if (pct === undefined || pct === null || isNaN(pct)) return '0%';
+    const val = pct * 100;
+    return val.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + '%';
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -190,7 +201,6 @@ const GastosApremioReal = ({ setView }) => {
     
     if (!inst) return null;
 
-    const format = (v) => '$' + v.toLocaleString('es-AR', { minimumFractionDigits: 2 });
     const p_cami = parseFloat(p.CamiPaap);
     const p_cama = parseFloat(p.CamaPaap);
     const p_aple = parseFloat(p.AplePaap);
@@ -204,6 +214,7 @@ const GastosApremioReal = ({ setView }) => {
     let coad_note = "";
     if (coad < p_cami) { coad = p_cami; coad_note = "Aplica Mínimo"; }
     if (p_cama > 0 && coad > p_cama) { coad = p_cama; coad_note = "Aplica Máximo"; }
+    coad = Math.round(coad * 100) / 100;
 
     // Hore (Honorarios Recaudador)
     const hore_pct = parseFloat(inst.HoreInju) / 100;
@@ -211,21 +222,25 @@ const GastosApremioReal = ({ setView }) => {
     let hore_note = "";
     if (hore > 0 && hore < p_hrmi) { hore = p_hrmi; hore_note = "Aplica Mínimo"; }
     if (p_hrma > 0 && hore > p_hrma) { hore = p_hrma; hore_note = "Aplica Máximo"; }
+    hore = Math.round(hore * 100) / 100;
 
     // Tasa Justicia (if CodiInju > 1)
     let taju = 0;
     if (inst.CodiInju > 1) {
       taju = p_taju; // Simplified lookup since escaapre is usually empty
     }
+    taju = Math.round(taju * 100) / 100;
 
     // Aple (Aporte Ley)
     const aple_pct = parseFloat(inst.ApleInju) / 100;
     let aple = base * aple_pct;
     if (aple > p_aple) aple = p_aple;
+    aple = Math.round(aple * 100) / 100;
 
     // Defi (Deficientes / Descuento)
     const defi_pct = parseFloat(inst.DefiInju) / 100;
     let defi = taju * defi_pct;
+    defi = Math.round(defi * 100) / 100;
 
     const total = coad + hore + taju + aple - defi;
 
@@ -333,7 +348,7 @@ const GastosApremioReal = ({ setView }) => {
             </div>
             {liveDebt.numeApre && (
               <div style={{ marginTop: '0.75rem', fontSize: '0.8rem', color: '#10b981', fontWeight: 600 }}>
-                Apremio {liveDebt.numeApre} detectado. Base: ${(liveDebt.capital + liveDebt.recargo).toLocaleString('es-AR')}
+                Apremio {liveDebt.numeApre} detectado. Base de Cálculo: {formatMoney(liveDebt.capital + liveDebt.recargo)}
               </div>
             )}
           </div>
@@ -373,31 +388,31 @@ const GastosApremioReal = ({ setView }) => {
               </h4>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 <SimRow 
-                  label={`Comisión Admin (${(calcResults.coad_pct * 100).toFixed(1)}%)`} 
-                  calc={`$${calcResults.base.toLocaleString('es-AR')} × ${(calcResults.coad_pct * 100).toFixed(1)}%`} 
-                  result={`$${calcResults.coad.toLocaleString('es-AR')}`} 
+                  label={`Comisión Admin (${formatPercent(calcResults.coad_pct)})`} 
+                  calc={`${formatMoney(calcResults.base)} × ${formatPercent(calcResults.coad_pct)}`} 
+                  result={formatMoney(calcResults.coad)} 
                   note={calcResults.coad_note}
                 />
                 <SimRow 
-                  label={`Honorarios Recaudador (${(calcResults.hore_pct * 100).toFixed(1)}%)`} 
-                  calc={`$${calcResults.base.toLocaleString('es-AR')} × ${(calcResults.hore_pct * 100).toFixed(1)}%`} 
-                  result={`$${calcResults.hore.toLocaleString('es-AR')}`} 
+                  label={`Honorarios Recaudador (${formatPercent(calcResults.hore_pct)})`} 
+                  calc={`${formatMoney(calcResults.base)} × ${formatPercent(calcResults.hore_pct)}`} 
+                  result={formatMoney(calcResults.hore)} 
                   note={calcResults.hore_note}
                 />
                 <SimRow 
                   label="Tasa de Justicia" 
                   calc={selectedInstance > 1 ? "Aplica (Instancia > 1)" : "N/A (Instancia 1)"} 
-                  result={`$${calcResults.taju.toLocaleString('es-AR')}`} 
+                  result={formatMoney(calcResults.taju)} 
                 />
                 <SimRow 
-                  label={`Aporte Ley (${(calcResults.aple_pct * 100).toFixed(1)}%)`} 
-                  calc={`$${calcResults.base.toLocaleString('es-AR')} × ${(calcResults.aple_pct * 100).toFixed(1)}%`} 
-                  result={`$${calcResults.aple.toLocaleString('es-AR')}`} 
+                  label={`Aporte Ley (${formatPercent(calcResults.aple_pct)})`} 
+                  calc={`${formatMoney(calcResults.base)} × ${formatPercent(calcResults.aple_pct)}`} 
+                  result={formatMoney(calcResults.aple)} 
                 />
                 <SimRow 
                   label="Descuento Deficiente (descuento sobre la Tasa de Justicia.)" 
-                  calc={`Tasa Justicia × ${(calcResults.defi_pct * 100).toFixed(1)}%`} 
-                  result={`-$${calcResults.defi.toLocaleString('es-AR')}`} 
+                  calc={`Tasa Justicia × ${formatPercent(calcResults.defi_pct)}`} 
+                  result={'-' + formatMoney(calcResults.defi)} 
                 />
               </div>
             </div>
@@ -406,21 +421,36 @@ const GastosApremioReal = ({ setView }) => {
 
         {/* Right Col: Summary Panel */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          {/* Sleeek High-Contrast Slate Card for Total Sum */}
           <div style={{ 
-            background: 'linear-gradient(135deg, #10b981, #059669)', 
+            background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', 
             padding: '1.5rem', 
             borderRadius: '16px', 
-            color: '#fff',
-            boxShadow: '0 10px 25px -5px rgba(16, 185, 129, 0.4)'
+            color: '#ffffff',
+            border: '2px solid #10b981',
+            boxShadow: '0 10px 25px -5px rgba(16, 185, 129, 0.25)'
           }}>
-            <p style={{ fontSize: '0.75rem', fontWeight: 600, opacity: 0.8, marginBottom: '0.5rem', textTransform: 'uppercase' }}>Total Gastos de Apremio</p>
-            <div style={{ fontSize: '2.25rem', fontWeight: 800, marginBottom: '1rem' }}>
-              ${calcResults ? calcResults.total.toLocaleString('es-AR', { minimumFractionDigits: 2 }) : '0,00'}
+            <p style={{ fontSize: '0.75rem', fontWeight: 700, color: '#ffffff', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Total Gastos de Apremio
+            </p>
+            <div style={{ fontSize: '2.5rem', fontWeight: 800, color: '#34d399', marginBottom: '1rem', fontFamily: 'monospace' }}>
+              {calcResults ? formatMoney(calcResults.total) : '$0,00'}
             </div>
-            <div style={{ height: '1px', background: '#ffffff30', margin: '1rem 0' }} />
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
-              <span style={{ opacity: 0.8 }}>Base Imponible:</span>
-              <span style={{ fontWeight: 700 }}>${liveDebt.capital.toLocaleString('es-AR')}</span>
+            <div style={{ height: '1px', background: 'rgba(255, 255, 255, 0.15)', margin: '1rem 0' }} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.85rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#e2e8f0' }}>Capital:</span>
+                <span style={{ fontWeight: 700, color: '#ffffff' }}>{formatMoney(liveDebt.capital)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#e2e8f0' }}>Recargo (Interés):</span>
+                <span style={{ fontWeight: 700, color: '#ffffff' }}>{formatMoney(liveDebt.recargo)}</span>
+              </div>
+              <div style={{ height: '1px', background: 'rgba(255, 255, 255, 0.15)', margin: '0.4rem 0' }} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
+                <span style={{ color: '#34d399', fontWeight: 700 }}>Base de Cálculo:</span>
+                <span style={{ fontWeight: 800, color: '#34d399' }}>{formatMoney(liveDebt.capital + liveDebt.recargo)}</span>
+              </div>
             </div>
           </div>
 
@@ -433,15 +463,15 @@ const GastosApremioReal = ({ setView }) => {
               <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span>Comisión Mínima:</span>
-                  <span style={{ color: 'var(--text)', fontWeight: 600 }}>${parseFloat(liveParams[0].CamiPaap).toLocaleString('es-AR')}</span>
+                  <span style={{ color: 'var(--text)', fontWeight: 600 }}>{formatMoney(parseFloat(liveParams[0].CamiPaap))}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span>Honorarios Mínimos:</span>
-                  <span style={{ color: 'var(--text)', fontWeight: 600 }}>${parseFloat(liveParams[0].HrmiPaap).toLocaleString('es-AR')}</span>
+                  <span style={{ color: 'var(--text)', fontWeight: 600 }}>{formatMoney(parseFloat(liveParams[0].HrmiPaap))}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span>Tasa Justicia (Tope):</span>
-                  <span style={{ color: 'var(--text)', fontWeight: 600 }}>${parseFloat(liveParams[0].TajuPaap).toLocaleString('es-AR')}</span>
+                  <span style={{ color: 'var(--text)', fontWeight: 600 }}>{formatMoney(parseFloat(liveParams[0].TajuPaap))}</span>
                 </div>
               </div>
             )}
@@ -460,10 +490,10 @@ const GastosApremioReal = ({ setView }) => {
             rows={liveInstjudi.map(r => [
               r.CodiInju,
               r.DetaInju,
-              r.CoadInju + '%',
-              r.HoreInju + '%',
-              r.ApleInju + '%',
-              r.DefiInju + '%'
+              formatPercent(parseFloat(r.CoadInju) / 100),
+              formatPercent(parseFloat(r.HoreInju) / 100),
+              formatPercent(parseFloat(r.ApleInju) / 100),
+              formatPercent(parseFloat(r.DefiInju) / 100)
             ])}
           />
         )}

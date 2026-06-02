@@ -5,8 +5,10 @@ import {
     History, LayoutGrid, Filter, Database, HelpCircle
 } from 'lucide-react';
 import API_BASE_URL from '../config';
+import PostgresCedulaModal from '../components/PostgresCedulaModal';
 
 const Apremios = () => {
+    const [selectedGrNumeApre, setSelectedGrNumeApre] = useState(null);
     const [data, setData] = useState([]);
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -423,7 +425,38 @@ const Apremios = () => {
                                         {item.postgres ? (
                                             <>
                                                 <td>
-                                                    <div style={{ fontWeight: 500 }}>{item.postgres.cednro}</div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                                        <div style={{ fontWeight: 500 }}>{item.postgres.cednro}</div>
+                                                        <button 
+                                                            className="gr-table-action-btn"
+                                                            onClick={() => setSelectedGrNumeApre(item.legacy.numeapre)}
+                                                            title="Ver Cédula GR (Rentas) de Postgres"
+                                                            style={{
+                                                                background: 'rgba(124, 77, 255, 0.15)',
+                                                                border: '1px solid rgba(124, 77, 255, 0.3)',
+                                                                color: '#cbd5e1',
+                                                                padding: '2px 6px',
+                                                                borderRadius: '4px',
+                                                                fontSize: '0.7rem',
+                                                                fontWeight: 'bold',
+                                                                cursor: 'pointer',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '4px',
+                                                                transition: 'all 0.2s'
+                                                            }}
+                                                            onMouseEnter={(e) => {
+                                                                e.target.style.background = '#7c4dff';
+                                                                e.target.style.color = '#fff';
+                                                            }}
+                                                            onMouseLeave={(e) => {
+                                                                e.target.style.background = 'rgba(124, 77, 255, 0.15)';
+                                                                e.target.style.color = '#cbd5e1';
+                                                            }}
+                                                        >
+                                                            <Scale size={11} /> GR
+                                                        </button>
+                                                    </div>
                                                     <div style={{ fontSize: '0.75rem', color: '#2563eb', marginBottom: '4px' }}>{item.postgres.cedtexto}</div>
                                                     <div style={{ display: 'flex', gap: '8px', fontSize: '0.7rem', flexWrap: 'wrap', marginBottom: '4px' }}>
                                                         <span title="Estado">Est: <strong>{item.postgres.cedestado}</strong></span>
@@ -664,6 +697,12 @@ const Apremios = () => {
                         </div>
                     </div>
                 </div>
+            )}
+            {selectedGrNumeApre && (
+                <PostgresCedulaModal 
+                    numeApre={selectedGrNumeApre} 
+                    onClose={() => setSelectedGrNumeApre(null)} 
+                />
             )}
 
             <style dangerouslySetInnerHTML={{ __html: `

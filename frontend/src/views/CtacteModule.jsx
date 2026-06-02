@@ -38,9 +38,9 @@ const CtacteModule = ({ setView, user }) => {
       }
   ];
 
-  const cards = user?.rol === 'municipalidad' 
-    ? allCards.filter(c => c.id === 'ctacte_fn') 
-    : allCards;
+  const cards = user?.rol === 'superadmin' 
+    ? allCards 
+    : allCards.filter(c => c.id === 'ctacte_fn');
 
   return (
     <div style={{ height: '100%', overflow: 'auto', padding: '2rem' }}>
@@ -195,26 +195,29 @@ const CtacteModule = ({ setView, user }) => {
         })}
       </div>
 
-      {/* Hint for different formulas */}
-      <div style={{
-        background: 'rgba(245, 158, 11, 0.05)',
-        border: '1px solid rgba(245, 158, 11, 0.2)',
-        borderRadius: '12px',
-        padding: '1.25rem 1.5rem',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '1rem'
-      }}>
-        <ShieldAlert size={20} color="#f59e0b" style={{ flexShrink: 0 }} />
-        <div>
-          <p style={{ margin: 0, fontSize: '0.85rem', color: '#fbbf24', fontWeight: 600 }}>
-            Nota sobre Intereses
-          </p>
-          <p style={{ margin: '4px 0 0 0', fontSize: '0.78rem', color: 'var(--text-dim)' }}>
-            La versión "Alternativa" utiliza un motor de cálculo basado en JavaScript, mientras que la "Oficial" delega el cálculo al procedimiento <code style={{ background: 'rgba(255,255,255,0.05)', padding: '2px 4px', borderRadius: '4px' }}>fnDeuda</code> del servidor. Use ambas para validar discrepancias.
-          </p>
+      {/* Hint for different formulas - solo para superadmin */}
+      {user?.rol === 'superadmin' && (
+        <div style={{
+          background: 'rgba(245, 158, 11, 0.05)',
+          border: '1px solid rgba(245, 158, 11, 0.2)',
+          borderRadius: '12px',
+          padding: '1.25rem 1.5rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '1rem',
+          marginTop: '2rem'
+        }}>
+          <ShieldAlert size={20} color="#f59e0b" style={{ flexShrink: 0 }} />
+          <div>
+            <p style={{ margin: 0, fontSize: '0.85rem', color: '#fbbf24', fontWeight: 600 }}>
+              Nota sobre Intereses
+            </p>
+            <p style={{ margin: '4px 0 0 0', fontSize: '0.78rem', color: 'var(--text-dim)' }}>
+              La versión "Alternativa" utiliza un motor de cálculo basado en JavaScript, mientras que la "Oficial" delega el cálculo al procedimiento <code style={{ background: 'rgba(255,255,255,0.05)', padding: '2px 4px', borderRadius: '4px' }}>fnDeuda</code> del servidor. Use ambas para validar discrepancias.
+            </p>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

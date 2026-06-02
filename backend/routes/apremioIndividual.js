@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const mariaDB = require('../db/maria');
+const postgresDB = require('../db/postgres');
 const { logAction } = require('../utils/logger');
 const jwt = require('jsonwebtoken');
 
@@ -198,7 +199,8 @@ router.get('/detail/:numeApre', async (req, res) => {
                 SUM(CASE WHEN c.MoviCtct = 1 THEN c.DebeCtct ELSE 0 END) as Capital,
                 SUM(CASE WHEN c.MoviCtct > 1 THEN c.DebeCtct ELSE 0 END) as Recargo,
                 SUM(c.DebeCtct) as Total,
-                MAX(c.DetaCtct) as Concepto
+                MAX(c.DetaCtct) as Concepto,
+                MAX(c.CodiConc) as CodiConc
             FROM ${SCHEMA}.apredeta ad
             LEFT JOIN ${SCHEMA}.ctacte c ON 
                 ad.CodiOfic = c.CodiOfic AND 
@@ -251,6 +253,82 @@ router.get('/detail/:numeApre', async (req, res) => {
                 apredetaSql: apredetaQuery,
                 params: [numeApre]
             }
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/apremio-individual/postgres-detail/:numeApre
+router.get('/postgres-detail/:numeApre', async (req, res) => {
+    const { numeApre } = req.params;
+    logAction(req.user.nombre_usuario, 'APREMIO_POSTGRES_DETAIL', `Consultando detalle de cédula de Rentas (Postgres) para: ${numeApre}`, req);
+
+    try {
+        // 1. Consultar public.cedula y MariaDB apremio en paralelo usando numeApre
+        const [cedulaRes, legacyApremioRes] = await Promise.all([
+            postgresDB.query(`
+                SELECT c.*, TRIM(p.pernom) as pernom 
+                FROM public.cedula c 
+                LEFT JOIN public.persona p ON c.cedpercod = p.percod 
+                WHERE c.cedid = $1 OR CAST(c.cednro AS TEXT) = $1
+            `, [numeApre]),
+            mariaDB.query(`
+                SELECT * FROM ${SCHEMA}.apremio WHERE NumeApre = ?
+            `, [numeApre])
+        ]);
+
+        if (cedulaRes.rows.length === 0) {
+            return res.status(404).json({ error: 'Cédula no encontrada en PostgreSQL para este Apremio.' });
+        }
+
+        const cedula = cedulaRes.rows[0];
+        const legacyApremio = legacyApremioRes[0] || null;
+        const { cednro, cedtpo, cedmotfin, cedseccod } = cedula;
+
+        // Consultas en paralelo de las tablas vinculadas
+        const [instancesRes, tipCedulaRes, cedMotFinRes, sectorRes, cuotasRes] = await Promise.all([
+            // 2 y 4. cedinstancia + tipcedinstancia (Historial)
+            postgresDB.query(`
+                SELECT ci.*, TRIM(tci.tipcedinsdsc) as tipcedinsdsc, tci.tipcedinstrabar, tci.tipcedinsmedcau 
+                FROM public.cedinstancia ci 
+                LEFT JOIN public.tipcedinstancia tci ON ci.tipcedinscod = tci.tipcedinscod 
+                WHERE ci.cednro = $1 
+                ORDER BY ci.cedinsfec ASC, ci.cedinscod ASC
+            `, [cednro]),
+            // 5. tipcedula
+            postgresDB.query(`SELECT * FROM public.tipcedula WHERE tipcedid = $1`, [cedtpo]),
+            // 6. cedmotfin (si existe)
+            cedmotfin != null ? postgresDB.query(`SELECT * FROM public.cedmotfin WHERE motfincod = $1`, [cedmotfin]) : { rows: [] },
+            // 7. tipocedulasector
+            cedtpo != null && cedseccod != null ? postgresDB.query(`SELECT * FROM public.tipocedulasector WHERE tipcedid = $1 AND tipcedseccod = $2`, [cedtpo, parseInt(cedseccod)]) : { rows: [] },
+            // 8. tcedulacedcuo
+            postgresDB.query(`SELECT * FROM public.tcedulacedcuo WHERE cednro = $1`, [cednro])
+        ]);
+
+        // 3. instanciacosto para las instancias que están presentes en el historial de esta cédula
+        const tipcedinscods = [...new Set(instancesRes.rows.map(r => r.tipcedinscod))];
+        let costs = [];
+        if (tipcedinscods.length > 0) {
+            const costsRes = await postgresDB.query(`
+                SELECT ic.*, TRIM(tci.tipcedinsdsc) as tipcedinsdsc 
+                FROM public.instanciacosto ic 
+                LEFT JOIN public.tipcedinstancia tci ON ic.tipcedinscod = tci.tipcedinscod 
+                WHERE ic.tipcedinscod = ANY($1)
+                ORDER BY ic.tipcedinscod ASC, ic.inscosalta DESC
+            `, [tipcedinscods]);
+            costs = costsRes.rows;
+        }
+
+        res.json({
+            cedula,
+            legacyApremio,
+            instances: instancesRes.rows,
+            costs,
+            tipCedula: tipCedulaRes.rows[0] || null,
+            cedMotFin: cedMotFinRes.rows[0] || null,
+            sector: sectorRes.rows[0] || null,
+            cuotas: cuotasRes.rows
         });
     } catch (err) {
         res.status(500).json({ error: err.message });

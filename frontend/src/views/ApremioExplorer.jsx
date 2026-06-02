@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { Search, FileText, Calendar, User, Hash, Filter, ChevronLeft, ChevronRight, Scale, Gavel, Briefcase } from 'lucide-react';
 import { API_URL } from '../config';
+import PostgresCedulaModal from '../components/PostgresCedulaModal';
 
 const ApremioExplorer = () => {
+    const [selectedGrNumeApre, setSelectedGrNumeApre] = useState(null);
     const [filters, setFilters] = useState({
         numeApre: '',
         title: '',
@@ -131,11 +133,12 @@ const ApremioExplorer = () => {
                             <th>Autos</th>
                             <th>Recaudador</th>
                             <th>Usuario</th>
+                            <th>GR</th>
                         </tr>
                     </thead>
                     <tbody>
                         {results.length === 0 && !loading ? (
-                            <tr><td colSpan="11" style={{ textAlign: 'center', padding: '3rem', opacity: 0.5 }}>Sin resultados</td></tr>
+                            <tr><td colSpan="12" style={{ textAlign: 'center', padding: '3rem', opacity: 0.5 }}>Sin resultados</td></tr>
                         ) : results.map((a, i) => (
                             <tr key={i} className="table-row">
                                 <td style={{ fontWeight: '700' }}>#{a.NumeApre}</td>
@@ -160,6 +163,36 @@ const ApremioExplorer = () => {
                                 <td>{a.AutoApre}</td>
                                 <td style={{ fontSize: '0.75rem' }}>{a.RecaudadorDeta || `Cód ${a.CodiReca}`}</td>
                                 <td>{a.AltaUsua}</td>
+                                <td>
+                                    <button 
+                                        onClick={() => setSelectedGrNumeApre(a.NumeApre)}
+                                        title="Ver Cédula GR (Rentas) de Postgres"
+                                        style={{
+                                            background: 'rgba(124, 77, 255, 0.15)',
+                                            border: '1px solid rgba(124, 77, 255, 0.3)',
+                                            color: '#a78bfa',
+                                            padding: '4px 8px',
+                                            borderRadius: '6px',
+                                            fontSize: '0.75rem',
+                                            fontWeight: 'bold',
+                                            cursor: 'pointer',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '4px',
+                                            transition: 'all 0.2s'
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            e.currentTarget.style.background = '#7c4dff';
+                                            e.currentTarget.style.color = '#fff';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.currentTarget.style.background = 'rgba(124, 77, 255, 0.15)';
+                                            e.currentTarget.style.color = '#a78bfa';
+                                        }}
+                                    >
+                                        <Scale size={12} /> GR
+                                    </button>
+                                </td>
                             </tr>
                         ))}
                     </tbody>
@@ -198,6 +231,13 @@ const ApremioExplorer = () => {
                     margin-bottom: 1rem;
                 }
             `}</style>
+
+            {selectedGrNumeApre && (
+                <PostgresCedulaModal 
+                    numeApre={selectedGrNumeApre} 
+                    onClose={() => setSelectedGrNumeApre(null)} 
+                />
+            )}
         </div>
     );
 };

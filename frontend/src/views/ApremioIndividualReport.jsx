@@ -9,9 +9,11 @@ import {
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { API_URL } from '../config';
+import PostgresCedulaModal from '../components/PostgresCedulaModal';
 
 const ApremioIndividualReport = () => {
     const [viewMode, setViewMode] = useState('search'); 
+    const [selectedGrNumeApre, setSelectedGrNumeApre] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [statuses, setStatuses] = useState([]);
@@ -33,6 +35,91 @@ const ApremioIndividualReport = () => {
         if (!dateString || dateString === '0000-00-00' || dateString === 'null') return '-';
         const date = new Date(dateString);
         return isNaN(date.getTime()) ? '-' : date.toLocaleDateString('es-AR');
+    };
+
+    const processClaimedInstallments = (detailData) => {
+        if (!detailData) return [];
+        const { claimedInstallments, debt } = detailData;
+
+        const groups = {};
+        const interestConcepts = ['13030201', '13030203'];
+        const expenseConcepts = ['91010400', '91010500'];
+
+        if (claimedInstallments && claimedInstallments.length > 0) {
+            claimedInstallments.forEach(c => {
+                const bime = parseInt(c.BimeCtct || 0);
+                if (bime <= 0) return;
+
+                // Excluir conceptos de gastos, comisiones y honorarios de apremio (comienzan con 9)
+                const conceptCode = (c.CodiConc || c.CodiConcDeta || '').toString().trim();
+                if (conceptCode.startsWith('9')) return;
+
+                const key = `${c.PeriCtct}-${c.BimeCtct}`;
+                if (!groups[key]) {
+                    groups[key] = {
+                        PeriCtct: parseInt(c.PeriCtct),
+                        BimeCtct: bime,
+                        Concepto: null,
+                        Capital: 0,
+                        Recargo: 0
+                    };
+                }
+                groups[key].Capital += parseFloat(c.Capital) || 0;
+                groups[key].Recargo += parseFloat(c.Recargo) || 0;
+                if (!groups[key].Concepto) {
+                    groups[key].Concepto = c.Concepto;
+                }
+            });
+        } else if (debt && debt.length > 0) {
+            debt.forEach(row => {
+                const bime = parseInt(row.BimeCtct || 0);
+                if (bime <= 0) return;
+
+                // Excluir conceptos de gastos, comisiones y honorarios de apremio (comienzan con 9)
+                const conceptCode = (row.CodiConc || '').toString().trim();
+                if (conceptCode.startsWith('9')) return;
+
+                const key = `${row.PeriCtct}-${row.BimeCtct}`;
+                if (!groups[key]) {
+                    groups[key] = {
+                        PeriCtct: parseInt(row.PeriCtct),
+                        BimeCtct: bime,
+                        Concepto: null,
+                        Capital: 0,
+                        Recargo: 0,
+                        Expenses: 0
+                    };
+                }
+
+                const debe = parseFloat(row.DebeCtct || 0);
+                const mov = parseInt(row.MoviCtct || 0);
+
+                if (interestConcepts.includes(conceptCode) || (mov > 1 && !expenseConcepts.includes(conceptCode))) {
+                    groups[key].Recargo += debe;
+                } else if (expenseConcepts.includes(conceptCode)) {
+                    groups[key].Expenses += debe;
+                } else if (mov === 1 || !conceptCode) {
+                    groups[key].Capital += debe;
+                    if (!groups[key].Concepto) {
+                        groups[key].Concepto = row.DetaCtct || row.Concepto;
+                    }
+                }
+            });
+        } else {
+            return [];
+        }
+
+        return Object.values(groups).map(g => ({
+            PeriCtct: g.PeriCtct,
+            BimeCtct: g.BimeCtct,
+            Concepto: g.Concepto || 'Cuota Apremio',
+            Capital: g.Capital,
+            Recargo: g.Recargo + (g.Expenses || 0),
+            Total: g.Capital + g.Recargo + (g.Expenses || 0)
+        })).sort((a, b) => {
+            if (a.PeriCtct !== b.PeriCtct) return a.PeriCtct - b.PeriCtct;
+            return a.BimeCtct - b.BimeCtct;
+        });
     };
 
     // Helper para obtener cabeceras con Token
@@ -143,8 +230,9 @@ const ApremioIndividualReport = () => {
         const { apremio, instances, debt, payments = [] } = data;
         const doc = new jsPDF();
         
-        const totalCapital = debt.reduce((acc, curr) => acc + (parseFloat(curr.DebeCtct) || 0), 0);
-        const totalInteres = parseFloat(apremio.RecaApre) || 0;
+        const activeInstallments = processClaimedInstallments(data);
+        const totalCapital = activeInstallments.reduce((acc, curr) => acc + curr.Capital, 0);
+        const totalInteres = activeInstallments.reduce((acc, curr) => acc + curr.Recargo, 0);
         const gastosAdm = (totalCapital + totalInteres) * 0.05;
         const totalGeneral = totalCapital + totalInteres + gastosAdm;
 
@@ -161,7 +249,7 @@ const ApremioIndividualReport = () => {
         doc.setFont('helvetica', 'bold');
         doc.text('REPORTE ESTADOS BOLETA DE DEUDA', 110, 20, { align: 'left' });
         doc.setFontSize(10);
-        doc.text(`BOLETA N°: ${apremio.NumeBole || '-'}`, 110, 26);
+        doc.text(`BOLETA N°: ${apremio.NumeApre || '-'}`, 110, 26);
         doc.text(`CAMPAÑA N°: ${apremio.PeriBole || '-'}`, 110, 31);
         doc.setFont('helvetica', 'normal');
         doc.text(`Guaymallén, ${new Date().toLocaleDateString()}`, 110, 36);
@@ -191,18 +279,11 @@ const ApremioIndividualReport = () => {
             styles: { fontSize: 8 }
         });
 
-        // Usamos apredeta (claimedInstallments) si ctacte (debt) está vacío para los periodos
-        const sourceData = (data.claimedInstallments && data.claimedInstallments.length > 0) 
-            ? data.claimedInstallments.map(d => ({ ...d, PeriCtct: d.PeriCtct, BimeCtct: d.BimeCtct, DebeCtct: d.ImpoApre }))
-            : debt;
-
-        // Filtrar solo los registros que son tipo cuota (BimeCtct > 0) para el resumen
-        const installmentsOnly = sourceData.filter(d => d.BimeCtct > 0);
-        const periodos = Array.from(new Set(installmentsOnly.map(d => d.PeriCtct)))
+        const periodos = Array.from(new Set(activeInstallments.map(d => d.PeriCtct)))
             .sort((a, b) => a - b)
             .map(year => {
                 const cuotas = Array.from(new Set(
-                    installmentsOnly
+                    activeInstallments
                         .filter(d => d.PeriCtct === year)
                         .map(d => d.BimeCtct)
                 )).sort((a, b) => a - b);
@@ -248,39 +329,23 @@ const ApremioIndividualReport = () => {
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
         doc.text('Cuotas reclamadas', 15, yPos);
-        
-        // Agrupar la deuda por Año y Cuota para la tabla
-        const groupedDebtMap = new Map();
-        sourceData.filter(d => d.BimeCtct > 0).forEach(d => {
-            const key = `${d.PeriCtct}-${d.BimeCtct}`;
-            if (groupedDebtMap.has(key)) {
-                const existing = groupedDebtMap.get(key);
-                existing.DebeCtct += parseFloat(d.DebeCtct || 0);
-            } else {
-                groupedDebtMap.set(key, { ...d, DebeCtct: parseFloat(d.DebeCtct || 0) });
-            }
-        });
-        const groupedDebtList = Array.from(groupedDebtMap.values()).sort((a, b) => {
-            if (a.PeriCtct !== b.PeriCtct) return a.PeriCtct - b.PeriCtct;
-            return a.BimeCtct - b.BimeCtct;
-        });
 
         autoTable(doc, {
             startY: yPos + 5,
             head: [['Periodo', 'Cuota', 'Conceptos', 'Capital', 'Recargo', 'Total']],
             body: [
-                ...groupedDebtList.map(d => [
+                ...activeInstallments.map(d => [
                     d.PeriCtct, 
                     d.BimeCtct, 
-                    d.Concepto || d.DetaCtct || 'Cuota Apremio', 
-                    formatCurrency(d.Capital || d.DebeCtct),
-                    formatCurrency(d.Recargo || 0),
-                    formatCurrency(d.Total || d.DebeCtct)
+                    d.Concepto, 
+                    formatCurrency(d.Capital),
+                    formatCurrency(d.Recargo),
+                    formatCurrency(d.Total)
                 ]),
                 [{ content: 'Totales', colSpan: 3, styles: { halign: 'right', fontStyle: 'bold', fillColor: [243, 244, 246] } }, 
-                 { content: formatCurrency(groupedDebtList.reduce((acc, curr) => acc + parseFloat(curr.Capital || curr.DebeCtct || 0), 0)), styles: { fontStyle: 'bold', fillColor: [243, 244, 246] } },
-                 { content: formatCurrency(groupedDebtList.reduce((acc, curr) => acc + parseFloat(curr.Recargo || 0), 0)), styles: { fontStyle: 'bold', fillColor: [243, 244, 246] } },
-                 { content: formatCurrency(groupedDebtList.reduce((acc, curr) => acc + parseFloat(curr.Total || curr.DebeCtct || 0), 0)), styles: { fontStyle: 'bold', fillColor: [243, 244, 246] } }]
+                 { content: formatCurrency(totalCapital), styles: { fontStyle: 'bold', fillColor: [243, 244, 246] } },
+                 { content: formatCurrency(totalInteres), styles: { fontStyle: 'bold', fillColor: [243, 244, 246] } },
+                 { content: formatCurrency(totalCapital + totalInteres), styles: { fontStyle: 'bold', fillColor: [243, 244, 246] } }]
             ],
             headStyles: { fillColor: [204, 230, 244], textColor: [0, 74, 117] },
             styles: { fontSize: 7 }
@@ -412,15 +477,43 @@ const ApremioIndividualReport = () => {
 
     if (viewMode === 'detail' && detail) {
         const payments = detail.payments || [];
+        const activeInstallments = processClaimedInstallments(detail);
+        const hasApredeta = detail.claimedInstallments && detail.claimedInstallments.length > 0;
+        const dynamicCapital = activeInstallments.reduce((acc, curr) => acc + curr.Capital, 0);
+        const dynamicRecargo = activeInstallments.reduce((acc, curr) => acc + curr.Recargo, 0);
+        const dynamicTotal = dynamicCapital + dynamicRecargo;
+
         return (
             <div style={mainStyles.container}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
                     <button onClick={() => setViewMode('search')} style={{ background: 'none', border: 'none', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
                         <ArrowLeft size={18} /> Volver
                     </button>
-                    <button onClick={() => generatePDF(detail)} style={{ backgroundColor: '#10b981', color: 'white', padding: '0.6rem 1.5rem', borderRadius: '0.5rem', border: 'none', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <Download size={18} /> Descargar PDF Oficial
-                    </button>
+                    <div style={{ display: 'flex', gap: '0.75rem' }}>
+                        <button 
+                            onClick={() => setSelectedGrNumeApre(detail.apremio.NumeApre)} 
+                            style={{ 
+                                backgroundColor: '#7c4dff', 
+                                color: 'white', 
+                                padding: '0.6rem 1.5rem', 
+                                borderRadius: '0.5rem', 
+                                border: 'none', 
+                                fontWeight: 'bold', 
+                                cursor: 'pointer', 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: '0.5rem',
+                                transition: 'all 0.2s'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#6533ff'}
+                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#7c4dff'}
+                        >
+                            <Scale size={18} /> Ver Estructura GR
+                        </button>
+                        <button onClick={() => generatePDF(detail)} style={{ backgroundColor: '#10b981', color: 'white', padding: '0.6rem 1.5rem', borderRadius: '0.5rem', border: 'none', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <Download size={18} /> Descargar PDF Oficial
+                        </button>
+                    </div>
                 </div>
                 <div style={mainStyles.card}>
                     <div style={{ padding: '2rem', borderBottom: '1px solid #1e293b', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -429,8 +522,8 @@ const ApremioIndividualReport = () => {
                             <p style={{ color: '#64748b', margin: '0.5rem 0' }}>{detail.apremio.TituApre} | {detail.apremio.CuenCtct}</p>
                         </div>
                         <div style={{ textAlign: 'right' }}>
-                            <div style={{ fontSize: '1.75rem', fontWeight: 'bold', color: '#3b82f6' }}>{formatCurrency(detail.apremio.TotaApre)}</div>
-                            <div style={{ fontSize: '0.7rem', color: '#64748b' }}>TOTAL CALCULADO</div>
+                            <div style={{ fontSize: '1.75rem', fontWeight: 'bold', color: '#3b82f6' }}>{formatCurrency(dynamicTotal)}</div>
+                            <div style={{ fontSize: '0.7rem', color: '#64748b' }}>TOTAL RECLAMADO (MAPEADO)</div>
                         </div>
                     </div>
                     <div style={{ padding: '2rem' }}>
@@ -448,18 +541,24 @@ const ApremioIndividualReport = () => {
 
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '1.5rem', marginBottom: '2rem' }}>
                             <div style={{ background: 'rgba(255,255,255,0.03)', padding: '1rem', borderRadius: '0.5rem', border: '1px solid #1e293b' }}>
-                                <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.7rem', color: '#94a3b8' }}>DESGLOSE DE DEUDA RECLAMADA</h4>
+                                <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.7rem', color: '#94a3b8' }}>DESGLOSE DE DEUDA RECLAMADA (MAPEADO)</h4>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                                     <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Capital Original:</span>
-                                    <span style={{ fontSize: '0.85rem' }}>{formatCurrency(detail.apremio.CapiApre)}</span>
+                                    <span style={{ fontSize: '0.85rem', fontWeight: 'bold' }}>{formatCurrency(dynamicCapital)}</span>
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                                     <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Recargos / Intereses:</span>
-                                    <span style={{ fontSize: '0.85rem' }}>{formatCurrency(detail.apremio.RecaApre)}</span>
+                                    <span style={{ fontSize: '0.85rem', fontWeight: 'bold' }}>{formatCurrency(dynamicRecargo)}</span>
                                 </div>
                                 <div style={{ borderTop: '1px solid #1e293b', paddingTop: '0.5rem', marginTop: '0.5rem', display: 'flex', justifyContent: 'space-between' }}>
-                                    <span style={{ fontSize: '0.8rem', fontWeight: 'bold' }}>Total Apremio:</span>
-                                    <span style={{ fontSize: '0.9rem', fontWeight: 'bold', color: '#3b82f6' }}>{formatCurrency(detail.apremio.TotaApre)}</span>
+                                    <span style={{ fontSize: '0.8rem', fontWeight: 'bold' }}>Total Reclamado:</span>
+                                    <span style={{ fontSize: '0.9rem', fontWeight: 'bold', color: '#3b82f6' }}>{formatCurrency(dynamicTotal)}</span>
+                                </div>
+                                <div style={{ marginTop: '0.75rem', borderTop: '1px dashed #1e293b', paddingTop: '0.5rem' }}>
+                                    <div style={{ fontSize: '0.65rem', color: '#64748b', display: 'flex', justifyContent: 'space-between' }}>
+                                        <span>Cabecera Apremio:</span>
+                                        <span>Cap: {formatCurrency(detail.apremio.CapiApre)} | Rec: {formatCurrency(detail.apremio.RecaApre)}</span>
+                                    </div>
                                 </div>
                             </div>
                             <div style={{ background: 'rgba(255,255,255,0.03)', padding: '1rem', borderRadius: '0.5rem', border: '1px solid #1e293b' }}>
@@ -470,10 +569,59 @@ const ApremioIndividualReport = () => {
                             </div>
                         </div>
 
-                        {/* SECCIÓN: CUOTAS RECLAMADAS (HISTÓRICO APREDETA) */}
+                        {/* SECCIÓN: INSTANCIAS DE BOLETA DE DEUDA (instapre) */}
                         <div style={{ marginTop: '2rem', marginBottom: '2rem' }}>
                             <h3 style={{ fontSize: '1rem', color: '#3b82f6', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                <Table size={18} /> Cuotas Reclamadas Originales (apredeta)
+                                <History size={18} /> Instancias de la Boleta de Deuda (instapre)
+                            </h3>
+                            <div style={mainStyles.tableContainer}>
+                                <table style={mainStyles.table}>
+                                    <thead>
+                                        <tr>
+                                            <th style={mainStyles.th}>Fecha Alta</th>
+                                            <th style={mainStyles.th}>Fecha Instancia</th>
+                                            <th style={mainStyles.th}>Cód.</th>
+                                            <th style={mainStyles.th}>Instancia Judicial</th>
+                                            <th style={mainStyles.th}>Recaudador (Cód)</th>
+                                            <th style={mainStyles.th}>Of. Justicia (Cód)</th>
+                                            <th style={mainStyles.th}>Juzgado</th>
+                                            <th style={mainStyles.th}>Medida Cautelar</th>
+                                            <th style={mainStyles.th}>Kms 1</th>
+                                            <th style={mainStyles.th}>Kms 2</th>
+                                            <th style={mainStyles.th}>Zona</th>
+                                            <th style={mainStyles.th}>Observaciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {detail.instances && detail.instances.length > 0 ? (
+                                            detail.instances.map((inst, i) => (
+                                                <tr key={i}>
+                                                    <td style={mainStyles.td}>{formatDate(inst.FealInap)}</td>
+                                                    <td style={mainStyles.td}>{formatDate(inst.FechInap)}</td>
+                                                    <td style={mainStyles.td}>{inst.CodiInju}</td>
+                                                    <td style={{ ...mainStyles.td, fontWeight: 'bold' }}>{inst.DetaInju || 'Sin descripción'}</td>
+                                                    <td style={mainStyles.td}>{inst.CodiReca}</td>
+                                                    <td style={mainStyles.td}>{inst.CodiOfju}</td>
+                                                    <td style={mainStyles.td}>{inst.JuzgInap || '-'}</td>
+                                                    <td style={mainStyles.td}>{inst.MecaInap || '-'}</td>
+                                                    <td style={mainStyles.td}>{inst.Kmt1Inap != null ? parseFloat(inst.Kmt1Inap).toFixed(2) : '-'}</td>
+                                                    <td style={mainStyles.td}>{inst.Kmt2Inap != null ? parseFloat(inst.Kmt2Inap).toFixed(2) : '-'}</td>
+                                                    <td style={mainStyles.td}>{inst.ZonaMoap || '-'}</td>
+                                                    <td style={{ ...mainStyles.td, whiteSpace: 'normal', minWidth: '200px' }}>{inst.ObseInap || '-'}</td>
+                                                </tr>
+                                            ))
+                                        ) : (
+                                            <tr><td colSpan="12" style={{ ...mainStyles.td, textAlign: 'center', color: '#64748b' }}>No hay instancias registradas para este apremio.</td></tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        {/* SECCIÓN: CUOTAS RECLAMADAS */}
+                        <div style={{ marginTop: '2rem', marginBottom: '2rem' }}>
+                            <h3 style={{ fontSize: '1rem', color: '#3b82f6', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <Table size={18} /> Cuotas Reclamadas ({hasApredeta ? 'Origen: Histórico apredeta' : 'Origen: Reconstruido de ctacte'})
                             </h3>
                             <div style={mainStyles.tableContainer}>
                                 <table style={mainStyles.table}>
@@ -488,8 +636,8 @@ const ApremioIndividualReport = () => {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {detail.claimedInstallments && detail.claimedInstallments.length > 0 ? (
-                                            detail.claimedInstallments.map((cuota, i) => (
+                                        {activeInstallments && activeInstallments.length > 0 ? (
+                                            activeInstallments.map((cuota, i) => (
                                                 <tr key={i}>
                                                     <td style={mainStyles.td}>{cuota.PeriCtct}</td>
                                                     <td style={mainStyles.td}>{cuota.BimeCtct}</td>
@@ -500,7 +648,7 @@ const ApremioIndividualReport = () => {
                                                 </tr>
                                             ))
                                         ) : (
-                                            <tr><td colSpan="5" style={{ ...mainStyles.td, textAlign: 'center', color: '#64748b' }}>No hay registros en apredeta para este apremio.</td></tr>
+                                            <tr><td colSpan="6" style={{ ...mainStyles.td, textAlign: 'center', color: '#64748b' }}>No hay registros de cuotas para este apremio.</td></tr>
                                         )}
                                     </tbody>
                                 </table>
@@ -664,6 +812,7 @@ const ApremioIndividualReport = () => {
                             <thead>
                                 <tr>
                                     <th style={mainStyles.th}>PDF</th>
+                                    <th style={mainStyles.th}>GR</th>
                                     <th style={mainStyles.th}>NUME</th>
                                     <th style={mainStyles.th}>CUENTA</th>
                                     <th style={mainStyles.th}>TITULAR</th>
@@ -685,6 +834,39 @@ const ApremioIndividualReport = () => {
                                                 title="Descargar PDF Oficial"
                                             >
                                                 {downloadingId === a.NumeApre ? <Loader2 size={18} className="spin" /> : <FileDown size={18} />}
+                                            </button>
+                                        </td>
+                                        <td style={mainStyles.td}>
+                                            <button 
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setSelectedGrNumeApre(a.NumeApre);
+                                                }}
+                                                title="Ver Estructura GR"
+                                                style={{
+                                                    background: 'rgba(124, 77, 255, 0.15)',
+                                                    border: '1px solid rgba(124, 77, 255, 0.3)',
+                                                    color: '#cbd5e1',
+                                                    padding: '4px 8px',
+                                                    borderRadius: '6px',
+                                                    fontSize: '0.75rem',
+                                                    fontWeight: 'bold',
+                                                    cursor: 'pointer',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '4px',
+                                                    transition: 'all 0.2s'
+                                                }}
+                                                onMouseEnter={(e) => {
+                                                    e.currentTarget.style.background = '#7c4dff';
+                                                    e.currentTarget.style.color = '#fff';
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                    e.currentTarget.style.background = 'rgba(124, 77, 255, 0.15)';
+                                                    e.currentTarget.style.color = '#cbd5e1';
+                                                }}
+                                            >
+                                                <Scale size={12} /> GR
                                             </button>
                                         </td>
                                         <td style={{ ...mainStyles.td, fontWeight: 'bold' }}>{a.NumeApre}</td>
@@ -769,6 +951,12 @@ const ApremioIndividualReport = () => {
                         />
                     </div>
                 </div>
+            )}
+            {selectedGrNumeApre && (
+                <PostgresCedulaModal 
+                    numeApre={selectedGrNumeApre} 
+                    onClose={() => setSelectedGrNumeApre(null)} 
+                />
             )}
         </div>
     );

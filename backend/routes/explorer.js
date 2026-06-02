@@ -133,12 +133,19 @@ router.get('/:engine/:db/columns/:table', async (req, res) => {
 
 // Dynamic Aggregation Query Builder
 router.post('/query', async (req, res) => {
-    const { engine, db, table, selectColumns = [], aggregates = [], groupBy = [], filters = [], limit = 100 } = req.body;
+    const { engine, db, table, selectColumns = [], aggregates = [], groupBy = [], filters = [], joins = [], limit = 100 } = req.body;
     
     if (!/^[a-zA-Z0-9_.]+$/.test(table)) return res.status(400).json({ error: 'Nombre de tabla inválido' });
     if (engine !== 'pg' && !ALLOWED_MARIA_DBS.includes(db)) return res.status(403).json({ error: 'Base de datos no permitida' });
 
     const sanitizeColumnName = (col) => col.replace(/[^a-zA-Z0-9_*.]/g, '');
+    
+    const formatIdentifierPg = (col) => {
+        if (!col) return '';
+        if (col === '*') return '*';
+        const parts = col.split('.');
+        return parts.map(p => p === '*' ? '*' : `"${p}"`).join('.');
+    };
     
     try {
         const cleanSelect = selectColumns.map(sanitizeColumnName);
@@ -146,28 +153,80 @@ router.post('/query', async (req, res) => {
         
         let projections = [];
         if (cleanSelect.length > 0) {
-            projections.push(...cleanSelect);
+            if (engine === 'pg') {
+                projections.push(...cleanSelect.map(formatIdentifierPg));
+            } else {
+                projections.push(...cleanSelect);
+            }
         }
         
         aggregates.forEach(agg => {
             const op = agg.op.toUpperCase();
             if (!['SUM', 'COUNT', 'AVG', 'MIN', 'MAX'].includes(op)) return;
             const targetCol = agg.col === '*' ? '*' : sanitizeColumnName(agg.col);
-            const alias = sanitizeColumnName(agg.alias || `${op}_${targetCol}`);
+            const alias = sanitizeColumnName(agg.alias || `${op}_${targetCol.replace('.', '_')}`);
             
-            projections.push(`${op}(${targetCol}) as "${alias}"`);
+            if (engine === 'pg') {
+                projections.push(`${op}(${formatIdentifierPg(targetCol)}) as "${alias}"`);
+            } else {
+                projections.push(`${op}(${targetCol}) as "${alias}"`);
+            }
         });
         
         if (projections.length === 0) {
             projections.push('*');
         }
         
-        let query = '';
+        // Compile FROM and JOINs
+        let fromClause = '';
         if (engine === 'pg') {
-            query = `SELECT ${projections.join(', ')} FROM "${table}"`;
+            fromClause = `FROM "${table}"`;
+            joins.forEach(j => {
+                const type = j.type || 'INNER JOIN';
+                const rightTable = sanitizeColumnName(j.table);
+                
+                let onConditions = [];
+                if (Array.isArray(j.leftCol) && Array.isArray(j.rightCol)) {
+                    j.leftCol.forEach((lc, idx) => {
+                        const rc = j.rightCol[idx];
+                        if (lc && rc) {
+                            onConditions.push(`"${table}"."${sanitizeColumnName(lc)}" = "${rightTable}"."${sanitizeColumnName(rc)}"`);
+                        }
+                    });
+                } else {
+                    const leftCol = sanitizeColumnName(j.leftCol);
+                    const rightCol = sanitizeColumnName(j.rightCol);
+                    onConditions.push(`"${table}"."${leftCol}" = "${rightTable}"."${rightCol}"`);
+                }
+                
+                fromClause += ` ${type} "${rightTable}" ON ${onConditions.join(' AND ')}`;
+            });
         } else {
-            query = `SELECT ${projections.join(', ')} FROM ${db}.${table}`;
+            fromClause = `FROM ${db}.${table}`;
+            joins.forEach(j => {
+                const type = j.type || 'INNER JOIN';
+                const rightTable = sanitizeColumnName(j.table);
+                const rightTableQualified = rightTable.includes('.') ? rightTable : `${db}.${rightTable}`;
+                
+                let onConditions = [];
+                if (Array.isArray(j.leftCol) && Array.isArray(j.rightCol)) {
+                    j.leftCol.forEach((lc, idx) => {
+                        const rc = j.rightCol[idx];
+                        if (lc && rc) {
+                            onConditions.push(`${db}.${table}.${sanitizeColumnName(lc)} = ${rightTableQualified}.${sanitizeColumnName(rc)}`);
+                        }
+                    });
+                } else {
+                    const leftCol = sanitizeColumnName(j.leftCol);
+                    const rightCol = sanitizeColumnName(j.rightCol);
+                    onConditions.push(`${db}.${table}.${leftCol} = ${rightTableQualified}.${rightCol}`);
+                }
+                
+                fromClause += ` ${type} ${rightTableQualified} ON ${onConditions.join(' AND ')}`;
+            });
         }
+        
+        let query = `SELECT ${projections.join(', ')} ${fromClause}`;
         
         let whereClauses = [];
         let params = [];
@@ -181,7 +240,7 @@ router.post('/query', async (req, res) => {
             
             if (['=', '>', '<', '<=', '>=', '!=', 'LIKE'].includes(op)) {
                 if (engine === 'pg') {
-                    whereClauses.push(`"${col}"::text ${op} $${params.length + 1}`);
+                    whereClauses.push(`${formatIdentifierPg(col)}::text ${op} $${params.length + 1}`);
                 } else {
                     whereClauses.push(`${col} ${op} ?`);
                 }
@@ -194,7 +253,11 @@ router.post('/query', async (req, res) => {
         }
         
         if (cleanGroupBy.length > 0) {
-            query += ` GROUP BY ${cleanGroupBy.join(', ')}`;
+            if (engine === 'pg') {
+                query += ` GROUP BY ${cleanGroupBy.map(formatIdentifierPg).join(', ')}`;
+            } else {
+                query += ` GROUP BY ${cleanGroupBy.join(', ')}`;
+            }
         }
         
         query += ` LIMIT ${Math.min(parseInt(limit) || 100, 5000)}`;
@@ -203,16 +266,16 @@ router.post('/query', async (req, res) => {
         
         let rows = [];
         if (engine === 'pg') {
-            // Set statement timeout for PostgreSQL to 20 seconds
-            await postgres.query(`SET statement_timeout = 20000`);
+            // Set statement timeout for PostgreSQL to 90 seconds
+            await postgres.query(`SET statement_timeout = 90000`);
             const resData = await postgres.query(query, params);
             rows = resData.rows;
         } else {
-            // Get connection from pool and query with a 20-second timeout
+            // Get connection from pool and query with a 90-second timeout
             let conn;
             try {
                 conn = await mariaDB.getConnection();
-                rows = await conn.query({ sql: query, timeout: 20000 }, params);
+                rows = await conn.query({ sql: query, timeout: 90000 }, params);
             } finally {
                 if (conn) conn.release();
             }
@@ -226,10 +289,107 @@ router.post('/query', async (req, res) => {
     } catch (err) {
         console.error('Dynamic Query Engine Error:', err);
         let errorMsg = err.message;
-        if (err.code === 'ER_TIMEOUT' || err.message.toLowerCase().includes('timeout') || err.message.toLowerCase().includes('canceled')) {
-            errorMsg = 'La consulta excedió el tiempo límite de 20 segundos para evitar saturación del servidor. Por favor, selecciona dimensiones de agrupación más específicas o agrega filtros en la sección 3 para reducir el volumen de datos a procesar.';
+        if (
+            err.code === 'ER_TIMEOUT' || 
+            err.code === 'ER_STATEMENT_TIMEOUT' || 
+            err.message.toLowerCase().includes('timeout') || 
+            err.message.toLowerCase().includes('canceled') ||
+            err.message.toLowerCase().includes('interrupted') ||
+            err.message.toLowerCase().includes('exceeded')
+        ) {
+            errorMsg = 'La consulta excedió el tiempo límite de 90 segundos para evitar saturación del servidor. Por favor, selecciona dimensiones de agrupación más específicas o agrega filtros en la sección 4 (por ejemplo, filtrar por un CodiOfic o CuenCtct específico) para reducir el volumen de datos a procesar.';
         }
         res.status(500).json({ error: errorMsg });
+    }
+});
+
+// Get matching relation tables for a table
+router.get('/:engine/:db/relations/:table', async (req, res) => {
+    const { engine, db, table } = req.params;
+    if (!/^[a-zA-Z0-9_.]+$/.test(table)) return res.status(400).json({ error: 'Nombre de tabla inválido' });
+
+    try {
+        let columns = [];
+        if (engine === 'pg') {
+            const colRes = await postgres.query(`
+                SELECT column_name as "name" 
+                FROM information_schema.columns 
+                WHERE table_schema = 'public' AND table_name = $1
+            `, [table]);
+            columns = colRes.rows.map(c => c.name);
+        } else {
+            if (!ALLOWED_MARIA_DBS.includes(db)) return res.status(403).json({ error: 'Base de datos no permitida' });
+            const colRes = await mariaDB.query(`SHOW COLUMNS FROM ${db}.${table}`);
+            columns = colRes.map(c => c.Field);
+        }
+
+        if (columns.length === 0) {
+            return res.json([]);
+        }
+
+        // Exclude common generic and administrative audit columns that would create false positive relationships
+        const genericExclusions = [
+            'id', 'created_at', 'updated_at', 'deleted_at', 'engine', 'source', 'usuario', 
+            'fecha', 'time', 'date', 'observaciones', 'estado', 'monto', 'importe', 'deuda', 
+            'interes', 'capital', 'saldo', 'total', 'vencimiento', 'desc', 'descripcion', 
+            'observacion', 'obs', 'tipo', 'operacion', 'control', 'val', 'valor', 'num',
+            'altausua', 'altafeho', 'modiusa', 'modifeho', 'terminal', 'alta_usua', 'alta_feho', 
+            'modi_usua', 'modi_feho', 'auditoria', 'auditorias', 'altafech', 'alta_fech', 
+            'modifech', 'modi_fech', 'modiusua', 'usuaalta', 'fehoalta', 'usuamodi', 'fehomodi'
+        ];
+        const candidateKeys = columns.filter(col => {
+            const c = col.toLowerCase();
+            return !genericExclusions.includes(c) && c.length > 2;
+        });
+
+        if (candidateKeys.length === 0) {
+            return res.json([]);
+        }
+
+        // Query information_schema.columns to find matching columns in other tables
+        let relations = [];
+        if (engine === 'pg') {
+            const placeholders = candidateKeys.map((_, idx) => `$${idx + 1}`).join(', ');
+            const query = `
+                SELECT table_name as "table", column_name as "column"
+                FROM information_schema.columns
+                WHERE table_schema = 'public' 
+                  AND table_name != $${candidateKeys.length + 1}
+                  AND LOWER(column_name) IN (${placeholders})
+                ORDER BY table_name
+            `;
+            const params = [...candidateKeys.map(k => k.toLowerCase()), table];
+            const pgRes = await postgres.query(query, params);
+            relations = pgRes.rows.map(r => ({
+                table: r.table,
+                column: r.column,
+                matchingCol: candidateKeys.find(k => k.toLowerCase() === r.column.toLowerCase())
+            }));
+        } else {
+            // MariaDB - Search across allowed databases
+            const dbList = ALLOWED_MARIA_DBS.map(d => `'${d}'`).join(', ');
+            const placeholders = candidateKeys.map(() => '?').join(', ');
+            const query = `
+                SELECT TABLE_SCHEMA as "db", TABLE_NAME as "table", COLUMN_NAME as "column"
+                FROM information_schema.columns
+                WHERE TABLE_SCHEMA IN (${dbList})
+                  AND NOT (TABLE_SCHEMA = ? AND TABLE_NAME = ?)
+                  AND LOWER(COLUMN_NAME) IN (${placeholders})
+                ORDER BY TABLE_NAME
+            `;
+            const params = [db, table, ...candidateKeys.map(k => k.toLowerCase())];
+            const mariaRes = await mariaDB.query(query, params);
+            relations = mariaRes.map(r => ({
+                table: `${r.db}.${r.table}`,
+                column: r.column,
+                matchingCol: candidateKeys.find(k => k.toLowerCase() === r.column.toLowerCase())
+            }));
+        }
+
+        res.json(relations);
+    } catch (err) {
+        console.error('Relations Discovery Error:', err);
+        res.status(500).json({ error: err.message });
     }
 });
 

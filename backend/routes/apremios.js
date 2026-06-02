@@ -136,6 +136,129 @@ router.get('/compare', async (req, res) => {
     } finally { if (conn) conn.release(); }
 });
 
+// Search Combined Multi-Filter Parity
+router.get('/search-combined', async (req, res) => {
+    const { numeapre, cuenctct, codiof, estado, tituapre } = req.query;
+    logAction(req.user.nombre_usuario, 'APREMIO_SEARCH_COMBINED', `Buscando paridad combinada: ${JSON.stringify(req.query)}`, req);
+
+    try {
+        // 1. Build MariaDB Query dynamically
+        let mariaSql = `SELECT a.NumeApre as numeapre, a.CuenCtct as cuenctct, a.CodiOfic as codiofic, a.TotaApre as totaapre, ea.DetaEsap as estadodeta, a.TituApre as tituapre FROM ${DB_RECAUDACION}.apremio a LEFT JOIN ${DB_RECAUDACION}.estadoapremio ea ON a.EstaApre = ea.CodiEsap WHERE 1=1`;
+        const mariaParams = [];
+
+        if (numeapre && numeapre.trim()) {
+            mariaSql += " AND (a.NumeApre = ? OR CAST(a.NumeApre AS CHAR) LIKE ?)";
+            mariaParams.push(parseInt(numeapre.trim()) || 0, `%${numeapre.trim()}%`);
+        }
+        if (cuenctct && cuenctct.trim()) {
+            mariaSql += " AND (a.CuenCtct = ? OR a.CuenCtct LIKE ?)";
+            mariaParams.push(cuenctct.trim(), `%${cuenctct.trim()}%`);
+        }
+        if (codiof && codiof.trim()) {
+            mariaSql += " AND (a.CodiOfic = ? OR CAST(a.CodiOfic AS CHAR) LIKE ?)";
+            mariaParams.push(parseInt(codiof.trim()) || 0, `%${codiof.trim()}%`);
+        }
+        if (estado && estado.trim()) {
+            mariaSql += " AND ea.DetaEsap LIKE ?";
+            mariaParams.push(`%${estado.trim()}%`);
+        }
+        if (tituapre && tituapre.trim()) {
+            mariaSql += " AND a.TituApre LIKE ?";
+            mariaParams.push(`%${tituapre.trim()}%`);
+        }
+
+        mariaSql += " ORDER BY a.NumeApre DESC LIMIT 50";
+
+        // 2. Build PostgreSQL Query dynamically
+        let pgSql = `SELECT DISTINCT c.cedid, c.cednro, c.cedimptot, c.cedestado, c.cedseccod, c.cedpercod, TRIM(p.pernom) as pernom FROM public.cedula c LEFT JOIN public.persona p ON c.cedpercod = p.percod`;
+        const pgWhere = [];
+        const pgParams = [];
+
+        if (cuenctct && cuenctct.trim()) {
+            pgSql += " JOIN public.tcedulacedcuo cc ON c.cednro = cc.cednro";
+            pgWhere.push(`(cc.cedcuotribcod = $${pgParams.length + 1} OR CAST(cc.cedcuotribcod AS TEXT) LIKE $${pgParams.length + 2})`);
+            pgParams.push(parseInt(cuenctct.trim()) || 0, `%${cuenctct.trim()}%`);
+        }
+
+        if (numeapre && numeapre.trim()) {
+            pgWhere.push(`(c.cedid = $${pgParams.length + 1} OR c.cedid LIKE $${pgParams.length + 2})`);
+            pgParams.push(numeapre.trim(), `%${numeapre.trim()}%`);
+        }
+        if (codiof && codiof.trim()) {
+            pgWhere.push(`(c.cedseccod = $${pgParams.length + 1} OR CAST(c.cedseccod AS TEXT) LIKE $${pgParams.length + 2})`);
+            pgParams.push(parseInt(codiof.trim()) || 0, `%${codiof.trim()}%`);
+        }
+        if (estado && estado.trim()) {
+            let pgEstado = null;
+            const estUpper = estado.trim().toUpperCase();
+            if (estUpper.includes('CANC')) pgEstado = 'C';
+            else if (estUpper.includes('DEUD') || estUpper.includes('PEND')) pgEstado = 'D';
+            else if (estUpper.includes('PAG')) pgEstado = 'P';
+            else if (estUpper.includes('ANUL')) pgEstado = 'A';
+            else pgEstado = estUpper.substring(0, 1);
+
+            pgWhere.push(`c.cedestado = $${pgParams.length + 1}`);
+            pgParams.push(pgEstado);
+        }
+        if (tituapre && tituapre.trim()) {
+            pgWhere.push(`UPPER(p.pernom) LIKE UPPER($${pgParams.length + 1})`);
+            pgParams.push(`%${tituapre.trim()}%`);
+        }
+
+        if (pgWhere.length > 0) {
+            pgSql += " WHERE " + pgWhere.join(" AND ");
+        }
+
+        pgSql += " LIMIT 50";
+
+        // Execute in parallel
+        const [mariaResults, pgRes] = await Promise.all([
+            mariaDB.query(mariaSql, mariaParams),
+            postgresDB.query(pgSql, pgParams)
+        ]);
+
+        // Cross-DB hydration to prevent false "AUSENTE" on search results
+        let finalMariaResults = [...mariaResults];
+        let finalPgRows = [...pgRes.rows];
+
+        const pgIds = finalPgRows.map(r => r.cedid);
+        const missingMariaIds = pgIds.filter(pid => !finalMariaResults.some(m => m.numeapre.toString() === pid.toString()));
+        if (missingMariaIds.length > 0) {
+            const placeholders = missingMariaIds.map(() => '?').join(',');
+            const extraMaria = await mariaDB.query(`SELECT a.NumeApre as numeapre, a.CuenCtct as cuenctct, a.CodiOfic as codiofic, a.TotaApre as totaapre, ea.DetaEsap as estadodeta, a.TituApre as tituapre FROM ${DB_RECAUDACION}.apremio a LEFT JOIN ${DB_RECAUDACION}.estadoapremio ea ON a.EstaApre = ea.CodiEsap WHERE a.NumeApre IN (${placeholders})`, missingMariaIds);
+            finalMariaResults = [...finalMariaResults, ...extraMaria];
+        }
+
+        const mariaIds = finalMariaResults.map(r => r.numeapre);
+        const missingPgIds = mariaIds.filter(mid => !finalPgRows.some(p => p.cedid.toString() === mid.toString())).map(mid => mid.toString());
+        if (missingPgIds.length > 0) {
+            const extraPg = await postgresDB.query(`SELECT c.cedid, c.cednro, c.cedimptot, c.cedestado, c.cedseccod, c.cedpercod, TRIM(p.pernom) as pernom FROM public.cedula c LEFT JOIN public.persona p ON c.cedpercod = p.percod WHERE c.cedid = ANY($1::text[])`, [missingPgIds]);
+            finalPgRows = [...finalPgRows, ...extraPg.rows];
+        }
+
+        const allIds = new Set([...finalMariaResults.map(r => r.numeapre.toString()), ...finalPgRows.map(r => r.cedid.toString())]);
+        const combined = Array.from(allIds).map(idStr => {
+            const m = finalMariaResults.find(r => r.numeapre.toString() === idStr);
+            const p = finalPgRows.find(r => r.cedid.toString() === idStr);
+            const isMatch = m && p && Math.abs(parseFloat(m.totaapre || 0) - parseFloat(p.cedimptot || 0)) < 0.01;
+            return { id: idStr, legacy: m, postgres: p, status: { inMaria: !!m, inPostgres: !!p, match: !!isMatch } };
+        });
+
+        res.json({
+            results: combined,
+            queries: {
+                maria: mariaSql,
+                mariaParams,
+                postgres: pgSql,
+                postgresParams: pgParams
+            }
+        });
+
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // Search Apremio ID
 router.get('/search-id/:id', async (req, res) => {
     const { id } = req.params;
@@ -148,18 +271,49 @@ router.get('/search-id/:id', async (req, res) => {
         let mariaResults = [];
 
         if (searchType === 'name') {
-            mariaResults = await mariaDB.query(`SELECT a.NumeApre, a.CuenCtct, a.CodiOfic, a.TotaApre, ea.DetaEsap as EstadoDeta, a.TituApre FROM ${DB_RECAUDACION}.apremio a LEFT JOIN ${DB_RECAUDACION}.estadoapremio ea ON a.EstaApre = ea.CodiEsap WHERE a.TituApre LIKE ? ORDER BY a.NumeApre DESC LIMIT 50`, [searchTerm]);
+            mariaResults = await mariaDB.query(`SELECT a.NumeApre as numeapre, a.CuenCtct as cuenctct, a.CodiOfic as codiofic, a.TotaApre as totaapre, ea.DetaEsap as estadodeta, a.TituApre as tituapre FROM ${DB_RECAUDACION}.apremio a LEFT JOIN ${DB_RECAUDACION}.estadoapremio ea ON a.EstaApre = ea.CodiEsap WHERE a.TituApre LIKE ? ORDER BY a.NumeApre DESC LIMIT 50`, [searchTerm]);
+        } else if (searchType === 'cuenctct') {
+            mariaResults = await mariaDB.query(`SELECT a.NumeApre as numeapre, a.CuenCtct as cuenctct, a.CodiOfic as codiofic, a.TotaApre as totaapre, ea.DetaEsap as estadodeta, a.TituApre as tituapre FROM ${DB_RECAUDACION}.apremio a LEFT JOIN ${DB_RECAUDACION}.estadoapremio ea ON a.EstaApre = ea.CodiEsap WHERE a.CuenCtct LIKE ? ORDER BY a.NumeApre DESC LIMIT 50`, [searchTerm]);
+        } else if (searchType === 'codiof') {
+            mariaResults = await mariaDB.query(`SELECT a.NumeApre as numeapre, a.CuenCtct as cuenctct, a.CodiOfic as codiofic, a.TotaApre as totaapre, ea.DetaEsap as estadodeta, a.TituApre as tituapre FROM ${DB_RECAUDACION}.apremio a LEFT JOIN ${DB_RECAUDACION}.estadoapremio ea ON a.EstaApre = ea.CodiEsap WHERE CAST(a.CodiOfic AS CHAR) LIKE ? ORDER BY a.NumeApre DESC LIMIT 50`, [searchTerm]);
         } else if (isNumeric) {
-            mariaResults = await mariaDB.query(`SELECT a.NumeApre, a.CuenCtct, a.CodiOfic, a.TotaApre, ea.DetaEsap as EstadoDeta, a.TituApre FROM ${DB_RECAUDACION}.apremio a LEFT JOIN ${DB_RECAUDACION}.estadoapremio ea ON a.EstaApre = ea.CodiEsap WHERE a.NumeApre = ? OR CAST(a.NumeApre AS CHAR) LIKE ? ORDER BY a.NumeApre DESC LIMIT 50`, [parseInt(id), searchTerm]);
+            mariaResults = await mariaDB.query(`SELECT a.NumeApre as numeapre, a.CuenCtct as cuenctct, a.CodiOfic as codiofic, a.TotaApre as totaapre, ea.DetaEsap as estadodeta, a.TituApre as tituapre FROM ${DB_RECAUDACION}.apremio a LEFT JOIN ${DB_RECAUDACION}.estadoapremio ea ON a.EstaApre = ea.CodiEsap WHERE a.NumeApre = ? OR CAST(a.NumeApre AS CHAR) LIKE ? ORDER BY a.NumeApre DESC LIMIT 50`, [parseInt(id), searchTerm]);
         }
 
-        const pgRes = await postgresDB.query(`SELECT c.cedid, c.cednro, c.cedimptot, c.cedestado, TRIM(p.pernom) as pernom FROM public.cedula c LEFT JOIN public.persona p ON c.cedpercod = p.percod WHERE ${searchType === 'name' ? 'UPPER(p.pernom) LIKE UPPER($1)' : 'CAST(c.cedid AS TEXT) LIKE $1'} LIMIT 50`, [searchTerm]);
+        let pgRes;
+        if (searchType === 'name') {
+            pgRes = await postgresDB.query(`SELECT c.cedid, c.cednro, c.cedimptot, c.cedestado, c.cedseccod, c.cedpercod, TRIM(p.pernom) as pernom FROM public.cedula c LEFT JOIN public.persona p ON c.cedpercod = p.percod WHERE UPPER(p.pernom) LIKE UPPER($1) LIMIT 50`, [searchTerm]);
+        } else if (searchType === 'cuenctct') {
+            pgRes = await postgresDB.query(`SELECT DISTINCT c.cedid, c.cednro, c.cedimptot, c.cedestado, c.cedseccod, c.cedpercod, TRIM(p.pernom) as pernom FROM public.cedula c LEFT JOIN public.persona p ON c.cedpercod = p.percod JOIN public.tcedulacedcuo cc ON c.cednro = cc.cednro WHERE CAST(cc.cedcuotribcod AS TEXT) LIKE $1 LIMIT 50`, [searchTerm]);
+        } else if (searchType === 'codiof') {
+            pgRes = await postgresDB.query(`SELECT c.cedid, c.cednro, c.cedimptot, c.cedestado, c.cedseccod, c.cedpercod, TRIM(p.pernom) as pernom FROM public.cedula c LEFT JOIN public.persona p ON c.cedpercod = p.percod WHERE CAST(c.cedseccod AS TEXT) LIKE $1 LIMIT 50`, [searchTerm]);
+        } else {
+            pgRes = await postgresDB.query(`SELECT c.cedid, c.cednro, c.cedimptot, c.cedestado, c.cedseccod, c.cedpercod, TRIM(p.pernom) as pernom FROM public.cedula c LEFT JOIN public.persona p ON c.cedpercod = p.percod WHERE CAST(c.cedid AS TEXT) LIKE $1 LIMIT 50`, [searchTerm]);
+        }
         
-        const allIds = new Set([...mariaResults.map(r => r.NumeApre.toString()), ...pgRes.rows.map(r => r.cedid.toString())]);
+        // 1. Fetch missing MariaDB records for Postgres results to prevent false "AUSENTE" on truncation
+        const pgIds = pgRes.rows.map(r => r.cedid);
+        const missingMariaIds = pgIds.filter(pid => !mariaResults.some(m => m.numeapre.toString() === pid.toString()));
+        if (missingMariaIds.length > 0) {
+            const placeholders = missingMariaIds.map(() => '?').join(',');
+            const extraMaria = await mariaDB.query(`SELECT a.NumeApre as numeapre, a.CuenCtct as cuenctct, a.CodiOfic as codiofic, a.TotaApre as totaapre, ea.DetaEsap as estadodeta, a.TituApre as tituapre FROM ${DB_RECAUDACION}.apremio a LEFT JOIN ${DB_RECAUDACION}.estadoapremio ea ON a.EstaApre = ea.CodiEsap WHERE a.NumeApre IN (${placeholders})`, missingMariaIds);
+            mariaResults = [...mariaResults, ...extraMaria];
+        }
+
+        // 2. Fetch missing Postgres records for MariaDB results to prevent false "AUSENTE" on truncation
+        const mariaIds = mariaResults.map(r => r.numeapre);
+        const missingPgIds = mariaIds.filter(mid => !pgRes.rows.some(p => p.cedid.toString() === mid.toString())).map(mid => mid.toString());
+        if (missingPgIds.length > 0) {
+            const extraPg = await postgresDB.query(`SELECT c.cedid, c.cednro, c.cedimptot, c.cedestado, c.cedseccod, c.cedpercod, TRIM(p.pernom) as pernom FROM public.cedula c LEFT JOIN public.persona p ON c.cedpercod = p.percod WHERE c.cedid = ANY($1::text[])`, [missingPgIds]);
+            pgRes.rows = [...pgRes.rows, ...extraPg.rows];
+        }
+
+        const allIds = new Set([...mariaResults.map(r => r.numeapre.toString()), ...pgRes.rows.map(r => r.cedid.toString())]);
         const combined = Array.from(allIds).map(idStr => {
-            const m = mariaResults.find(r => r.NumeApre.toString() === idStr);
+            const m = mariaResults.find(r => r.numeapre.toString() === idStr);
             const p = pgRes.rows.find(r => r.cedid.toString() === idStr);
-            return { id: idStr, legacy: m, postgres: p, status: { inMaria: !!m, inPostgres: !!p } };
+            const isMatch = m && p && Math.abs(parseFloat(m.totaapre || 0) - parseFloat(p.cedimptot || 0)) < 0.01;
+            return { id: idStr, legacy: m, postgres: p, status: { inMaria: !!m, inPostgres: !!p, match: !!isMatch } };
         });
 
         res.json(combined);

@@ -29,6 +29,7 @@ import ApremioExplorer from './views/ApremioExplorer';
 import AuditModule from './views/AuditModule';
 import CtacteModule from './views/CtacteModule';
 import AnalyticsExplorer from './views/AnalyticsExplorer';
+import ExplorerDashboard from './views/ExplorerDashboard';
 import { API_URL } from './config';
 
 function App() {
@@ -106,7 +107,7 @@ function App() {
         <Header user={user} onMenuToggle={() => setMobileMenuOpen(!mobileMenuOpen)} />
         <div className="body-content-wrapper">
           {view === 'audit_module' ? (
-            <AuditModule setView={setView} />
+            <AuditModule setView={setView} user={user} />
           ) : view === 'ctacte_module' ? (
             <CtacteModule setView={setView} user={user} />
           ) : view === 'dashboard' ? (
@@ -119,6 +120,8 @@ function App() {
             <CuentaCorriente2 />
           ) : view === 'persona' ? (
             <PersonaSearch />
+          ) : view === 'explorer_dashboard' ? (
+            <ExplorerDashboard setView={setView} />
           ) : view === 'explorer' ? (
             <TableExplorer />
           ) : view === 'analytics' ? (
@@ -155,8 +158,10 @@ function App() {
             <ApremioExplorer />
           ) : view === 'rubros' ? (
             <RubrosComparison />
+          ) : view === 'excel' ? (
+            user?.rol === 'superadmin' ? <ComerciosExcel /> : <AuditDashboard />
           ) : (
-            <ComerciosExcel />
+            <AuditDashboard />
           )}
         </div>
       </main>

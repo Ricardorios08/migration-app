@@ -1,9 +1,10 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import { Search, FileText, Calendar, User, Hash, Filter, X, Info, CheckCircle, AlertCircle, Printer, History, Landmark, Clock } from 'lucide-react';
 import { API_URL } from '../config';
 
 const BoletoSearch = ({ currentUser }) => {
+    const [offices, setOffices] = useState([]);
     const [filters, setFilters] = useState({
         officeId: '',
         account: '',
@@ -17,6 +18,17 @@ const BoletoSearch = ({ currentUser }) => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const abortControllerRef = useRef(null);
+
+    useEffect(() => {
+        const token = localStorage.getItem('nomade_token');
+        axios.get(`${API_URL}/ctacte-fn/offices`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        })
+        .then(res => setOffices(res.data))
+        .catch(err => console.error('Error fetching offices:', err));
+    }, []);
     
     // Modal State
     const [showModal, setShowModal] = useState(false);
@@ -32,7 +44,7 @@ const BoletoSearch = ({ currentUser }) => {
         abortControllerRef.current = new AbortController();
 
         try {
-            const params = { page: pageNum, limit: 50 };
+            const params = { page: pageNum, limit: 20 };
             if (filters.officeId) params.officeId = filters.officeId;
             if (filters.account) params.account = filters.account;
             if (filters.personId) params.personId = filters.personId;
@@ -110,7 +122,7 @@ const BoletoSearch = ({ currentUser }) => {
             <div style={{ marginBottom: '2rem' }}>
                 <h1 style={{ fontSize: '1.8rem', fontWeight: '800', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                     <FileText size={32} color="var(--primary)" />
-                    Buscador de Boletos (InfoBoleto)
+                    Buscador de Boletos - InfoGov
                 </h1>
                 <p style={{ color: 'var(--text-dim)' }}>Consulta histórica y trazabilidad de pagos heredada del sistema Legacy.</p>
             </div>
@@ -120,15 +132,21 @@ const BoletoSearch = ({ currentUser }) => {
                 <form onSubmit={handleSearch} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1.5rem' }}>
                     <div className="form-group">
                         <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', marginBottom: '0.5rem', color: 'var(--text-dim)' }}>
-                            <Hash size={14} /> Oficina
+                            <Filter size={14} /> Oficina
                         </label>
-                        <input 
-                            type="number" 
+                        <select 
                             className="input-field" 
-                            placeholder="Ej: 1" 
                             value={filters.officeId}
                             onChange={(e) => setFilters({...filters, officeId: e.target.value})}
-                        />
+                            style={{ background: 'var(--card)', color: 'white' }}
+                        >
+                            <option value="">Todas las oficinas</option>
+                            {offices.map(off => (
+                                <option key={off.id} value={off.id}>
+                                    {off.name} ({off.id})
+                                </option>
+                            ))}
+                        </select>
                     </div>
                     <div className="form-group">
                         <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', marginBottom: '0.5rem', color: 'var(--text-dim)' }}>
@@ -215,7 +233,7 @@ const BoletoSearch = ({ currentUser }) => {
                             <th style={{ padding: '1rem' }}>Estado</th>
                             <th style={{ padding: '1rem' }}>Pago Real</th>
                             <th style={{ padding: '1rem', textAlign: 'right' }}>Total</th>
-                            <th style={{ padding: '1rem', textAlign: 'center' }}>InfoBoleto</th>
+                            <th style={{ padding: '1rem', textAlign: 'center' }}>InfoGov</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -276,7 +294,7 @@ const BoletoSearch = ({ currentUser }) => {
                                         onClick={() => fetchFullInfo(b)}
                                         className="btn btn-secondary" 
                                         style={{ padding: '0.4rem', borderRadius: '8px' }}
-                                        title="Ver InfoBoleto Completo"
+                                        title="Ver InfoGov Completo"
                                     >
                                         <Info size={18} />
                                     </button>
@@ -317,14 +335,14 @@ const BoletoSearch = ({ currentUser }) => {
                 </div>
             )}
 
-            {/* InfoBoleto Modal */}
+            {/* InfoGov Modal */}
             {showModal && (
                 <div className="modal-overlay" onClick={() => setShowModal(false)}>
                     <div className="modal-content" style={{ width: '900px', maxWidth: '95%', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
                             <div>
                                 <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                    <FileText size={24} /> InfoBoleto #{boletoData?.header?.NumeBole}
+                                    <FileText size={24} /> InfoGov #{boletoData?.header?.NumeBole}
                                 </h2>
                                 <p style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>Detalle completo y trazabilidad de auditoría</p>
                             </div>

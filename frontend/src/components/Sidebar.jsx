@@ -17,7 +17,8 @@ import {
   TrendingUp,
   Table,
   ClipboardCheck,
-  Calculator
+  Calculator,
+  Compass
 } from 'lucide-react';
 
 const Sidebar = ({ currentView, setView, collapsed, setCollapsed, mobileOpen, setMobileOpen, user, onLogout }) => {
@@ -73,7 +74,7 @@ const Sidebar = ({ currentView, setView, collapsed, setCollapsed, mobileOpen, se
           </div>
         )}
 
-        {user?.rol !== 'municipalidad' && (
+        {user?.rol !== 'municipalidad' && user?.rol !== 'usuario' && (
           <div
             className={`menu-item persona ${currentView === 'persona' ? 'active' : ''}`}
             onClick={() => setView('persona')}
@@ -88,7 +89,7 @@ const Sidebar = ({ currentView, setView, collapsed, setCollapsed, mobileOpen, se
         {user?.rol !== 'municipalidad' && (
           <>
             <div
-              className={`menu-item ${['apremio_dashboard', 'apremios', 'gastos_apremio', 'gastos_apremio_real', 'apremio_individual', 'apremio_tables'].includes(currentView) ? 'active' : ''}`}
+              className={`menu-item apremio ${['apremio_dashboard', 'apremios', 'gastos_apremio', 'gastos_apremio_real', 'apremio_individual', 'apremio_tables'].includes(currentView) ? 'active' : ''}`}
               onClick={() => setView('apremio_dashboard')}
               title={collapsed ? "Módulo de Apremio" : ""}
             >
@@ -98,7 +99,7 @@ const Sidebar = ({ currentView, setView, collapsed, setCollapsed, mobileOpen, se
             </div>
 
             <div
-              className={`menu-item ${isAuditView ? 'active' : ''}`}
+              className={`menu-item auditoria ${isAuditView ? 'active' : ''}`}
               onClick={() => setView('audit_module')}
               title={collapsed ? "Auditoría & Control" : ""}
             >
@@ -107,64 +108,38 @@ const Sidebar = ({ currentView, setView, collapsed, setCollapsed, mobileOpen, se
               {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
             </div>
 
-            <div
-              className={`menu-item ${currentView === 'apremio_explorer' ? 'active' : ''}`}
-              onClick={() => setView('apremio_explorer')}
-              title={collapsed ? "Explorador Apremios" : ""}
-            >
-              <Scale size={20} />
-              {!collapsed && <span>Explorador Apremios</span>}
-              {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
-            </div>
+            {(user?.rol === 'admin' || user?.rol === 'superadmin') && (
+              <div
+                className={`menu-item explorer ${['explorer_dashboard', 'explorer', 'analytics', 'apremio_explorer', 'boleto_explorer'].includes(currentView) ? 'active' : ''}`}
+                onClick={() => setView('explorer_dashboard')}
+                title={collapsed ? "Dashboard Explorador" : ""}
+              >
+                <Compass size={20} />
+                {!collapsed && <span>Dashboard Explorador</span>}
+                {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
+              </div>
+            )}
 
-            <div
-              className={`menu-item ${currentView === 'boleto_explorer' ? 'active' : ''}`}
-              onClick={() => setView('boleto_explorer')}
-              title={collapsed ? "Explorador Boletos" : ""}
-            >
-              <Table size={20} />
-              {!collapsed && <span>Explorador Boletos</span>}
-              {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
-            </div>
-
-            <div
-              className={`menu-item ${currentView === 'explorer' ? 'active' : ''}`}
-              onClick={() => setView('explorer')}
-              title={collapsed ? "Explorador de Tablas" : ""}
-            >
-              <Search size={20} />
-              {!collapsed && <span>Explorador de Tablas</span>}
-              {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
-            </div>
-
-            <div
-              className={`menu-item ${currentView === 'analytics' ? 'active' : ''}`}
-              onClick={() => setView('analytics')}
-              title={collapsed ? "Explorador Analítico (BI)" : ""}
-            >
-              <TrendingUp size={20} style={{ color: '#818cf8' }} />
-              {!collapsed && <span>Explorador Analítico (BI)</span>}
-              {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
-            </div>
-
-            <div
-              className={`menu-item ${currentView === 'excel' ? 'active' : ''}`}
-              onClick={() => setView('excel')}
-              title={collapsed ? "Excel Comercios" : ""}
-            >
-              <FileText size={20} />
-              {!collapsed && <span>Excel Comercios</span>}
-              {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
-            </div>
+            {user?.rol === 'superadmin' && (
+              <div
+                className={`menu-item excel ${currentView === 'excel' ? 'active' : ''}`}
+                onClick={() => setView('excel')}
+                title={collapsed ? "Excel Comercios" : ""}
+              >
+                <FileText size={20} />
+                {!collapsed && <span>Excel Comercios</span>}
+                {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
+              </div>
+            )}
 
             <div className="sidebar-separator" style={{ height: '1px', background: 'var(--border)', margin: '1rem 0' }}></div>
           </>
         )}
 
-        {/* Admin/Superadmin Specific Items, and Municipalidad for self-service */}
-        {(user?.rol === 'admin' || user?.rol === 'superadmin' || user?.rol === 'municipalidad') && (
+        {/* Exclusivo para Superadmin */}
+        {user?.rol === 'superadmin' && (
           <div
-            className={`menu-item ${currentView === 'users' ? 'active' : ''}`}
+            className={`menu-item users ${currentView === 'users' ? 'active' : ''}`}
             onClick={() => setView('users')}
             title={collapsed ? "Usuarios" : ""}
           >
@@ -176,7 +151,7 @@ const Sidebar = ({ currentView, setView, collapsed, setCollapsed, mobileOpen, se
 
         {user?.rol !== 'municipalidad' && (
           <div
-            className={`menu-item ${currentView === 'profile' ? 'active' : ''}`}
+            className={`menu-item profile ${currentView === 'profile' ? 'active' : ''}`}
             onClick={() => setView('profile')}
             title={collapsed ? "Mi Perfil" : ""}
           >

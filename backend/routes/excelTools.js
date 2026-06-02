@@ -97,6 +97,11 @@ function fillDownMergedCells(data) {
 }
 
 router.post('/parse-comercios', upload.single('file'), (req, res) => {
+    // Solo superadmin puede procesar/parsear archivos de comercio
+    if (!req.user || req.user.rol !== 'superadmin') {
+        return res.status(403).json({ error: 'No autorizado. Se requieren permisos de superadministrador.' });
+    }
+
     let filePath;
 
     if (req.file) {

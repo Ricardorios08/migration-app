@@ -8,7 +8,7 @@ const CuentaCorrienteFn = ({ user }) => {
     const [offices, setOffices] = useState([]);
     const [selectedOffice, setSelectedOffice] = useState('1'); // Default Inmueble
     const [account, setAccount] = useState('');
-    const [onlyDebt, setOnlyDebt] = useState(true);
+    const [onlyDebt, setOnlyDebt] = useState(false);
     const [toDate, setToDate] = useState(new Date().toISOString().split('T')[0]);
     const [legacyData, setLegacyData] = useState([]);
     const [postgresData, setPostgresData] = useState([]);
@@ -23,7 +23,7 @@ const CuentaCorrienteFn = ({ user }) => {
     const [showFormulaModal, setShowFormulaModal] = useState(false);
 
     const [showSubtotals, setShowSubtotals] = useState(false);
-    const [isGrouped, setIsGrouped] = useState(true);
+    const [isGrouped, setIsGrouped] = useState(false);
     const [leftWidth, setLeftWidth] = useState(50); // Set initial width to 50%
     const [isResizing, setIsResizing] = useState(false);
     const [searchBy, setSearchBy] = useState('person'); // 'account' or 'person'
@@ -1574,21 +1574,25 @@ const CuentaCorrienteFn = ({ user }) => {
 
                         {user?.rol !== 'municipalidad' && (
                             <>
-                                <button
-                                    type="button"
-                                    className="btn-sql"
-                                    onClick={() => setShowSqlMariaModal(true)}
-                                >
-                                    SQL MariaDB
-                                </button>
+                                {user?.rol === 'superadmin' && (
+                                    <>
+                                        <button
+                                            type="button"
+                                            className="btn-sql"
+                                            onClick={() => setShowSqlMariaModal(true)}
+                                        >
+                                            SQL MariaDB
+                                        </button>
 
-                                <button
-                                    type="button"
-                                    className="btn-sql"
-                                    onClick={() => setShowSqlPgModal(true)}
-                                >
-                                    SQL Postgres
-                                </button>
+                                        <button
+                                            type="button"
+                                            className="btn-sql"
+                                            onClick={() => setShowSqlPgModal(true)}
+                                        >
+                                            SQL Postgres
+                                        </button>
+                                    </>
+                                )}
 
                                 <button
                                     type="button"
@@ -1787,7 +1791,7 @@ const CuentaCorrienteFn = ({ user }) => {
                 </div>
             )}
 
-            {showSqlMariaModal && (
+            {showSqlMariaModal && user?.rol === 'superadmin' && (
                 <div className="modal-overlay" onClick={() => setShowSqlMariaModal(false)}>
                     <div className="modal-content" onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
@@ -1872,7 +1876,7 @@ LIMIT 2000;`}
                 </div>
             )}
 
-            {showSqlPgModal && (
+            {showSqlPgModal && user?.rol === 'superadmin' && (
                 <div className="modal-overlay" onClick={() => setShowSqlPgModal(false)}>
                     <div className="modal-content" onClick={e => e.stopPropagation()}>
                         <div className="modal-header">

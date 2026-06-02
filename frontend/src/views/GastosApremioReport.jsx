@@ -3,7 +3,8 @@ import axios from 'axios';
 import { API_URL } from '../config';
 import {
   BookOpen, ArrowLeft, Database, Calculator, AlertTriangle,
-  ChevronDown, ChevronUp, FileText, Scale, Info, Zap, Search, RefreshCw
+  ChevronDown, ChevronUp, FileText, Scale, Info, Zap, Search, RefreshCw,
+  Settings, Layers, History, Table
 } from 'lucide-react';
 
 const Section = ({ title, icon: Icon, color, children, defaultOpen = true }) => {
@@ -148,46 +149,41 @@ const Tag = ({ color, children }) => (
 const GastosApremioReport = ({ setView }) => {
   const [liveParams, setLiveParams] = useState(null);
   const [liveInstjudi, setLiveInstjudi] = useState(null);
-  const [selectedCase, setSelectedCase] = useState(1);
-  const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [liveDebt, setLiveDebt] = useState({ capital: 1172.88, recargo: 586.44, numeApre: null });
-  const [searching, setSearching] = useState(false);
 
-  const handleSearch = async () => {
-    if (!searchQuery) return;
-    setSearching(true);
+  // States and configuration for the integrated DB Tables Explorer
+  const [activeTab, setActiveTab] = useState('paraapre');
+  const [tableData, setTableData] = useState([]);
+  const [tableLoading, setTableLoading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const tabs = [
+    { id: 'paraapre', label: 'Parámetros Globales', icon: Settings, color: '#3b82f6' },
+    { id: 'instjudi', label: 'Instancias Judiciales', icon: Scale, color: '#10b981' },
+    { id: 'escaapre', label: 'Escalas de Gastos', icon: Layers, color: '#f59e0b' },
+    { id: 'instapre', label: 'Histórico Instancias', icon: History, color: '#ef4444' }
+  ];
+
+  const fetchTableData = async (tabId) => {
+    setTableLoading(true);
     try {
-      const isAccount = searchQuery.includes('-') || searchQuery.length > 8;
-      const param = isAccount ? `cuenCtct=${searchQuery}` : `numeApre=${searchQuery}`;
-      const res = await axios.get(`${API_URL}/apremio-config/debt?${param}`);
-      if (res.data.capital > 0) {
-        // Estimamos recargo al 50% si viene en 0 para que el simulador tenga sentido
-        const cap = res.data.capital;
-        const rec = res.data.recargo || (cap * 0.5);
-        setLiveDebt({ capital: cap, recargo: rec, numeApre: res.data.numeApre });
-      } else {
-        alert('No se encontró deuda pendiente para este apremio/cuenta');
-      }
-    } catch (e) {
-      console.error('Search error:', e);
-      alert('Error al buscar deuda');
+      const response = await axios.get(`${API_URL}/apremio-config/${tabId}`);
+      setTableData(response.data);
+    } catch (err) {
+      console.error('Error fetching table data:', err);
+      setTableData([]);
     } finally {
-      setSearching(false);
+      setTableLoading(false);
     }
   };
 
-  const SimRow = ({ label, calc, result, note }) => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>
-      <div style={{ flex: 1 }}>
-        <div style={{ fontSize: '0.85rem', color: 'var(--text)', fontWeight: 600 }}>{label}</div>
-        <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', fontFamily: 'monospace' }}>{calc}</div>
-      </div>
-      <div style={{ textAlign: 'right' }}>
-        <div style={{ fontSize: '0.85rem', color: '#f59e0b', fontWeight: 700 }}>{result}</div>
-        {note && <div style={{ fontSize: '0.65rem', color: '#7c4dff', fontStyle: 'italic' }}>{note}</div>}
-      </div>
-    </div>
+  useEffect(() => {
+    fetchTableData(activeTab);
+  }, [activeTab]);
+
+  const filteredData = tableData.filter(item => 
+    Object.values(item).some(val => 
+      String(val).toLowerCase().includes(searchTerm.toLowerCase())
+    )
   );
 
   useEffect(() => {
@@ -201,8 +197,6 @@ const GastosApremioReport = ({ setView }) => {
         setLiveInstjudi(instjudiRes.data);
       } catch (e) {
         console.error('Error fetching config:', e);
-      } finally {
-        setLoading(false);
       }
     };
     fetchData();
@@ -426,201 +420,7 @@ TOTAL = Σ(11 campos)`}</CodeBlock>
         </div>
       </Section>
 
-      <Section title="Calculadora Viva de Gastos" icon={Calculator} color="#7c4dff" defaultOpen={true}>
-        <div style={{ 
-          background: 'var(--card)', 
-          padding: '1.25rem', 
-          borderRadius: '12px', 
-          border: '1px solid var(--border)',
-          marginBottom: '1.5rem',
-          display: 'flex',
-          gap: '1rem',
-          alignItems: 'flex-end'
-        }}>
-          <div style={{ flex: 1 }}>
-            <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-dim)', marginBottom: '0.5rem', display: 'block' }}>
-              INGRESAR NUMEAPRE O CUENTA
-            </label>
-            <input 
-              type="text" 
-              placeholder="Ej: 10550414 o 01-123456"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-              style={{
-                width: '100%',
-                padding: '10px 14px',
-                borderRadius: '8px',
-                border: '1px solid var(--border)',
-                background: 'var(--bg)',
-                color: 'var(--text)',
-                fontSize: '0.9rem'
-              }}
-            />
-          </div>
-          <button 
-            onClick={handleSearch}
-            disabled={searching}
-            style={{
-              padding: '10px 20px',
-              borderRadius: '8px',
-              background: 'var(--primary)',
-              color: '#fff',
-              border: 'none',
-              fontWeight: 700,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem'
-            }}
-          >
-            {searching ? <RefreshCw size={16} className="spin" /> : <Search size={16} />}
-            Calcular Deuda
-          </button>
-        </div>
 
-        <Alert type="info">
-          <strong>Deuda Cargada:</strong> Capital: <strong>${liveDebt.capital.toLocaleString('es-AR')}</strong> | 
-          Recargo (est.): <strong>${liveDebt.recargo.toLocaleString('es-AR')}</strong> | 
-          Base: <strong>${(liveDebt.capital + liveDebt.recargo).toLocaleString('es-AR')}</strong>
-          {liveDebt.numeApre && <span> | Apremio: <strong>{liveDebt.numeApre}</strong></span>}
-        </Alert>
-
-        <div style={{ display: 'flex', gap: '0.75rem', overflowX: 'auto', paddingBottom: '1rem', marginBottom: '1.5rem' }}>
-          {[
-            { id: 1, name: '1. Notificación', color: '#3b82f6' },
-            { id: 2, name: '2. Demanda', color: '#10b981' },
-            { id: 3, name: '3. Mandamiento', color: '#f59e0b' },
-            { id: 4, name: '4. Sentencia', color: '#ef4444' },
-            { id: 5, name: '5. Embargo', color: '#7c4dff' },
-            { id: 'large', name: '🔥 Deuda Gigante (Topes)', color: '#eb4034' }
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setSelectedCase(tab.id)}
-              style={{
-                padding: '10px 20px',
-                borderRadius: '10px',
-                border: '1px solid ' + (selectedCase === tab.id ? tab.color : 'var(--border)'),
-                background: selectedCase === tab.id ? tab.color + '12' : 'var(--card)',
-                color: selectedCase === tab.id ? tab.color : 'var(--text-dim)',
-                fontWeight: 700,
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-                transition: 'all 0.2s'
-              }}
-            >
-              {tab.name}
-            </button>
-          ))}
-        </div>
-
-        {/* Case Detail Display */}
-        <div style={{
-          background: 'var(--bg)',
-          borderRadius: '14px',
-          padding: '1.5rem',
-          border: '1px solid var(--border)'
-        }}>
-          <h4 style={{ margin: '0 0 1rem 0', color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            {selectedCase === 1 && <><Tag color="#3b82f6">Instancia 1</Tag> Etapa Inicial de Notificación</>}
-            {selectedCase === 2 && <><Tag color="#10b981">Instancia 2</Tag> Inicio de Demanda Judicial</>}
-            {selectedCase === 3 && <><Tag color="#f59e0b">Instancia 3</Tag> Ejecución de Mandamiento</>}
-            {selectedCase === 4 && <><Tag color="#ef4444">Instancia 4</Tag> Pedido de Sentencia</>}
-            {selectedCase === 5 && <><Tag color="#7c4dff">Instancia 5</Tag> Cédula o Embargo Preventivo</>}
-            {selectedCase === 'large' && <><Tag color="#eb4034">TOPE MÁXIMO</Tag> Ejemplo de Deuda de $20,000,000</>}
-          </h4>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
-            {/* Left: Logic */}
-            <div>
-              <p style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', marginBottom: '0.75rem' }}>Lógica de Cálculo</p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                {selectedCase === 'large' ? (
-                  <>
-                    <SimRow label="Base Deuda" calc="Capital + Recargo" result="$20,000,000" />
-                    <SimRow label="Admin (3%)" calc="$20M × 3% = $600,000" result="$505,000.00" note="TOPE MÁXIMO" />
-                    <SimRow label="Aporte Ley (2%)" calc="$20M × 2% = $400,000" result="$17,000.00" note="TOPE MÁXIMO" />
-                    <SimRow label="Honorarios (3%)" calc="$20M × 3% = $600,000" result="$600,000.00" />
-                    <SimRow label="Tasa Justicia" calc="Fijo" result="$18,600.00" />
-                  </>
-                ) : (
-                  (() => {
-                    const base = liveDebt.capital + liveDebt.recargo;
-                    const format = (v) => '$' + v.toLocaleString('es-AR', { minimumFractionDigits: 2 });
-                    const p = liveParams ? liveParams[0] : { CamiPaap: 15000, CamaPaap: 505000, HrmiPaap: 9300, TajuPaap: 18600, AplePaap: 17000 };
-                    
-                    if (selectedCase === 1) return (
-                      <>
-                        <SimRow label="Admin (3%)" calc={`${format(base)} × 3% = ${format(base*0.03)}`} result={format(Math.max(base*0.03, p.CamiPaap))} note={base*0.03 < p.CamiPaap ? "Aplica Mínimo" : ""} />
-                        <SimRow label="Honorarios (0%)" calc="N/A" result="$0,00" />
-                        <SimRow label="Movilidad" calc="1 km" result="$66,00" />
-                      </>
-                    );
-                    if (selectedCase === 2) return (
-                      <>
-                        <SimRow label="Admin (3%)" calc={`${format(base)} × 3% = ${format(base*0.03)}`} result={format(Math.max(base*0.03, p.CamiPaap))} />
-                        <SimRow label="Honorarios (3%)" calc={`${format(base)} × 3% = ${format(base*0.03)}`} result={format(Math.max(base*0.03, p.HrmiPaap))} note={base*0.03 < p.HrmiPaap ? "Aplica Mínimo" : ""} />
-                        <SimRow label="Tasa Justicia" calc="Fijo" result={format(p.TajuPaap)} />
-                        <SimRow label="Aporte Ley (2%)" calc={`${format(base)} × 2% = ${format(base*0.02)}`} result={format(Math.min(base*0.02, p.AplePaap))} />
-                      </>
-                    );
-                    if (selectedCase === 3) return (
-                      <>
-                        <SimRow label="Admin (3%)" calc={`${format(base)} × 3% = ${format(base*0.03)}`} result={format(Math.max(base*0.03, p.CamiPaap))} />
-                        <SimRow label="Honorarios (3%)" calc={`${format(base)} × 3% = ${format(base*0.03)}`} result={format(Math.max(base*0.03, p.HrmiPaap))} />
-                        <SimRow label="Movilidad" calc="1 km (zona C)" result="$66,00" />
-                      </>
-                    );
-                    if (selectedCase === 4) return (
-                      <>
-                        <SimRow label="Admin (3%)" calc={`${format(base)} × 3% = ${format(base*0.03)}`} result={format(Math.max(base*0.03, p.CamiPaap))} />
-                        <SimRow label="Honorarios (5%)" calc={`${format(base)} × 5% = ${format(base*0.05)}`} result={format(Math.max(base*0.05, p.HrmiPaap))} note="Aumenta % en Sentencia" />
-                        <SimRow label="Aporte Ley (2%)" calc={`${format(base)} × 2% = ${format(base*0.02)}`} result={format(Math.min(base*0.02, p.AplePaap))} />
-                      </>
-                    );
-                    if (selectedCase === 5) return (
-                      <>
-                        <SimRow label="Admin (3%)" calc={`${format(base)} × 3% = ${format(base*0.03)}`} result={format(Math.max(base*0.03, p.CamiPaap))} />
-                        <SimRow label="Honorarios (7%)" calc={`${format(base)} × 7% = ${format(base*0.07)}`} result={format(Math.max(base*0.07, p.HrmiPaap))} note="Máximo % etapa Embargo" />
-                        <SimRow label="Tasa Justicia" calc="Fijo" result={format(p.TajuPaap)} />
-                      </>
-                    );
-                    return null;
-                  })()
-                )}
-              </div>
-            </div>
-
-            {/* Right: Summary */}
-            <div style={{ background: 'var(--card)', borderRadius: '12px', padding: '1.25rem', border: '1px solid var(--border)' }}>
-              <p style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', marginBottom: '1rem' }}>Resumen de Boleta</p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
-                  <span color="var(--text-dim)">Total Gastos:</span>
-                  <span style={{ fontWeight: 700, color: 'var(--text)' }}>
-                    {selectedCase === 1 && '$15,066.00'}
-                    {selectedCase === 2 && '$43,882.77'}
-                    {selectedCase === 3 && '$43,931.18'}
-                    {selectedCase === 4 && '$24,335.18'}
-                    {selectedCase === 5 && '$43,830.00'}
-                    {selectedCase === 'large' && '$1,140,600.00'}
-                  </span>
-                </div>
-                <div style={{ height: '1px', background: 'var(--border)', margin: '0.5rem 0' }} />
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', lineHeight: 1.5 }}>
-                  {selectedCase === 1 && "En esta etapa inicial, el costo está dominado por la comisión administrativa mínima de $15,000."}
-                  {selectedCase === 2 && "Al iniciar la demanda, se suman los honorarios mínimos ($9,300) y la Tasa de Justicia ($18,600), triplicando el costo."}
-                  {selectedCase === 3 && "El mandamiento mantiene los costos de la demanda pero suma movilidad del oficial de justicia."}
-                  {selectedCase === 4 && "En el pedido de sentencia, los honorarios suben al 5%, aunque en deudas bajas sigue aplicando el mínimo."}
-                  {selectedCase === 5 && "La etapa de embargo reactiva el cobro de la Tasa de Justicia y aplica el porcentaje más alto de honorarios (7%)."}
-                  {selectedCase === 'large' && "Con deudas de millones, verás que la Comisión ($505k) y el Aporte ($17k) llegan a su techo máximo. Sin embargo, los Honorarios del recaudador no tienen tope y crecen proporcionalmente a la deuda."}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Section>
 
       {/* 7. Implicancias Importantes */}
       <Section title="Implicancias Importantes" icon={AlertTriangle} color="#ef4444" defaultOpen={false}>
@@ -668,6 +468,154 @@ TOTAL = Σ(11 campos)`}</CodeBlock>
             ['IofiBoap', 'decimal(12,2)', 'Interés sobre honorarios oficial']
           ]}
         />
+      </Section>
+
+      {/* 9. Configuración y Tablas */}
+      <Section title="Configuración y Tablas (Base de Datos)" icon={Table} color="#10b981" defaultOpen={true}>
+        {/* Tabs Selector */}
+        <div style={{ 
+          display: 'flex', 
+          flexWrap: 'wrap',
+          gap: '0.5rem', 
+          marginBottom: '1.5rem',
+          padding: '4px',
+          background: 'var(--bg)',
+          borderRadius: '12px',
+          width: 'fit-content',
+          border: '1px solid var(--border)'
+        }}>
+          {tabs.map(tab => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.6rem',
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: isActive ? 'var(--card)' : 'transparent',
+                  color: isActive ? tab.color : 'var(--text-dim)',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  fontSize: '0.85rem',
+                  transition: 'all 0.2s',
+                  boxShadow: isActive ? '0 2px 8px rgba(0,0,0,0.1)' : 'none'
+                }}
+              >
+                <Icon size={16} />
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Toolbar */}
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center', 
+          marginBottom: '1rem',
+          gap: '1rem'
+        }}>
+          <div style={{ position: 'relative', flex: 1, maxWidth: '400px' }}>
+            <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }} />
+            <input
+              type="text"
+              placeholder="Buscar en la tabla..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '10px 12px 10px 40px',
+                borderRadius: '10px',
+                border: '1px solid var(--border)',
+                background: 'var(--card)',
+                color: 'var(--text)',
+                fontSize: '0.875rem'
+              }}
+            />
+          </div>
+          <button
+            onClick={() => fetchTableData(activeTab)}
+            disabled={tableLoading}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              padding: '10px 16px',
+              borderRadius: '10px',
+              border: '1px solid var(--border)',
+              background: 'var(--card)',
+              color: 'var(--text)',
+              cursor: 'pointer',
+              fontSize: '0.85rem'
+            }}
+          >
+            <RefreshCw size={16} className={tableLoading ? 'spin' : ''} />
+            Actualizar
+          </button>
+        </div>
+
+        {/* Table Container */}
+        <div style={{ 
+          maxHeight: '400px', 
+          overflow: 'auto', 
+          background: 'var(--card)', 
+          borderRadius: '14px', 
+          border: '1px solid var(--border)',
+          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+        }}>
+          {tableLoading ? (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px', color: 'var(--text-dim)' }}>
+              <RefreshCw size={24} className="spin" style={{ marginRight: '10px' }} />
+              Cargando datos...
+            </div>
+          ) : filteredData.length > 0 ? (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: 'var(--bg)' }}>
+                <tr>
+                  {Object.keys(filteredData[0]).map(key => (
+                    <th key={key} style={{
+                      padding: '12px 16px',
+                      textAlign: 'left',
+                      color: 'var(--text-dim)',
+                      fontWeight: 700,
+                      fontSize: '0.75rem',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                      borderBottom: '2px solid var(--border)'
+                    }}>{key}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filteredData.map((row, i) => (
+                  <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
+                    {Object.values(row).map((val, j) => (
+                      <td key={j} style={{ 
+                        padding: '12px 16px', 
+                        color: 'var(--text)',
+                        fontFamily: typeof val === 'number' ? 'monospace' : 'inherit'
+                      }}>
+                        {val === null ? <em style={{ color: 'var(--text-dim)' }}>null</em> : String(val)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div style={{ padding: '4rem', textAlign: 'center', color: 'var(--text-dim)' }}>
+              <Database size={48} style={{ opacity: 0.2, marginBottom: '1rem' }} />
+              <p>No se encontraron registros</p>
+            </div>
+          )}
+        </div>
       </Section>
     </div>
   );
