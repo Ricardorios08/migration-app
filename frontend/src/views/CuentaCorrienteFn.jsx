@@ -5,6 +5,7 @@ import autoTable from 'jspdf-autotable';
 import API_BASE_URL from '../config';
 
 const CuentaCorrienteFn = ({ user }) => {
+    const isMunic = user?.rol === 'municipalidad' || user?.rol === 'usuario';
     const [offices, setOffices] = useState([]);
     const [selectedOffice, setSelectedOffice] = useState('1'); // Default Inmueble
     const [account, setAccount] = useState('');
@@ -321,7 +322,6 @@ const CuentaCorrienteFn = ({ user }) => {
 
             const rowDebe = parseFloat(row.DebeCtct || 0);
             const rowCred = parseFloat(row.CredCtct || 0);
-            const isMunic = user?.rol === 'municipalidad';
             
             periodTotals.debe += rowDebe;
             periodTotals.reca += (isMunic ? 0 : parseFloat(row.RecaCtct || 0));
@@ -576,12 +576,12 @@ const CuentaCorrienteFn = ({ user }) => {
                 ) : '-'}
             </td>
             <td style={{ color: '#ef4444' }}>${formatCurrency(row.DebeCtct)}</td>
-            {user?.rol !== 'municipalidad' && <td style={{ color: '#f59e0b' }}>${formatCurrency(row.RecaCtct)}</td>}
+            {!isMunic && <td style={{ color: '#f59e0b' }}>${formatCurrency(row.RecaCtct)}</td>}
             <td style={{ color: '#10b981' }}>
-                ${formatCurrency(user?.rol === 'municipalidad' ? Math.min(parseFloat(row.DebeCtct || 0), parseFloat(row.CredCtct || 0)) : row.CredCtct)}
+                ${formatCurrency(isMunic ? Math.min(parseFloat(row.DebeCtct || 0), parseFloat(row.CredCtct || 0)) : row.CredCtct)}
             </td>
             <td style={{ fontWeight: 'bold' }}>
-                ${formatCurrency(user?.rol === 'municipalidad' ? Math.max(0, parseFloat(row.DebeCtct || 0) - parseFloat(row.CredCtct || 0)) : row.TotaCtct)}
+                ${formatCurrency(isMunic ? Math.max(0, parseFloat(row.DebeCtct || 0) - parseFloat(row.CredCtct || 0)) : row.TotaCtct)}
             </td>
             <td>
                 {(() => {
@@ -628,10 +628,10 @@ const CuentaCorrienteFn = ({ user }) => {
                 Subtotal {period}/{bime}:
             </td>
             <td style={{ color: '#ef4444', fontWeight: 'bold' }}>${formatCurrency(totals.debe)}</td>
-            {user?.rol !== 'municipalidad' && <td style={{ color: '#f59e0b', fontWeight: 'bold' }}>${formatCurrency(totals.reca)}</td>}
+            {!isMunic && <td style={{ color: '#f59e0b', fontWeight: 'bold' }}>${formatCurrency(totals.reca)}</td>}
             <td style={{ color: '#10b981', fontWeight: 'bold' }}>${formatCurrency(totals.haber)}</td>
             <td style={{ borderTop: '1px solid var(--primary)', background: 'rgba(37, 99, 235, 0.1)' }}>
-                ${formatCurrency(user?.rol === 'municipalidad' ? (totals.debe - totals.haber) : totals.total)}
+                ${formatCurrency(isMunic ? (totals.debe - totals.haber) : totals.total)}
             </td>
             <td></td>
         </tr>
@@ -807,7 +807,6 @@ const CuentaCorrienteFn = ({ user }) => {
                     const pDebe = parseFloat(row.DebeCtct || 0);
                     const pReca = parseFloat(row.RecaCtct || 0);
                     const pHaberOriginal = parseFloat(row.CredCtct || 0);
-                    const isMunic = user?.rol === 'municipalidad';
                     
                     const pHaber = isMunic ? Math.min(pDebe, pHaberOriginal) : pHaberOriginal;
                     const pTotal = isMunic ? Math.max(0, pDebe - pHaber) : parseFloat(row.TotaCtct || 0);
@@ -879,7 +878,6 @@ const CuentaCorrienteFn = ({ user }) => {
             } else if (postgresData[0]?.Pabellon) {
                 doc.text(`Ubicación: Pab: ${postgresData[0].Pabellon.trim()} Nicho: ${postgresData[0].Nicho?.trim() || ''}`, 40, 115);
             }
-            const isMunic = user?.rol === 'municipalidad';
 
             let currentY = 135;
 
@@ -1101,7 +1099,6 @@ const CuentaCorrienteFn = ({ user }) => {
 
             const rowDebe = parseFloat(row.DebeCtct || 0);
             const rowCred = parseFloat(row.CredCtct || 0);
-            const isMunic = user?.rol === 'municipalidad';
 
             periodTotals.debe += rowDebe;
             periodTotals.reca += (isMunic ? 0 : parseFloat(row.RecaCtct || 0));
@@ -1141,16 +1138,16 @@ const CuentaCorrienteFn = ({ user }) => {
                     <td style={{ color: isMismatchDebe ? '#fca5a5' : '#ef4444', fontWeight: isMismatchDebe ? 'bold' : 'normal' }}>
                         ${formatCurrency(row.DebeCtct)}
                     </td>
-                    {user?.rol !== 'municipalidad' && (
+                    {!isMunic && (
                         <td style={{ color: isMismatchReca ? '#fca5a5' : '#f59e0b', fontWeight: isMismatchReca ? 'bold' : 'normal' }}>
                             ${formatCurrency(row.RecaCtct)}
                         </td>
                     )}
                     <td style={{ color: '#10b981' }}>
-                        ${formatCurrency(user?.rol === 'municipalidad' ? Math.min(parseFloat(row.DebeCtct || 0), parseFloat(row.CredCtct || 0)) : row.CredCtct)}
+                        ${formatCurrency(isMunic ? Math.min(parseFloat(row.DebeCtct || 0), parseFloat(row.CredCtct || 0)) : row.CredCtct)}
                     </td>
                     <td style={{ fontWeight: 'bold' }}>
-                        ${formatCurrency(user?.rol === 'municipalidad' ? Math.max(0, parseFloat(row.DebeCtct || 0) - parseFloat(row.CredCtct || 0)) : row.TotaCtct)}
+                        ${formatCurrency(isMunic ? Math.max(0, parseFloat(row.DebeCtct || 0) - parseFloat(row.CredCtct || 0)) : row.TotaCtct)}
                     </td>
                     <td>
                         <div 
@@ -1499,7 +1496,7 @@ const CuentaCorrienteFn = ({ user }) => {
                             <Filter size={16} /> {isFiltersExpanded ? 'Opciones' : 'Más'}
                         </button>
 
-                        {user?.rol === 'municipalidad' && (
+                        {isMunic && (
                             <button
                                 type="button"
                                 className="btn-pdf"
@@ -1561,7 +1558,7 @@ const CuentaCorrienteFn = ({ user }) => {
                             </>
                         )}
 
-                        {user?.rol !== 'municipalidad' && (
+                        {!isMunic && (
                             <button
                                 type="button"
                                 className="btn-pdf"
@@ -1572,7 +1569,7 @@ const CuentaCorrienteFn = ({ user }) => {
                             </button>
                         )}
 
-                        {user?.rol !== 'municipalidad' && (
+                        {!isMunic && (
                             <>
                                 {user?.rol === 'superadmin' && (
                                     <>
@@ -1637,7 +1634,7 @@ const CuentaCorrienteFn = ({ user }) => {
                                         <th>Apr.</th>
                                         <th>Plan</th>
                                         <th>Debe</th>
-                                        {user?.rol !== 'municipalidad' && <th>Recargo</th>}
+                                        {!isMunic && <th>Recargo</th>}
                                         <th>Haber</th>
                                         <th>Total</th>
                                         <th>Estado/Ref</th>
@@ -1652,7 +1649,7 @@ const CuentaCorrienteFn = ({ user }) => {
                                         <td style={{ color: '#ef4444' }}>
                                             ${formatCurrency(legacyData.reduce((acc, row) => acc + parseFloat(row.DebeCtct || 0), 0))}
                                         </td>
-                                        {user?.rol !== 'municipalidad' && (
+                                        {!isMunic && (
                                             <td style={{ color: '#f59e0b' }}>
                                                 ${formatCurrency(legacyData.reduce((acc, row) => acc + parseFloat(row.RecaCtct || 0), 0))}
                                             </td>
@@ -1661,7 +1658,7 @@ const CuentaCorrienteFn = ({ user }) => {
                                             ${formatCurrency(legacyData.reduce((acc, row) => {
                                                 const d = parseFloat(row.DebeCtct || 0);
                                                 const h = parseFloat(row.CredCtct || 0);
-                                                return acc + (user?.rol === 'municipalidad' ? Math.min(d, h) : h);
+                                                return acc + (isMunic ? Math.min(d, h) : h);
                                             }, 0))}
                                         </td>
                                         <td style={{ fontSize: '1.1rem', borderTop: '2px solid var(--primary)' }}>
@@ -1669,7 +1666,7 @@ const CuentaCorrienteFn = ({ user }) => {
                                                 const d = parseFloat(row.DebeCtct || 0);
                                                 const h = parseFloat(row.CredCtct || 0);
                                                 const r = parseFloat(row.RecaCtct || 0);
-                                                return acc + (user?.rol === 'municipalidad' ? Math.max(0, d - h) : (d + r - h));
+                                                return acc + (isMunic ? Math.max(0, d - h) : (d + r - h));
                                             }, 0))}
                                         </td>
                                         <td></td>
@@ -1708,7 +1705,7 @@ const CuentaCorrienteFn = ({ user }) => {
                                         <th>Apr.</th>
                                         <th>Plan</th>
                                         <th>Debe</th>
-                                        {user?.rol !== 'municipalidad' && <th>Interés</th>}
+                                        {!isMunic && <th>Interés</th>}
                                         <th>Haber</th>
                                         <th>Total</th>
                                         <th>Estado/Ref</th>
@@ -1723,7 +1720,7 @@ const CuentaCorrienteFn = ({ user }) => {
                                         <td style={{ color: '#ef4444' }}>
                                             ${formatCurrency(postgresData.reduce((acc, row) => acc + parseFloat(row.DebeCtct || 0), 0))}
                                         </td>
-                                        {user?.rol !== 'municipalidad' && (
+                                        {!isMunic && (
                                             <td style={{ color: '#f59e0b' }}>
                                                 ${formatCurrency(postgresData.reduce((acc, row) => acc + parseFloat(row.RecaCtct || 0), 0))}
                                             </td>
@@ -1732,7 +1729,7 @@ const CuentaCorrienteFn = ({ user }) => {
                                             ${formatCurrency(postgresData.reduce((acc, row) => {
                                                 const d = parseFloat(row.DebeCtct || 0);
                                                 const h = parseFloat(row.CredCtct || 0);
-                                                return acc + (user?.rol === 'municipalidad' ? Math.min(d, h) : h);
+                                                return acc + (isMunic ? Math.min(d, h) : h);
                                             }, 0))}
                                         </td>
                                         <td style={{ fontSize: '1.1rem', borderTop: '2px solid var(--primary)' }}>
@@ -1740,7 +1737,7 @@ const CuentaCorrienteFn = ({ user }) => {
                                                 const d = parseFloat(row.DebeCtct || 0);
                                                 const h = parseFloat(row.CredCtct || 0);
                                                 const r = parseFloat(row.RecaCtct || 0);
-                                                return acc + (user?.rol === 'municipalidad' ? Math.max(0, d - h) : (d + r - h));
+                                                return acc + (isMunic ? Math.max(0, d - h) : (d + r - h));
                                             }, 0))}
                                         </td>
                                         <td></td>

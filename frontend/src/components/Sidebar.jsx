@@ -44,7 +44,7 @@ const Sidebar = ({ currentView, setView, collapsed, setCollapsed, mobileOpen, se
       <nav className="sidebar-menu">
         <div
           className={`menu-item ctacte ${isCtacteView ? 'active' : ''}`}
-          onClick={() => setView(user?.rol === 'municipalidad' ? 'ctacte_fn' : 'ctacte_module')}
+          onClick={() => setView((user?.rol === 'municipalidad' || user?.rol === 'usuario') ? 'ctacte_fn' : 'ctacte_module')}
           title={collapsed ? "Cuenta Corriente" : ""}
         >
           <Calculator size={20} />
