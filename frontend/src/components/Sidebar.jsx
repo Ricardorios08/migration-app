@@ -138,15 +138,27 @@ const Sidebar = ({ currentView, setView, collapsed, setCollapsed, mobileOpen, se
 
         {/* Exclusivo para Superadmin */}
         {user?.rol === 'superadmin' && (
-          <div
-            className={`menu-item users ${currentView === 'users' ? 'active' : ''}`}
-            onClick={() => setView('users')}
-            title={collapsed ? "Usuarios" : ""}
-          >
-            <Users size={20} />
-            {!collapsed && <span>Gestión Usuarios</span>}
-            {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
-          </div>
+          <>
+            <div
+              className={`menu-item users ${currentView === 'users' ? 'active' : ''}`}
+              onClick={() => setView('users')}
+              title={collapsed ? "Usuarios" : ""}
+            >
+              <Users size={20} />
+              {!collapsed && <span>Gestión Usuarios</span>}
+              {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
+            </div>
+
+            <div
+              className={`menu-item metabase ${currentView === 'metabase' ? 'active' : ''}`}
+              onClick={() => setView('metabase')}
+              title={collapsed ? "Reportes Metabase" : ""}
+            >
+              <TrendingUp size={20} />
+              {!collapsed && <span>Reportes Metabase</span>}
+              {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
+            </div>
+          </>
         )}
 
         {user?.rol !== 'municipalidad' && (

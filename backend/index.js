@@ -1,6 +1,6 @@
 const path = require('path');
 const dotenv = require('dotenv');
-dotenv.config({ path: path.join(__dirname, '.env'), override: true });
+dotenv.config({ path: path.join(__dirname, '.env') });
 
 const express = require('express');
 const cors = require('cors');
@@ -41,6 +41,7 @@ app.use('/api/audit', require('./routes/audit'));
 app.use('/api/audit-snapshot', require('./routes/auditSnapshot'));
 app.use('/api/boletos', require('./routes/boletos'));
 app.use('/api/apremio-individual', require('./routes/apremioIndividual'));
+app.use('/api/metabase', require('./routes/metabase'));
 
 // Endpoint to serve migration logic documentation
 app.get('/api/docs/migration-logic', (req, res) => {

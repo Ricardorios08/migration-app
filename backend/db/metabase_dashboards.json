@@ -1,0 +1,10 @@
+[
+  {
+    "id": 1,
+    "name": "prueba",
+    "description": "prueba",
+    "metabase_id": 1,
+    "type": "dashboard",
+    "created_at": "2026-06-04T20:17:47.235Z"
+  }
+]

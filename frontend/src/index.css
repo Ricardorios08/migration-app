@@ -172,6 +172,7 @@ body {
 .menu-item.explorer { color: #818cf8; }    /* Índigo elegante */
 .menu-item.excel { color: #a3e635; }       /* Verde lima vibrante */
 .menu-item.users { color: #fb923c; }       /* Naranja cálido */
+.menu-item.metabase { color: #a855f7; }    /* Púrpura vibrante */
 .menu-item.profile { color: #f472b6; }     /* Orchid/Fucsia suave */
 .menu-item.logout { color: #f87171; }      /* Rojo coral */
 
@@ -190,6 +191,7 @@ body {
 .menu-item.explorer.active { background: linear-gradient(90deg, #4f46e5 0%, rgba(79, 70, 229, 0.2) 100%); border-left: 4px solid #818cf8; }
 .menu-item.excel.active { background: linear-gradient(90deg, #65a30d 0%, rgba(101, 163, 13, 0.2) 100%); border-left: 4px solid #a3e635; }
 .menu-item.users.active { background: linear-gradient(90deg, #ea580c 0%, rgba(234, 88, 12, 0.2) 100%); border-left: 4px solid #fb923c; }
+.menu-item.metabase.active { background: linear-gradient(90deg, #9333ea 0%, rgba(147, 51, 234, 0.2) 100%); border-left: 4px solid #a855f7; }
 .menu-item.profile.active { background: linear-gradient(90deg, #db2777 0%, rgba(219, 39, 119, 0.2) 100%); border-left: 4px solid #f472b6; }
 .menu-item.logout.active { background: linear-gradient(90deg, #dc2626 0%, rgba(220, 38, 38, 0.2) 100%); border-left: 4px solid #f87171; }
 

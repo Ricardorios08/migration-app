@@ -30,6 +30,7 @@ import AuditModule from './views/AuditModule';
 import CtacteModule from './views/CtacteModule';
 import AnalyticsExplorer from './views/AnalyticsExplorer';
 import ExplorerDashboard from './views/ExplorerDashboard';
+import MetabaseReports from './views/MetabaseReports';
 import { API_URL } from './config';
 
 function App() {
@@ -160,6 +161,8 @@ function App() {
             <RubrosComparison />
           ) : view === 'excel' ? (
             user?.rol === 'superadmin' ? <ComerciosExcel /> : <AuditDashboard />
+          ) : view === 'metabase' ? (
+            user?.rol === 'superadmin' ? <MetabaseReports user={user} /> : <AuditDashboard />
           ) : (
             <AuditDashboard />
           )}
