@@ -1,0 +1,29 @@
+Nº Banco;Nombre ;Cuenta;Denominación;RAF;Sucursal;Categoría;Activa
+7;BANCO DE GALICIA Y BUENOS AIRES S.A               ;02212471    ;BANCO GALICIA CC Nº 2212471                                                     ;10;9750;AUXILIAR PAGADORA                  ;S
+11;BANCO DE LA NACION ARGENTINA                      ;4433393     ;Municipalidad de  Guaymallen - Cta. Raiz Tarjeta Prepaga                        ;10;0001;LIBRE DISPONIBILIDAD               ;S
+11;BANCO DE LA NACION ARGENTINA                      ;6290002225  ;BANCO NACION CC N° 6290002225                                                   ;10;3816;AUXILIAR PAGADORA                  ;S
+11;BANCO DE LA NACION ARGENTINA                      ;6290002328  ;BANCO NACION CC N° 6290002328                                                   ;10;3816;AUXILIAR PAGADORA                  ;S
+11;BANCO DE LA NACION ARGENTINA                      ;6290035153  ;BANCO NACION CC N° 6290035153                                                   ;10;0001;AUXILIAR PAGADORA                  ;S
+11;BANCO DE LA NACION ARGENTINA                      ;6290046289  ;BANCO NACION CC N° 6290046289                                                   ;10;0001;AUXILIAR PAGADORA                  ;S
+11;BANCO DE LA NACION ARGENTINA                      ;6290064906  ;BANCO NACION CC N° 6290064906                                                   ;10;0001;AUXILIAR PAGADORA                  ;S
+27;BANCO SUPERVIELLE S.A.                            ;00579702001 ;BANCO SUPERVIELLE CC Nº 579702001                                               ;10;0200;LIBRE DISPONIBILIDAD               ;S
+27;BANCO SUPERVIELLE S.A.                            ;00579702002 ;Fondo Permanente Tesoreria                                                      ;10;0200;FONDO PERMANENTE                   ;S
+72;BANCO SANTANDER RIO S.A.                          ;100000482   ;FONDO PERMANENTE - TESORERÍA                                                    ;10;0441;FONDO PERMANENTE                   ;N
+72;BANCO SANTANDER RIO S.A.                          ;44100000482 ;BANCO SANTANDER CC N° 44100000482                                               ;10;0441;AUXILIAR PAGADORA                  ;S
+191;BANCO CREDICOOP COOP. LTDO.                       ;1135970835  ;BANCO CREDICOOP CC N° 1135970835                                                ;10;0000;AUXILIAR PAGADORA                  ;S
+285;BANCO MACRO S.A.                                  ;09406934115 ;BANCO MACRO CC N° 9406934115                                                    ;10;3404;AUXILIAR PAGADORA                  ;S
+888;PAGOS PARA INGRESAR                               ;1000123     ;Pagos a Ingresar                                                                ;10;0001;PATRIMONIAL                        ;S
+888;PAGOS PARA INGRESAR                               ;600000001   ;Fondo Comun de Inv. Supervielle                                                 ;10;0001;FONDO COMUN DE INVERSION           ;S
+888;PAGOS PARA INGRESAR                               ;600000002   ;Plazo Fijo Banco Nacion                                                         ;10;0001;PLAZO FIJO                         ;S
+888;PAGOS PARA INGRESAR                               ;600000003   ;Fondo Común de Inv. Nación                                                      ;10;0001;FONDO COMUN DE INVERSION           ;S
+888;PAGOS PARA INGRESAR                               ;600000004   ;Plazo Fijo - Supervielle                                                        ;10;0001;PLAZO FIJO                         ;S
+888;PAGOS PARA INGRESAR                               ;600000005   ;Fondo Comun de Inv. Credicoop CL                                                ;10;0001;FONDO COMUN DE INVERSION           ;S
+888;PAGOS PARA INGRESAR                               ;600000006   ;Plazo Fijo Credicoop CL                                                         ;10;0001;PLAZO FIJO                         ;S
+888;PAGOS PARA INGRESAR                               ;600000007   ;Fondo Comun de Inv. Hipotecario                                                 ;10;0001;FONDO COMUN DE INVERSION           ;S
+888;PAGOS PARA INGRESAR                               ;600000008   ;Plazo Fijo Hipotecario                                                          ;10;0001;PLAZO FIJO                         ;S
+888;PAGOS PARA INGRESAR                               ;600000009   ;Fondo Comun de Inv. Santander Rio                                               ;10;0001;FONDO COMUN DE INVERSION           ;S
+888;PAGOS PARA INGRESAR                               ;600000010   ;Plazo Fijo Santander Rio                                                        ;10;0001;PLAZO FIJO                         ;S
+888;PAGOS PARA INGRESAR                               ;600000011   ;Fondo Comun de Inv. Galicia                                                     ;10;0001;FONDO COMUN DE INVERSION           ;S
+888;PAGOS PARA INGRESAR                               ;600000012   ;Plazo Fijo Galicia                                                              ;10;0001;PLAZO FIJO                         ;S
+888;PAGOS PARA INGRESAR                               ;600000013   ;Fondo Comun de Inv. Macro                                                       ;10;0001;FONDO COMUN DE INVERSION           ;S
+888;PAGOS PARA INGRESAR                               ;600000014   ;Plazo Fijo Macro                                                                ;10;0001;PLAZO FIJO                         ;S

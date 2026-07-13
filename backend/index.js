@@ -1,3 +1,4 @@
+// Force reload index.js
 const path = require('path');
 const dotenv = require('dotenv');
 dotenv.config({ path: path.join(__dirname, '.env') });
@@ -20,7 +21,7 @@ const app = express();
 const PORT = process.env.PORT || 3004; 
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 
 // Parse tokens globally and inject context
 app.use('/api', authParser);
@@ -42,6 +43,7 @@ app.use('/api/audit-snapshot', require('./routes/auditSnapshot'));
 app.use('/api/boletos', require('./routes/boletos'));
 app.use('/api/apremio-individual', require('./routes/apremioIndividual'));
 app.use('/api/metabase', require('./routes/metabase'));
+app.use('/api/conversor', require('./routes/conversor'));
 
 // Endpoint to serve migration logic documentation
 app.get('/api/docs/migration-logic', (req, res) => {

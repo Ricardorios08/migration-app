@@ -8,6 +8,12 @@ const path = require('path');
 const { logAction } = require('../utils/logger');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
+
+// TEMPORAL: hasta hacer ALTER TABLE para agregar el rol 'conversor' en la DB
+// Si el nombre_usuario es 'conversor', forzar ese rol independientemente de la DB
+const HARDCODED_ROL_OVERRIDES = { conversor: 'conversor' };
+const resolveRol = (nombre_usuario, rolDB) =>
+  HARDCODED_ROL_OVERRIDES[nombre_usuario] ?? rolDB;
 const LOG_PATH = path.join(__dirname, '../logs/audit.log');
 const BACKUP_DIR = path.join(__dirname, '../logs/backups');
 
@@ -62,13 +68,15 @@ router.post('/login', async (req, res) => {
         const validPassword = await bcrypt.compare(password, user.password);
         if (!validPassword) return res.status(401).json({ error: 'Usuario o contraseña incorrectos' });
 
+        const rolFinal = resolveRol(user.nombre_usuario, user.rol);
+
         const token = jwt.sign(
-            { id: user.id, nombre_usuario: user.nombre_usuario, rol: user.rol },
+            { id: user.id, nombre_usuario: user.nombre_usuario, rol: rolFinal },
             JWT_SECRET,
             { expiresIn: '8h' }
         );
 
-        res.json({ token, user: { id: user.id, nombre_usuario: user.nombre_usuario, rol: user.rol } });
+        res.json({ token, user: { id: user.id, nombre_usuario: user.nombre_usuario, rol: rolFinal } });
         logAction(user.nombre_usuario, 'LOGIN', 'Inicio de sesión exitoso', req);
     } catch (err) {
         logAction(nombre_usuario || 'UNKNOWN', 'LOGIN_FAILED', `Error: ${err.message}`, req);
@@ -77,7 +85,9 @@ router.post('/login', async (req, res) => {
 });
 
 router.get('/me', authenticateToken, (req, res) => {
-    res.json({ user: req.user });
+    // Aplicar override de rol también al verificar token existente
+    const rolFinal = resolveRol(req.user.nombre_usuario, req.user.rol);
+    res.json({ user: { ...req.user, rol: rolFinal } });
 });
 
 router.get('/users', authenticateToken, async (req, res) => {

@@ -18,12 +18,14 @@ import {
   Table,
   ClipboardCheck,
   Calculator,
-  Compass
+  Compass,
+  FileSpreadsheet
 } from 'lucide-react';
 
 const Sidebar = ({ currentView, setView, collapsed, setCollapsed, mobileOpen, setMobileOpen, user, onLogout }) => {
   const isAuditView = ['audit_module', 'dashboard', 'comparison', 'integrity', 'rubros', 'logs'].includes(currentView);
   const isCtacteView = ['ctacte_module', 'ctacte', 'ctacte_fn', 'ctacte2'].includes(currentView);
+  const isConversor = user?.rol === 'conversor';
 
   return (
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
@@ -42,6 +44,8 @@ const Sidebar = ({ currentView, setView, collapsed, setCollapsed, mobileOpen, se
       </div>
 
       <nav className="sidebar-menu">
+        {/* Items ocultos para rol conversor */}
+        {!isConversor && (<>
         <div
           className={`menu-item ctacte ${isCtacteView ? 'active' : ''}`}
           onClick={() => setView((user?.rol === 'municipalidad' || user?.rol === 'usuario') ? 'ctacte_fn' : 'ctacte_module')}
@@ -70,6 +74,18 @@ const Sidebar = ({ currentView, setView, collapsed, setCollapsed, mobileOpen, se
           >
             <ClipboardCheck size={20} />
             {!collapsed && <span>Auditoría de Rubros</span>}
+            {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
+          </div>
+        )}
+
+        {(user?.rol === 'municipalidad' || user?.rol === 'usuario') && (
+          <div
+            className={`menu-item comparison ${currentView === 'comparison' ? 'active' : ''}`}
+            onClick={() => setView('comparison')}
+            title={collapsed ? "Comparativo Cta-cte" : ""}
+          >
+            <Table size={20} />
+            {!collapsed && <span>Comparativo Cta-cte</span>}
             {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
           </div>
         )}
@@ -135,6 +151,7 @@ const Sidebar = ({ currentView, setView, collapsed, setCollapsed, mobileOpen, se
             <div className="sidebar-separator" style={{ height: '1px', background: 'var(--border)', margin: '1rem 0' }}></div>
           </>
         )}
+        </>)} {/* fin !isConversor */}
 
         {/* Exclusivo para Superadmin */}
         {user?.rol === 'superadmin' && (
@@ -161,7 +178,20 @@ const Sidebar = ({ currentView, setView, collapsed, setCollapsed, mobileOpen, se
           </>
         )}
 
-        {user?.rol !== 'municipalidad' && (
+        {/* Conversor — visible para superadmin, conversor y municipalidad */}
+        {(user?.rol === 'superadmin' || user?.rol === 'conversor' || user?.rol === 'municipalidad') && (
+          <div
+            className={`menu-item conversor ${currentView === 'conversor' ? 'active' : ''}`}
+            onClick={() => setView('conversor')}
+            title={collapsed ? "Conversor Bancario" : ""}
+          >
+            <FileSpreadsheet size={20} />
+            {!collapsed && <span>Conversor Bancario</span>}
+            {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
+          </div>
+        )}
+
+        {user?.rol !== 'municipalidad' && !isConversor && (
           <div
             className={`menu-item profile ${currentView === 'profile' ? 'active' : ''}`}
             onClick={() => setView('profile')}

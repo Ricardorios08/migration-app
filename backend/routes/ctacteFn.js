@@ -8,13 +8,107 @@ const postgresDB = require('../db/postgres');
 
 const { calculateLegacyInterest } = require('../utils/interestUtils');
 
+function getNormalizedConceptName(name) {
+    if (!name) return 'Sin Concepto';
+    const lower = name.toLowerCase().trim();
+    
+    if (lower.includes('propiedad raíz') || lower.includes('propiedad raiz') || lower.includes('tasas x servicios') || lower.includes('tasas por servicios')) {
+        return 'Tasas por Servicios';
+    }
+    if (lower.includes('bomberos') || lower.includes('bombero')) {
+        return 'Aportes a Bomberos Voluntarios';
+    }
+    if (lower.includes('insp, comercio') || lower.includes('inspección com') || lower.includes('inspeccion com') || lower.includes('derechos de insp, comercio, ind. y servicios') || lower.includes('derecho inspección com') || lower.includes('derecho inspeccion com')) {
+        return 'Derechos de Inspección, Comercio, Ind. y Servicios';
+    }
+    if (lower.includes('cementerio')) {
+        return 'Derechos de Cementerio';
+    }
+    if (lower.includes('publicidad')) {
+        return 'Derechos de Publicidad y Propaganda';
+    }
+    if (lower.includes('edificación') || lower.includes('edificacion')) {
+        return 'Derechos de Edificación';
+    }
+    if (lower.includes('antena')) {
+        return 'Derechos de Antena de Telefonía Móvil';
+    }
+    if (lower.includes('multas de padrones') || lower.includes('multa de padron')) {
+        return 'Multas de Padrones';
+    }
+    if (lower.includes('multas de comercio') || lower.includes('multa de comercio') || lower.includes('multas de comercios')) {
+        return 'Multas de Comercios';
+    }
+    if (lower.includes('acarreo')) {
+        return 'Acarreo de Vehículos';
+    }
+    if (lower.includes('fondos de terceros')) {
+        return 'Fondos de Terceros';
+    }
+    if (lower.includes('intereses') || lower.includes('recargos')) {
+        return 'Intereses, Actualizaciones y Recargos';
+    }
+    if (lower.includes('pagoctacte') || lower.includes('facilidades') || lower.includes('facilidad')) {
+        return 'Saldo de Facilidades / Convenios';
+    }
+
+    // Capitalize first letter of each word as fallback
+    return name.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+}
+
+function getRawConceptMatches(normalizedName) {
+    if (!normalizedName) return [];
+    
+    const lower = normalizedName.toLowerCase().trim();
+    
+    if (lower.includes('tasas por servicios')) {
+        return ['tasas x servicios', 'tasas por servicios', 'servicios a la propiedad raíz', 'servicios a la propiedad raiz', 'tasas x servicios a la prop. raiz'];
+    }
+    if (lower.includes('bomberos')) {
+        return ['aporte bomberos guaymallen', 'aportes a bomberos voluntarios de guaymallen', 'aporte bomberos voluntarios de guaymallen', 'aportes a bomberos voluntarios'];
+    }
+    if (lower.includes('inspección, comercio') || lower.includes('inspeccion, comercio')) {
+        return ['derecho inspección com. ind.', 'derecho inspeccion com. ind.', 'derechos de insp, comercio, ind. y servicios', 'derecho insp, comercio, ind. y servicios'];
+    }
+    if (lower.includes('cementerio')) {
+        return ['derecho de cementerio', 'derechos de cementerio', 'cementerio'];
+    }
+    if (lower.includes('publicidad')) {
+        return ['derechos de publicidad y propaganda', 'derecho de publicidad', 'publicidad y propaganda'];
+    }
+    if (lower.includes('edificación') || lower.includes('edificacion')) {
+        return ['derechos de edificación', 'derecho de edificación', 'derechos de edificacion', 'derecho de edificacion'];
+    }
+    if (lower.includes('antena')) {
+        return ['derechos de antena de telefonía móvil', 'derecho de antena de telefonia movil', 'derecho de antena', 'antena'];
+    }
+    if (lower.includes('multas de padrones')) {
+        return ['multas de padrones', 'multa de padrones', 'multas de padron'];
+    }
+    if (lower.includes('multas de comercios') || lower.includes('multas de comercio')) {
+        return ['multas de comercios', 'multa de comercios', 'multas de comercio', 'multa de comercio'];
+    }
+    if (lower.includes('acarreo')) {
+        return ['acarreo de vehículos', 'acarreo de vehiculos', 'acarreo'];
+    }
+    if (lower.includes('fondos de terceros')) {
+        return ['fondos de terceros', 'fondo de terceros'];
+    }
+    if (lower.includes('intereses')) {
+        return ['intereses, actualizaciones y recargos', 'intereses', 'recargos'];
+    }
+    
+    return [normalizedName];
+}
+
 // MAIN SEARCH ROUTE
 router.get('/legacy/search', async (req, res) => {
-    const { officeId, account, onlyDebt, toDate, filterYear, filterMonth } = req.query;
+    const { officeId, account, onlyDebt, toDate, filterYear, filterMonth, showQuotaDetail } = req.query;
     let conn;
+    const isOnlyDebt = onlyDebt === 'true';
 
     console.log(`\n--- [DEBUG] /legacy/search called ---`);
-    console.log(`PARAMS: officeId=${officeId}, account=${account}, onlyDebt=${onlyDebt}, toDate=${toDate}`);
+    console.log(`PARAMS: officeId=${officeId}, account=${account}, onlyDebt=${onlyDebt}, toDate=${toDate}, showQuotaDetail=${showQuotaDetail}`);
 
     try {
         conn = await mariaDB.getRemoteConnection();
@@ -64,7 +158,7 @@ router.get('/legacy/search', async (req, res) => {
                             
                             // 3. Find CuenCtct in relacion for this office and citizen
                             const relRes = await conn.query(
-                                "SELECT CuenCtct FROM relacion WHERE CodiOfic = ? AND CucuPers = ?",
+                               "SELECT CuenCtct FROM relacion WHERE CodiOfic = ? AND CucuPers = ?",
                                 [officeId, cucuPers]
                             );
                             
@@ -125,29 +219,48 @@ router.get('/legacy/search', async (req, res) => {
             }
 
             // 1. Get main debt from ctacte
-            const isOnlyDebt = onlyDebt === 'true';
-            const mainDebtQuery = `
-                SELECT 
-                    t.PeriCtct, t.BimeCtct, MAX(t.CuotDefa) as CuotDefa, MAX(t.FeveCtct) as FeveCtct, 
-                    IFNULL(c.DetaConc, MAX(t.DetaCtct)) as DetaCtct, 
-                    SUM(IFNULL(t.DebeCtct, 0)) as DebeCtct, 
-                    SUM(IFNULL(t.CredCtct, 0)) as CredCtct,
-                    MAX(t.NumeAcpa) as NumeAcpa, MAX(t.FeenAcpa) as FechaPago,
-                    MAX(t.NumeBole) as NumeBole, MAX(t.PeriBole) as PeriBole, MAX(t.NumeApre) as NumeApre, MAX(t.CodiFapa) as CodiFapa,
-                    MAX(t.PeriInfo) as PeriInfo, MAX(t.CodiConc) as CodiConc,
-                    'CTACTE' as Source,
-                    t.CuenCtct as CuenCtct
-                FROM ${DB_NAME}.ctacte t
-                LEFT JOIN ${DB_RECAUDACION}.concepto c ON c.PeriInfo = t.PeriInfo AND c.CodiConc = t.CodiConc
-                ${whereClause}
-                GROUP BY t.PeriCtct, t.BimeCtct, t.PeriInfo, t.CodiConc, t.CuenCtct
-                ${isOnlyDebt ? 'HAVING (SUM(IFNULL(t.DebeCtct, 0)) - SUM(IFNULL(t.CredCtct, 0))) > 0.01' : ''}
-            `;
+            const isDetail = showQuotaDetail === 'true';
+            let mainDebtQuery;
+
+            if (isDetail) {
+                mainDebtQuery = `
+                    SELECT 
+                        t.PeriCtct, t.BimeCtct, t.CuotDefa, t.FeveCtct, 
+                        IFNULL(c.DetaConc, t.DetaCtct) as DetaCtct, 
+                        IFNULL(t.DebeCtct, 0) as DebeCtct, 
+                        IFNULL(t.CredCtct, 0) as CredCtct,
+                        t.NumeAcpa, t.FeenAcpa as FechaPago,
+                        t.NumeBole, t.PeriBole, t.NumeApre, t.CodiFapa,
+                        t.PeriInfo, t.CodiConc,
+                        'CTACTE' as Source,
+                        t.CuenCtct as CuenCtct
+                    FROM ${DB_NAME}.ctacte t
+                    LEFT JOIN ${DB_RECAUDACION}.concepto c ON c.PeriInfo = t.PeriInfo AND c.CodiConc = t.CodiConc
+                    ${whereClause}
+                `;
+            } else {
+                mainDebtQuery = `
+                    SELECT 
+                        t.PeriCtct, t.BimeCtct, MAX(t.CuotDefa) as CuotDefa, MAX(t.FeveCtct) as FeveCtct, 
+                        IFNULL(c.DetaConc, MAX(t.DetaCtct)) as DetaCtct, 
+                        SUM(IFNULL(t.DebeCtct, 0)) as DebeCtct, 
+                        SUM(IFNULL(t.CredCtct, 0)) as CredCtct,
+                        MAX(t.NumeAcpa) as NumeAcpa, MAX(t.FeenAcpa) as FechaPago,
+                        MAX(t.NumeBole) as NumeBole, MAX(t.PeriBole) as PeriBole, MAX(t.NumeApre) as NumeApre, MAX(t.CodiFapa) as CodiFapa,
+                        MAX(t.PeriInfo) as PeriInfo, MAX(t.CodiConc) as CodiConc,
+                        'CTACTE' as Source,
+                        t.CuenCtct as CuenCtct
+                    FROM ${DB_NAME}.ctacte t
+                    LEFT JOIN ${DB_RECAUDACION}.concepto c ON c.PeriInfo = t.PeriInfo AND c.CodiConc = t.CodiConc
+                    ${whereClause}
+                    GROUP BY t.PeriCtct, t.BimeCtct, t.PeriInfo, t.CodiConc, t.CuenCtct
+                `;
+            }
 
             const mainResults = await conn.query(mainDebtQuery, params);
 
             // 2. Get payment plan installments (facipago/detafapa)
-            let planWhereClause = `WHERE f.CodiOfic = ? AND f.CuenCtct = ? AND f.EstaFapa = 'Activa' ${isOnlyDebt ? 'AND d.FepaDefa IS NULL' : ''}`;
+            let planWhereClause = `WHERE f.CodiOfic = ? AND f.CuenCtct = ? AND f.EstaFapa = 'Activa'`;
             let planParams = [officeId, acc];
 
             if (filterYear) {
@@ -198,6 +311,7 @@ router.get('/legacy/search', async (req, res) => {
                     RecaCtct: reca,
                     CredCtct: haber,
                     TotaCtct: Math.max(0, (debe + reca) - haber),
+                    DetaCtct: (row.DetaCtct || '').trim() ? getNormalizedConceptName((row.DetaCtct || '').trim()) : `Mov: ${row.MoviCtct || ''}`,
                     hasApremio: parseInt(row.NumeApre || 0) > 0,
                     hasPlan: parseInt(row.CodiFapa || 0) > 0,
                     AccountName: accountNameMap[acc] || null,
@@ -206,6 +320,23 @@ router.get('/legacy/search', async (req, res) => {
             });
 
             allResults.push(...finalResults);
+        }
+
+        // Filter by onlyDebt at the group level (Period + Month + Account)
+        if (isOnlyDebt) {
+            const groupBalances = {};
+            allResults.forEach(r => {
+                const accKey = r.CuenCtct ? r.CuenCtct.toString().trim().replace(/^0+/, '') || '0' : '';
+                const key = `${r.PeriCtct}-${r.BimeCtct}-${accKey}`;
+                if (!groupBalances[key]) groupBalances[key] = 0;
+                groupBalances[key] += (parseFloat(r.DebeCtct || 0) - parseFloat(r.CredCtct || 0));
+            });
+
+            allResults = allResults.filter(r => {
+                const accKey = r.CuenCtct ? r.CuenCtct.toString().trim().replace(/^0+/, '') || '0' : '';
+                const key = `${r.PeriCtct}-${r.BimeCtct}-${accKey}`;
+                return (groupBalances[key] || 0) > 0.01;
+            });
         }
 
         // Sort by period descending
@@ -246,6 +377,9 @@ router.get('/new/search', async (req, res) => {
 
         if (accountList.length === 0) return res.json([]);
 
+        // Clean leading zeroes from account list for Postgres (e.g. '03933' -> '3933')
+        accountList = accountList.map(a => a.toString().trim().replace(/^0+/, '') || '0');
+
         const placeholders = accountList.map((_, i) => `$${i + 1}`).join(',');
 
         let query;
@@ -274,7 +408,6 @@ router.get('/new/search', async (req, res) => {
                 LEFT JOIN public.defuncion def ON (tt.tpotribcod = 4 AND def.defcod = t.tbecod)
                 WHERE ${searchType === 'person' ? 'gc.genctapercod = $1' : `t.tbecod IN (${placeholders})`}
                 AND tt.tpotribcod = \$${searchType === 'person' ? '2' : accountList.length + 1}
-                ${onlyDebt === 'true' ? 'AND (cc.cabpgoctactecod IS NULL OR cc.cabpgoctactecod = 0)' : ''}
                 ${filterYear ? `AND gc.genctaancta = ${parseInt(filterYear)}` : ''}
                 ${filterMonth ? `AND gc.genctanrocta = ${parseInt(filterMonth)}` : ''}
                 ORDER BY gc.genctaancta DESC, gc.genctanrocta ASC, gcd.genctadetlin ASC
@@ -291,7 +424,7 @@ router.get('/new/search', async (req, res) => {
                     cc.plnpgocod, t.tbecod as "CuenCtct", tt.tpotribnom as "TipoTributo",
                     tt.tpotribcod as "officeId", p.percod as "PersonId",
                     TRIM(p.pernom) as "OwnerName", cat.caonra as "Nomenclatura",
-                    def.defidpab as "Pabellon", def.defidnicho as "Nicho"
+                    def.defuncion_id as "Pabellon", def.defuncion_nicho as "Nicho"
                 FROM public.cuentacorriente cc
                 INNER JOIN public.generacioncuota gc ON cc.genctacod = gc.genctacod
                 INNER JOIN public.tributo t ON gc.genctatribcod = t.tribcod
@@ -299,10 +432,8 @@ router.get('/new/search', async (req, res) => {
                 LEFT JOIN public.cabecerapagoctacte pgo ON cc.cabpgoctactecod = pgo.cabpgoctactecod
                 LEFT JOIN public.persona p ON gc.genctapercod = p.percod
                 LEFT JOIN public.catastro cat ON (tt.tpotribcod = 1 AND cat.caocod = t.tbecod)
-                LEFT JOIN public.defuncion def ON (tt.tpotribcod = 4 AND def.defcod = t.tbecod)
                 WHERE ${searchType === 'person' ? 'gc.genctapercod = $1' : `t.tbecod IN (${placeholders})`}
                 AND tt.tpotribcod = \$${searchType === 'person' ? '2' : accountList.length + 1}
-                ${onlyDebt === 'true' ? 'AND (cc.cabpgoctactecod IS NULL OR cc.cabpgoctactecod = 0)' : ''}
                 ${filterYear ? `AND gc.genctaancta = ${parseInt(filterYear)}` : ''}
                 ${filterMonth ? `AND gc.genctanrocta = ${parseInt(filterMonth)}` : ''}
                 ORDER BY gc.genctaancta DESC, gc.genctanrocta ASC
@@ -317,9 +448,20 @@ router.get('/new/search', async (req, res) => {
 
         const queryDate = toDate || new Date().toISOString().split('T')[0];
 
+        const payOnlyCtacteCods = new Set();
+        result.rows.forEach(row => {
+            const dbVal = parseFloat(row.DebeCtct || 0);
+            if (dbVal < 0 && row.ctactecod) {
+                payOnlyCtacteCods.add(row.ctactecod.toString());
+            }
+        });
+
         const mappedResults = result.rows.map(row => {
-            const debe = parseFloat(row.DebeCtct || 0);
+            const dbVal = parseFloat(row.DebeCtct || 0);
+            let debe = 0;
+            let haber = 0;
             let reca = 0;
+            let isPaid = false;
 
             const ognMov = parseInt(row.ctacteognmov || 0);
             const feve = row.FeveCtct;
@@ -328,19 +470,25 @@ router.get('/new/search', async (req, res) => {
             const isSurcharge = detailName.includes('recargo') || detailName.includes('interes');
             const isCapital = ognMov === 1 || (ognMov === 0 && !isSurcharge);
 
-            const isPaid = parseInt(row.NumeAcpa || 0) > 0 || parseFloat(row.CredCtct || 0) > 0.01;
-            if (isCapital && feve && !isPaid) {
-                const calculationEndDate = queryDate;
-                reca = calculateLegacyInterest(feve, calculationEndDate, debe);
-                
-                if (debe > 60000 && debe < 70000) {
-                    console.log(`[DEBUG INTEREST] Capital: ${debe}, Venc: ${feve}, Fin: ${calculationEndDate}, Reca: ${reca}, isPaid: ${isPaid}`);
+            if (dbVal < 0) {
+                // If amount is negative, it is a payment/credit (Haber)
+                haber = Math.abs(dbVal);
+                debe = 0;
+                isPaid = true;
+            } else {
+                debe = dbVal;
+                const hasSeparatePayments = row.ctactecod && payOnlyCtacteCods.has(row.ctactecod.toString());
+                isPaid = parseInt(row.NumeAcpa || 0) > 0 && !hasSeparatePayments;
+                if (isPaid) {
+                    haber = debe;
+                } else {
+                    haber = 0;
+                    if (isCapital && feve) {
+                        const calculationEndDate = queryDate;
+                        reca = calculateLegacyInterest(feve, calculationEndDate, debe);
+                    }
                 }
-            } else if (isPaid) {
-                reca = 0;
             }
-
-            const haber = isPaid ? parseFloat(row.CredCtct || row.Pagado || debe) : 0;
 
             return {
                 ...row,
@@ -351,13 +499,30 @@ router.get('/new/search', async (req, res) => {
                 CredCtct: haber,
                 TotaCtct: isPaid ? 0 : (debe + reca),
                 TipoTributo: (row.TipoTributo || '').trim(),
-                DetaCtct: (row.DetaCtct || '').trim() || `Mov: ${ognMov}`,
+                DetaCtct: (row.DetaCtct || '').trim() ? getNormalizedConceptName((row.DetaCtct || '').trim()) : (row.TipoTributo || '').trim() ? getNormalizedConceptName((row.TipoTributo || '').trim()) : `Mov: ${ognMov}`,
                 hasApremio: parseInt(row.NumeApre || 0) > 0,
                 hasPlan: parseInt(row.plnpgocod || 0) > 0,
             };
         });
+ 
+        let finalFiltered = mappedResults;
+        if (onlyDebt === 'true') {
+            const groupBalances = {};
+            mappedResults.forEach(r => {
+                const accKey = r.CuenCtct ? r.CuenCtct.toString().trim().replace(/^0+/, '') || '0' : '';
+                const key = `${r.PeriCtct}-${r.BimeCtct}-${accKey}`;
+                if (!groupBalances[key]) groupBalances[key] = 0;
+                groupBalances[key] += (parseFloat(r.DebeCtct || 0) - parseFloat(r.CredCtct || 0));
+            });
 
-        res.json(mappedResults);
+            finalFiltered = mappedResults.filter(r => {
+                const accKey = r.CuenCtct ? r.CuenCtct.toString().trim().replace(/^0+/, '') || '0' : '';
+                const key = `${r.PeriCtct}-${r.BimeCtct}-${accKey}`;
+                return (groupBalances[key] || 0) > 0.01;
+            });
+        }
+
+        res.json(finalFiltered);
     } catch (err) {
         console.error('Error in Postgres Fn search:', err);
         res.status(500).json({ error: err.message });
@@ -366,7 +531,7 @@ router.get('/new/search', async (req, res) => {
 
 // REPORT: GENERAL COMPARISON OF ALL PADRONES
 router.get('/report/comparison', async (req, res) => {
-    const { officeId, page = 1, limit = 20, search } = req.query;
+    const { officeId, page = 1, limit = 20, search, filterYear, filterMonth, filterConcept } = req.query;
     const offset = (parseInt(page) - 1) * parseInt(limit);
     let conn;
 
@@ -378,138 +543,509 @@ router.get('/report/comparison', async (req, res) => {
         const pNum = parseInt(page);
         const lmt = parseInt(limit);
 
-        // 1. Get a page of unique accounts for this office
-        let accountsQuery;
-        let queryParams;
-
-        if (search && search.trim()) {
-            const searchTerm = search.trim();
-            console.log(`[COMPARISON REPORT] Index-safe search for: "${searchTerm}" in Office ${offId}`);
-
-            // Generate padded variants to hit the index (CuenCtct is typically char(10) or similar)
-            const variants = [];
-            for (let i = 0; i <= 10; i++) {
-                variants.push(searchTerm.padStart(i, ' '));
-            }
-            const uniqueVariants = [...new Set(variants)];
-            const inPlaceholders = uniqueVariants.map(() => '?').join(',');
-
-            accountsQuery = `
-                SELECT CuenCtct 
-                FROM ${DB_NAME}.ctacte 
-                WHERE CodiOfic = ? 
-                AND CuenCtct IN (${inPlaceholders})
-                GROUP BY CuenCtct
-                ORDER BY CuenCtct ASC
-                LIMIT ?, ?
-            `;
-            queryParams = [offId, ...uniqueVariants, (pNum - 1) * lmt, lmt];
-        } else {
-            accountsQuery = `
-                SELECT CuenCtct 
-                FROM ${DB_NAME}.ctacte 
-                WHERE CodiOfic = ? 
-                GROUP BY CuenCtct
-                ORDER BY CuenCtct ASC
-                LIMIT ?, ?
-            `;
-            queryParams = [offId, (pNum - 1) * lmt, lmt];
+        // Pre-resolve concept codes to avoid slow LEFT JOIN on ctacte
+        let codiConcList = [];
+        if (filterConcept) {
+            const matches = getRawConceptMatches(filterConcept);
+            const conceptPlaceholders = matches.map(() => '?').join(',');
+            const conceptRows = await conn.query(
+                `SELECT DISTINCT CodiConc FROM ${DB_RECAUDACION}.concepto WHERE DetaConc IN (${conceptPlaceholders})`,
+                matches
+            );
+            codiConcList = conceptRows.map(r => r.CodiConc.toString().trim());
         }
 
-        const accountsResult = await conn.query(accountsQuery, queryParams);
+        const isExport = req.query.export === 'true';
 
-        if (accountsResult.length === 0) return res.json({ data: [], total: 0 });
-
-        // Ensure unique accounts after trimming (avoid duplicates from different padding variants)
-        const accList = [...new Set(accountsResult.map(r => r.CuenCtct.toString().trim()))];
-        const placeholders = accList.map(() => '?').join(',');
-
-        // 2. Fetch Personal Info from vpadrones_persona (more reliable than master tables)
-        const personLinkQuery = `
-            SELECT nro_padron as CuenCtct, nro_doc as percod, denominacion as nombre, CUIT
-            FROM ${DB_RECAUDACION}.vpadrones_persona
-            WHERE nro_padron IN (${placeholders}) AND principal = 'SI'
-        `;
-        const personDataRes = await conn.query(personLinkQuery, accList);
-        const personMap = personDataRes.reduce((acc, r) => { acc[r.CuenCtct] = r; return acc; }, {});
-
-        // 3. Fetch MariaDB Records in Bulk (Grouped by period/bimester)
-        const mariaDebtQuery = `
-            SELECT CuenCtct, PeriCtct, BimeCtct, MAX(FeveCtct) as FeveCtct, 
-                   SUM(IFNULL(DebeCtct, 0) - IFNULL(CredCtct, 0)) as Capital,
-                   SUM(IFNULL(CredCtct, 0)) as Pagado
-            FROM ${DB_NAME}.ctacte
-            WHERE CodiOfic = ? AND CuenCtct IN (${placeholders})
-            GROUP BY CuenCtct, PeriCtct, BimeCtct, PeriInfo, CodiConc
-        `;
-        const mariaRecords = await conn.query(mariaDebtQuery, [officeId, ...accList]);
-
-        // 3b. Fetch MariaDB Plan Records in Bulk
-        const mariaPlanQuery = `
-            SELECT f.CuenCtct, f.PeriInfo as PeriCtct, d.CuotDefa as BimeCtct, MAX(d.FeveDefa) as FeveCtct, 
-                   SUM(d.TotaDefa) as Capital,
-                   SUM(CASE WHEN d.FepaDefa IS NOT NULL THEN d.TotaDefa ELSE 0 END) as Pagado
-            FROM ${DB_RECAUDACION}.facipago f
-            INNER JOIN ${DB_RECAUDACION}.detafapa d ON d.CodiFapa = f.CodiFapa
-            WHERE f.CodiOfic = ? AND f.CuenCtct IN (${placeholders})
-            AND f.EstaFapa = 'Activa'
-            GROUP BY f.CuenCtct, f.PeriInfo, d.CuotDefa
-        `;
-        const mariaPlans = await conn.query(mariaPlanQuery, [officeId, ...accList]);
-
-        // 4. Fetch PostgreSQL Records in Bulk
-        const pgDebtQuery = `
-            SELECT t.tbecod::text as "CuenCtct", gc.genctaancta as "PeriCtct", gc.genctafchvto as "FeveCtct", gc.genctaimpcta as "DebeCtct",
-                   (CASE WHEN (cc.cabpgoctactecod > 0) THEN gc.genctaimpcta ELSE 0 END) as "Pagado"
-            FROM public.cuentacorriente cc
-            INNER JOIN public.generacioncuota gc ON cc.genctacod = gc.genctacod
-            INNER JOIN public.tributo t ON gc.genctatribcod = t.tribcod
-            WHERE t.tpotribcod = $1 AND t.tbecod::text = ANY($2)
-        `;
-        const pgResult = await postgresDB.query(pgDebtQuery, [officeId, accList]);
-        const pgRecords = pgResult.rows;
-
-        // 4b. Fetch Detailed Account Names (Trade name, etc.)
-        let accountNameMap = {};
-        if (accList.length > 0) {
-            let nameQuery = "";
-            if (offId === 7 || offId === 13) { // Antenas
-                nameQuery = `SELECT CodiCome as acc, RazoCome as name FROM antena WHERE CodiCome IN (${placeholders})`;
-            } else if (offId === 2) { // Comercio
-                nameQuery = `SELECT CodiCome as acc, RazoCome as name FROM comercio WHERE CodiCome IN (${placeholders})`;
-            } else if (offId === 6 || offId === 3) { // Publicidad
-                nameQuery = `SELECT CodiCome as acc, RazoCome as name FROM publicidad WHERE CodiCome IN (${placeholders})`;
-            } else if (offId === 4) { // Cementerio
-                nameQuery = `SELECT CodiCome as acc, RazoCome as name FROM cementerio WHERE CodiCome IN (${placeholders})`;
+        // Pre-resolve searched accounts if search parameter is present
+        let searchAccs = [];
+        if (search && search.trim()) {
+            const term = search.trim();
+            const termLike = `%${term}%`;
+            const cleanTerm = term.replace(/[^0-9]/g, '');
+            
+            // Format cleanTerm as CUIT with dashes if it's 11 digits (e.g. 20033239832 → 20-03323983-2)
+            let cuitWithDashes = null;
+            if (/^\d{11}$/.test(cleanTerm)) {
+                cuitWithDashes = `${cleanTerm.substring(0, 2)}-${cleanTerm.substring(2, 10)}-${cleanTerm.substring(10)}`;
             }
 
-            if (nameQuery) {
+            // Build query params dynamically to support CUIT with and without dashes
+            const queryParams = [term, cleanTerm, term]; // nro_padron, nro_doc, CUIT exact match
+            if (cuitWithDashes) queryParams.push(cuitWithDashes); // CUIT formatted with dashes
+            queryParams.push(termLike); // denominacion LIKE
+
+            const cuitCondition = cuitWithDashes ? `OR CUIT = ?` : '';
+
+            const resolveQuery = `
+                SELECT DISTINCT nro_padron 
+                FROM ${DB_RECAUDACION}.vpadrones_persona 
+                WHERE nro_padron = ? 
+                   OR nro_doc = ?
+                   OR CUIT = ?
+                   ${cuitCondition}
+                   OR denominacion LIKE ?
+                LIMIT 100
+            `;
+            const resolvedRows = await conn.query(resolveQuery, queryParams);
+
+            if (resolvedRows.length > 0) {
+                searchAccs = resolvedRows.map(r => r.nro_padron.toString().trim());
+            } else {
+                searchAccs = [term];
+            }
+        }
+
+        let accList = [];
+        let mariaRecords = [];
+        let mariaPlans = [];
+        let pgRecords = [];
+        let personMap = {};
+
+        if (isExport) {
+            // 1. Fetch MariaDB Records directly filtered by office, year, month, concept
+            let mariaWhere = "WHERE t.CodiOfic = ?";
+            let mariaParams = [offId];
+            if (filterYear) {
+                mariaWhere += " AND t.PeriCtct = ?";
+                mariaParams.push(parseInt(filterYear));
+            }
+            if (filterMonth) {
+                mariaWhere += " AND t.BimeCtct = ?";
+                mariaParams.push(parseInt(filterMonth));
+            }
+            if (filterConcept) {
+                const matches = getRawConceptMatches(filterConcept);
+                const conceptPlaceholders = matches.map(() => '?').join(',');
+                if (codiConcList.length > 0) {
+                    const codePlaceholders = codiConcList.map(() => '?').join(',');
+                    mariaWhere += ` AND (t.CodiConc IN (${codePlaceholders}) OR t.DetaCtct IN (${conceptPlaceholders}))`;
+                    mariaParams.push(...codiConcList, ...matches);
+                } else {
+                    mariaWhere += ` AND t.DetaCtct IN (${conceptPlaceholders})`;
+                    mariaParams.push(...matches);
+                }
+            }
+
+            if (search && search.trim()) {
+                const searchVariants = [];
+                searchAccs.forEach(acc => {
+                    for (let i = 0; i <= 10 - acc.length; i++) {
+                        searchVariants.push(acc.padStart(acc.length + i, ' '));
+                    }
+                });
+                const uniqueVariants = [...new Set(searchVariants)];
+                if (uniqueVariants.length > 0) {
+                    const inPlaceholders = uniqueVariants.map(() => '?').join(',');
+                    mariaWhere += ` AND t.CuenCtct IN (${inPlaceholders})`;
+                    mariaParams.push(...uniqueVariants);
+                } else {
+                    mariaWhere += " AND 1=0";
+                }
+            }
+
+            const mariaDebtQuery = `
+                SELECT t.CuenCtct, t.PeriCtct, t.BimeCtct, MAX(t.FeveCtct) as FeveCtct, 
+                       SUM(IFNULL(t.DebeCtct, 0) - IFNULL(t.CredCtct, 0)) as Capital,
+                       SUM(IFNULL(t.DebeCtct, 0)) as DebeTotal,
+                       SUM(IFNULL(t.CredCtct, 0)) as Pagado
+                FROM ${DB_NAME}.ctacte t
+                ${mariaWhere}
+                GROUP BY t.CuenCtct, t.PeriCtct, t.BimeCtct, t.PeriInfo, t.CodiConc
+                LIMIT 50000
+            `;
+            console.log(`[EXPORT] Running MariaDB query for office ${offId}, year ${filterYear}, month ${filterMonth}`);
+            mariaRecords = await conn.query(mariaDebtQuery, mariaParams);
+            console.log(`[EXPORT] MariaDB returned ${mariaRecords.length} account rows`);
+
+            // Fetch Plans directly
+            if (!filterConcept) {
+                let planWhere = "WHERE f.CodiOfic = ? AND f.EstaFapa = 'Activa'";
+                let planParams = [officeId];
+                if (filterYear) {
+                    planWhere += " AND f.PeriInfo = ?";
+                    planParams.push(parseInt(filterYear));
+                }
+                if (filterMonth) {
+                    planWhere += " AND d.CuotDefa = ?";
+                    planParams.push(parseInt(filterMonth));
+                }
+                if (search && search.trim()) {
+                    const cleanSearchAccs = searchAccs.map(a => a.replace(/^0+/, '') || '0');
+                    const placeholders = cleanSearchAccs.map(() => '?').join(',');
+                    planWhere += ` AND f.CuenCtct IN (${placeholders})`;
+                    planParams.push(...cleanSearchAccs);
+                }
+
+                const mariaPlanQuery = `
+                    SELECT f.CuenCtct, f.PeriInfo as PeriCtct, d.CuotDefa as BimeCtct, MAX(d.FeveDefa) as FeveCtct, 
+                           SUM(d.TotaDefa - CASE WHEN d.FepaDefa IS NOT NULL THEN d.TotaDefa ELSE 0 END) as Capital,
+                           SUM(d.TotaDefa) as DebeTotal,
+                           SUM(CASE WHEN d.FepaDefa IS NOT NULL THEN d.TotaDefa ELSE 0 END) as Pagado
+                    FROM ${DB_RECAUDACION}.facipago f
+                    INNER JOIN ${DB_RECAUDACION}.detafapa d ON d.CodiFapa = f.CodiFapa
+                    ${planWhere}
+                    GROUP BY f.CuenCtct, f.PeriInfo, d.CuotDefa
+                `;
+                mariaPlans = await conn.query(mariaPlanQuery, planParams);
+            }
+
+            // 2. Fetch PostgreSQL Records directly
+            let pgWhere = "WHERE t.tpotribcod = $1";
+            let pgParams = [officeId];
+            let pgParamCount = 2;
+            if (filterYear) {
+                pgWhere += ` AND gc.genctaancta = $${pgParamCount}`;
+                pgParams.push(parseInt(filterYear));
+                pgParamCount++;
+            }
+            if (filterMonth) {
+                pgWhere += ` AND gc.genctanrocta = $${pgParamCount}`;
+                pgParams.push(parseInt(filterMonth));
+                pgParamCount++;
+            }
+            if (search && search.trim()) {
+                const cleanSearchAccs = searchAccs.map(a => a.replace(/^0+/, '') || '0');
+                pgWhere += ` AND t.tbecod::text = ANY($${pgParamCount})`;
+                pgParams.push(cleanSearchAccs);
+                pgParamCount++;
+            }
+
+            let pgDebtQuery;
+            if (filterConcept) {
+                const matches = getRawConceptMatches(filterConcept).map(m => m.toUpperCase().trim());
+                const placeholders = matches.map((_, idx) => `$${pgParamCount + idx}`).join(',');
+                pgWhere += ` AND UPPER(TRIM(BOTH ' ' FROM COALESCE(rt.rectrfdsc, tt.tpotribnom))) IN (${placeholders})`;
+                pgParams.push(...matches);
+                pgParamCount += matches.length;
+
+                // GROUP BY account to avoid returning thousands of individual rows
+                pgDebtQuery = `
+                    SELECT t.tbecod::text as "CuenCtct",
+                           gc.genctaancta as "PeriCtct",
+                           MAX(gc.genctafchvto) as "FeveCtct",
+                           SUM(COALESCE(gcd.genctadetimp, gc.genctaimpcta)) as "DebeCtct",
+                           SUM(CASE WHEN (cc.cabpgoctactecod > 0) THEN COALESCE(gcd.genctadetimp, gc.genctaimpcta) ELSE 0 END) as "Pagado"
+                    FROM public.generacioncuota gc
+                    LEFT JOIN public.generacioncuotadetalle gcd ON gc.genctacod = gcd.genctadetcod
+                    LEFT JOIN public.recursostarifa rt ON rt.rectrfcod = gcd.genctadetreccod
+                    LEFT JOIN public.cuentacorriente cc ON cc.genctacod = gc.genctacod
+                    INNER JOIN public.tributo t ON gc.genctatribcod = t.tribcod
+                    INNER JOIN public.tipotributo tt ON t.tpotribcod = tt.tpotribcod
+                    ${pgWhere}
+                    GROUP BY t.tbecod, gc.genctaancta
+                `;
+            } else {
+                // GROUP BY account to avoid returning thousands of individual rows
+                pgDebtQuery = `
+                    SELECT t.tbecod::text as "CuenCtct",
+                           gc.genctaancta as "PeriCtct",
+                           MAX(gc.genctafchvto) as "FeveCtct",
+                           SUM(gc.genctaimpcta) as "DebeCtct",
+                           SUM(CASE WHEN (cc.cabpgoctactecod > 0) THEN gc.genctaimpcta ELSE 0 END) as "Pagado"
+                    FROM public.cuentacorriente cc
+                    INNER JOIN public.generacioncuota gc ON cc.genctacod = gc.genctacod
+                    INNER JOIN public.tributo t ON gc.genctatribcod = t.tribcod
+                    ${pgWhere}
+                    GROUP BY t.tbecod, gc.genctaancta
+                `;
+            }
+            console.log(`[EXPORT] Running PG query for office ${officeId}, year ${filterYear}, month ${filterMonth}, concept ${filterConcept}`);
+            const pgResult = await postgresDB.query(pgDebtQuery, pgParams);
+            pgRecords = pgResult.rows;
+            console.log(`[EXPORT] PG returned ${pgRecords.length} account rows`);
+
+            // Merge unique accounts
+            const allAccs = new Set([
+                ...mariaRecords.map(r => r.CuenCtct.toString().trim()),
+                ...mariaPlans.map(r => r.CuenCtct.toString().trim()),
+                ...pgRecords.map(r => r.CuenCtct.toString().trim())
+            ]);
+            accList = [...allAccs].sort();
+
+        } else {
+            // Paginated logic:
+            // 1. Get a page of unique accounts for this office
+            let accountsQuery;
+            let queryParams = [offId];
+            let whereClause = "WHERE t.CodiOfic = ?";
+            let fromClause = `${DB_NAME}.ctacte t`;
+
+            if (search && search.trim()) {
+                const searchVariants = [];
+                searchAccs.forEach(acc => {
+                    for (let i = 0; i <= 10 - acc.length; i++) {
+                        searchVariants.push(acc.padStart(acc.length + i, ' '));
+                    }
+                });
+                const uniqueVariants = [...new Set(searchVariants)];
+                if (uniqueVariants.length > 0) {
+                    const inPlaceholders = uniqueVariants.map(() => '?').join(',');
+                    whereClause += ` AND t.CuenCtct IN (${inPlaceholders})`;
+                    queryParams.push(...uniqueVariants);
+                } else {
+                    whereClause += " AND 1=0";
+                }
+            }
+
+            if (filterYear) {
+                whereClause += " AND t.PeriCtct = ?";
+                queryParams.push(parseInt(filterYear));
+            }
+
+            if (filterMonth) {
+                whereClause += " AND t.BimeCtct = ?";
+                queryParams.push(parseInt(filterMonth));
+            }
+
+            if (filterConcept) {
+                const matches = getRawConceptMatches(filterConcept);
+                const conceptPlaceholders = matches.map(() => '?').join(',');
+                if (codiConcList.length > 0) {
+                    const codePlaceholders = codiConcList.map(() => '?').join(',');
+                    whereClause += ` AND (t.CodiConc IN (${codePlaceholders}) OR t.DetaCtct IN (${conceptPlaceholders}))`;
+                    queryParams.push(...codiConcList, ...matches);
+                } else {
+                    whereClause += ` AND t.DetaCtct IN (${conceptPlaceholders})`;
+                    queryParams.push(...matches);
+                }
+            }
+
+            accountsQuery = `
+                SELECT t.CuenCtct 
+                FROM ${fromClause} 
+                ${whereClause}
+                GROUP BY t.CuenCtct
+                ORDER BY t.CuenCtct ASC
+                LIMIT ?, ?
+            `;
+            queryParams.push((pNum - 1) * lmt, lmt);
+
+            const accountsResult = await conn.query(accountsQuery, queryParams);
+
+            if (accountsResult.length === 0) return res.json({ data: [], total: 0 });
+
+            // Ensure unique accounts after trimming (avoid duplicates from different padding variants)
+            accList = [...new Set(accountsResult.map(r => r.CuenCtct.toString().trim()))];
+            const placeholders = accList.map(() => '?').join(',');
+
+            // Clean account codes of leading zeroes
+            const cleanAccList = [...new Set(accList.map(a => a.replace(/^0+/, '') || '0'))];
+            const cleanPlaceholders = cleanAccList.map(() => '?').join(',');
+
+            // 3. Fetch MariaDB Records in Bulk (Grouped by period/bimester)
+            let mariaWhere = `WHERE t.CodiOfic = ? AND t.CuenCtct IN (${placeholders})`;
+            let mariaParams = [officeId, ...accList];
+            if (filterYear) {
+                mariaWhere += " AND t.PeriCtct = ?";
+                mariaParams.push(parseInt(filterYear));
+            }
+            if (filterMonth) {
+                mariaWhere += " AND t.BimeCtct = ?";
+                mariaParams.push(parseInt(filterMonth));
+            }
+            if (filterConcept) {
+                const matches = getRawConceptMatches(filterConcept);
+                const conceptPlaceholders = matches.map(() => '?').join(',');
+                if (codiConcList.length > 0) {
+                    const codePlaceholders = codiConcList.map(() => '?').join(',');
+                    mariaWhere += ` AND (t.CodiConc IN (${codePlaceholders}) OR t.DetaCtct IN (${conceptPlaceholders}))`;
+                    mariaParams.push(...codiConcList, ...matches);
+                } else {
+                    mariaWhere += ` AND t.DetaCtct IN (${conceptPlaceholders})`;
+                    mariaParams.push(...matches);
+                }
+            }
+
+            const mariaDebtQuery = `
+                SELECT t.CuenCtct, t.PeriCtct, t.BimeCtct, MAX(t.FeveCtct) as FeveCtct, 
+                       SUM(IFNULL(t.DebeCtct, 0) - IFNULL(t.CredCtct, 0)) as Capital,
+                       SUM(IFNULL(t.DebeCtct, 0)) as DebeTotal,
+                       SUM(IFNULL(t.CredCtct, 0)) as Pagado
+                FROM ${DB_NAME}.ctacte t
+                ${mariaWhere}
+                GROUP BY t.CuenCtct, t.PeriCtct, t.BimeCtct, t.PeriInfo, t.CodiConc
+            `;
+            mariaRecords = await conn.query(mariaDebtQuery, mariaParams);
+
+            // 3b. Fetch MariaDB Plan Records in Bulk
+            if (!filterConcept) {
+                let planWhere = `WHERE f.CodiOfic = ? AND f.CuenCtct IN (${cleanPlaceholders}) AND f.EstaFapa = 'Activa'`;
+                let planParams = [officeId, ...cleanAccList];
+                if (filterYear) {
+                    planWhere += " AND f.PeriInfo = ?";
+                    planParams.push(parseInt(filterYear));
+                }
+                if (filterMonth) {
+                    planWhere += " AND d.CuotDefa = ?";
+                    planParams.push(parseInt(filterMonth));
+                }
+
+                const mariaPlanQuery = `
+                    SELECT f.CuenCtct, f.PeriInfo as PeriCtct, d.CuotDefa as BimeCtct, MAX(d.FeveDefa) as FeveCtct, 
+                           SUM(d.TotaDefa - CASE WHEN d.FepaDefa IS NOT NULL THEN d.TotaDefa ELSE 0 END) as Capital,
+                           SUM(d.TotaDefa) as DebeTotal,
+                           SUM(CASE WHEN d.FepaDefa IS NOT NULL THEN d.TotaDefa ELSE 0 END) as Pagado
+                    FROM ${DB_RECAUDACION}.facipago f
+                    INNER JOIN ${DB_RECAUDACION}.detafapa d ON d.CodiFapa = f.CodiFapa
+                    ${planWhere}
+                    GROUP BY f.CuenCtct, f.PeriInfo, d.CuotDefa
+                `;
+                mariaPlans = await conn.query(mariaPlanQuery, planParams);
+            }
+
+            // 4. Fetch PostgreSQL Records in Bulk
+            let pgWhere = "WHERE t.tpotribcod = $1 AND t.tbecod::text = ANY($2)";
+            let pgParams = [officeId, cleanAccList];
+            let pgParamCount = 3;
+            if (filterYear) {
+                pgWhere += ` AND gc.genctaancta = $${pgParamCount}`;
+                pgParams.push(parseInt(filterYear));
+                pgParamCount++;
+            }
+            if (filterMonth) {
+                pgWhere += ` AND gc.genctanrocta = $${pgParamCount}`;
+                pgParams.push(parseInt(filterMonth));
+                pgParamCount++;
+            }
+
+            let pgDebtQuery;
+            if (filterConcept) {
+                const matches = getRawConceptMatches(filterConcept).map(m => m.toUpperCase().trim());
+                const placeholders = matches.map((_, idx) => `$${pgParamCount + idx}`).join(',');
+                pgWhere += ` AND UPPER(TRIM(BOTH ' ' FROM COALESCE(rt.rectrfdsc, tt.tpotribnom))) IN (${placeholders})`;
+                pgParams.push(...matches);
+                pgParamCount += matches.length;
+
+                pgDebtQuery = `
+                    SELECT t.tbecod::text as "CuenCtct", gc.genctaancta as "PeriCtct", gc.genctafchvto as "FeveCtct", 
+                           COALESCE(gcd.genctadetimp, gc.genctaimpcta) as "DebeCtct",
+                           (CASE WHEN (cc.cabpgoctactecod > 0) THEN COALESCE(gcd.genctadetimp, gc.genctaimpcta) ELSE 0 END) as "Pagado",
+                           cc.ctactecod
+                    FROM public.generacioncuota gc
+                    LEFT JOIN public.generacioncuotadetalle gcd ON gc.genctacod = gcd.genctadetcod
+                    LEFT JOIN public.recursostarifa rt ON rt.rectrfcod = gcd.genctadetreccod
+                    LEFT JOIN public.cuentacorriente cc ON cc.genctacod = gc.genctacod
+                    INNER JOIN public.tributo t ON gc.genctatribcod = t.tribcod
+                    INNER JOIN public.tipotributo tt ON t.tpotribcod = tt.tpotribcod
+                    ${pgWhere}
+                `;
+            } else {
+                pgDebtQuery = `
+                    SELECT t.tbecod::text as "CuenCtct", gc.genctaancta as "PeriCtct", gc.genctafchvto as "FeveCtct", gc.genctaimpcta as "DebeCtct",
+                           (CASE WHEN (cc.cabpgoctactecod > 0) THEN gc.genctaimpcta ELSE 0 END) as "Pagado",
+                           cc.ctactecod
+                    FROM public.cuentacorriente cc
+                    INNER JOIN public.generacioncuota gc ON cc.genctacod = gc.genctacod
+                    INNER JOIN public.tributo t ON gc.genctatribcod = t.tribcod
+                    ${pgWhere}
+                `;
+            }
+            const pgResult = await postgresDB.query(pgDebtQuery, pgParams);
+            pgRecords = pgResult.rows;
+        }
+
+        // Fetch Personal Info from vpadrones_persona in safe chunks of 1000
+        const cleanAccListForPerson = [...new Set(accList.map(a => a.replace(/^0+/, '') || '0'))];
+        for (let i = 0; i < cleanAccListForPerson.length; i += 1000) {
+            const chunk = cleanAccListForPerson.slice(i, i + 1000);
+            const placeholders = chunk.map(() => '?').join(',');
+            const personDataRes = await conn.query(`
+                SELECT nro_padron as CuenCtct, nro_doc as percod, denominacion as nombre, CUIT
+                FROM ${DB_RECAUDACION}.vpadrones_persona
+                WHERE nro_padron IN (${placeholders}) AND principal = 'SI'
+            `, chunk);
+            personDataRes.forEach(r => {
+                const k = r.CuenCtct.toString().trim();
+                personMap[k] = r;
+            });
+        }
+
+        // 4b. Fetch Detailed Account Names (Trade name, etc.) in safe chunks of 1000
+        let accountNameMap = {};
+        if (accList.length > 0 && [7, 13, 2, 6, 3, 4].includes(offId)) {
+            let nameQuery = "";
+            if (offId === 7 || offId === 13) {
+                nameQuery = "SELECT CodiCome as acc, RazoCome as name FROM antena WHERE CodiCome IN (";
+            } else if (offId === 2) {
+                nameQuery = "SELECT CodiCome as acc, RazoCome as name FROM comercio WHERE CodiCome IN (";
+            } else if (offId === 6 || offId === 3) {
+                nameQuery = "SELECT CodiCome as acc, RazoCome as name FROM publicidad WHERE CodiCome IN (";
+            } else if (offId === 4) {
+                nameQuery = "SELECT CodiCome as acc, RazoCome as name FROM cementerio WHERE CodiCome IN (";
+            }
+
+            for (let i = 0; i < accList.length; i += 1000) {
+                const chunk = accList.slice(i, i + 1000);
+                const placeholders = chunk.map(() => '?').join(',');
                 try {
-                    const nameResults = await conn.query(nameQuery, accList);
-                    nameResults.forEach(r => { accountNameMap[r.acc.toString().trim()] = r.name; });
-                } catch (e) { console.error("Error in bulk name lookup:", e); }
+                    const nameResults = await conn.query(nameQuery + placeholders + ")", chunk);
+                    nameResults.forEach(r => {
+                        const k = r.acc.toString().trim();
+                        accountNameMap[k] = r.name;
+                        accountNameMap[k.replace(/^0+/, '') || '0'] = r.name;
+                    });
+                } catch (e) {
+                    console.error("Error in bulk name lookup chunk:", e);
+                }
             }
         }
 
         // 5. Calculate Summaries
         const today = new Date().toISOString().split('T')[0];
+
+        // Create O(1) lookup maps to avoid O(N^2) matching
+        const mdItemsMap = {};
+        mariaRecords.forEach(r => {
+            const mdAccClean = r.CuenCtct.toString().trim().replace(/^0+/, '') || '0';
+            if (!mdItemsMap[mdAccClean]) mdItemsMap[mdAccClean] = [];
+            mdItemsMap[mdAccClean].push(r);
+        });
+
+        const plItemsMap = {};
+        mariaPlans.forEach(r => {
+            const planAccClean = r.CuenCtct.toString().trim().replace(/^0+/, '') || '0';
+            if (!plItemsMap[planAccClean]) plItemsMap[planAccClean] = [];
+            plItemsMap[planAccClean].push(r);
+        });
+
+        const pgItemsMap = {};
+        pgRecords.forEach(r => {
+            const pgAccClean = r.CuenCtct.toString().trim().replace(/^0+/, '') || '0';
+            if (!pgItemsMap[pgAccClean]) pgItemsMap[pgAccClean] = [];
+            pgItemsMap[pgAccClean].push(r);
+        });
+
+        // Track Postgres paid codes to prevent double counting payments
+        const payOnlyCtacteCods = new Set();
+        pgRecords.forEach(row => {
+            const dbVal = parseFloat(row.DebeCtct || 0);
+            if (dbVal < 0 && row.ctactecod) {
+                payOnlyCtacteCods.add(row.ctactecod.toString());
+            }
+        });
+
         const finalResults = accList.map(acc => {
-            const pInfo = personMap[acc] || { percod: 'N/A', nombre: 'N/A', CUIT: 'N/A' };
+            const cleanAcc = acc.replace(/^0+/, '') || '0';
+            const pInfo = personMap[cleanAcc] || personMap[acc] || { percod: 'N/A', nombre: 'N/A', CUIT: 'N/A' };
 
             // MariaDB Calculation
-            const mdItems = mariaRecords.filter(r => r.CuenCtct.toString().trim() === acc);
-            const plItems = mariaPlans.filter(r => r.CuenCtct.toString().trim() === acc);
+            const mdItems = mdItemsMap[cleanAcc] || [];
+            const plItems = plItemsMap[cleanAcc] || [];
             const allMdItems = [...mdItems, ...plItems];
 
             let mdPendiente = 0;
             let mdPagado = 0;
             let mdAnterior = 0;
+            let mdTotalCapital = 0;
 
             allMdItems.forEach(r => {
                 const capitalPendiente = parseFloat(r.Capital || 0);
                 const pagado = parseFloat(r.Pagado || 0);
+                const debeTotal = parseFloat(r.DebeTotal || 0);
                 
                 mdPagado += pagado;
+                mdTotalCapital += debeTotal;
 
                 if (capitalPendiente > 0.01) {
                     // Solo calculamos interés si NO está pagado (capitalPendiente > 0)
@@ -523,24 +1059,40 @@ router.get('/report/comparison', async (req, res) => {
             });
 
             // Postgres Calculation
-            const pgItems = pgRecords.filter(r => r.CuenCtct.toString().trim() === acc);
+            const pgItems = pgItemsMap[cleanAcc] || [];
             let pgPendiente = 0;
             let pgPagado = 0;
             let pgAnterior = 0;
+            let pgTotalCapital = 0;
 
             pgItems.forEach(r => {
-                const capital = parseFloat(r.DebeCtct || 0);
-                const pagado = parseFloat(r.Pagado || 0);
+                const amount = parseFloat(r.DebeCtct || 0);
+                const hasSeparatePayments = r.ctactecod && payOnlyCtacteCods.has(r.ctactecod.toString());
+                const isPaidByHeader = parseInt(r.Pagado || 0) > 0 && !hasSeparatePayments;
                 
-                pgPagado += pagado;
+                let debe = 0;
+                let haber = 0;
+
+                if (amount < 0) {
+                    haber = Math.abs(amount);
+                } else {
+                    debe = amount;
+                    if (isPaidByHeader) {
+                        haber = amount;
+                    }
+                }
+
+                pgTotalCapital += debe;
+                pgPagado += haber;
 
                 // Si NO hay pago, calculamos deuda con interés dinámico
-                if (pagado < 0.01 && capital > 0.01) {
+                const pending = Math.max(0, debe - haber);
+                if (pending > 0.01) {
                     let reca = 0;
                     if (r.FeveCtct) {
-                        reca = calculateLegacyInterest(r.FeveCtct, today, capital);
+                        reca = calculateLegacyInterest(r.FeveCtct, today, pending);
                     }
-                    const totalRow = capital + reca;
+                    const totalRow = pending + reca;
                     pgPendiente += totalRow;
                     if (parseInt(r.PeriCtct) <= 2018) {
                         pgAnterior += totalRow;
@@ -550,34 +1102,34 @@ router.get('/report/comparison', async (req, res) => {
 
             return {
                 cuenta: acc,
-                accountName: accountNameMap[acc] || null,
+                accountName: accountNameMap[cleanAcc] || accountNameMap[acc] || null,
                 officeId: officeId,
                 percod: pInfo.percod,
                 nombre: pInfo.nombre,
                 cuit: pInfo.CUIT,
                 maria: {
-                    total: mdPendiente,
+                    total: mdTotalCapital,
                     pagado: mdPagado,
                     anterior: mdAnterior,
                     saldo: mdPendiente
                 },
                 postgres: {
-                    total: pgPendiente,
+                    total: pgTotalCapital,
                     pagado: pgPagado,
                     anterior: pgAnterior,
                     saldo: pgPendiente
                 },
                 diffDeuda: Math.abs(mdPendiente - pgPendiente),
                 diffPagado: Math.abs(mdPagado - pgPagado),
-                diffTotal: Math.abs((mdPendiente + mdPagado) - (pgPendiente + pgPagado))
+                diffTotal: Math.abs(mdTotalCapital - pgTotalCapital)
             };
         });
 
         res.json({
             data: finalResults,
-            total: 1000, // Placeholder to allow some navigation
+            total: isExport ? finalResults.length : 1000,
             page: parseInt(page),
-            pageSize: parseInt(limit)
+            pageSize: isExport ? finalResults.length : parseInt(limit)
         });
 
     } catch (err) {
@@ -601,6 +1153,36 @@ router.get('/offices', async (req, res) => {
         if (conn) conn.release();
     }
 });
+
+// Helper for concepts associated with an office
+router.get('/concepts', async (req, res) => {
+    const { officeId } = req.query;
+    try {
+        const rtRes = await postgresDB.query(`
+            SELECT DISTINCT rectrfdsc as name 
+            FROM public.recursostarifa 
+            WHERE rectrfdsc IS NOT NULL AND rectrfdsc != ''
+            ORDER BY name
+        `);
+        const ttRes = await postgresDB.query(`
+            SELECT tpotribnom as name 
+            FROM public.tipotributo 
+            WHERE tpotribcod = $1
+        `, [parseInt(officeId || 1)]);
+        
+        const rawConcepts = rtRes.rows.map(r => r.name.trim());
+        if (ttRes.rows.length > 0) {
+            rawConcepts.unshift(ttRes.rows[0].name.trim());
+        }
+        
+        // Normalize all concepts and return sorted unique ones
+        const normalized = rawConcepts.map(c => getNormalizedConceptName(c));
+        res.json([...new Set(normalized)].sort());
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 
 // NEW: Fetch ticket history for a specific period/account to debug re-emissions
 router.get('/tickets/:officeId/:account/:period/:bime', async (req, res) => {

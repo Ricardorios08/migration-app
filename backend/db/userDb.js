@@ -4,35 +4,35 @@ dotenv.config({ path: path.join(__dirname, '../.env') });
 
 const mariadb = require('mariadb');
 
-const userToUse = process.env.SUPERADMIN_MARIA_USER || process.env.MARIA_USER;
+// Use superadmin credentials if defined and different from the normal user,
+// otherwise fall back to the standard user (migracion) that has confirmed access.
+const superUser = process.env.SUPERADMIN_MARIA_USER || process.env.MARIA_USER;
+const superPass = process.env.SUPERADMIN_MARIA_PASS || process.env.MARIA_PASS;
 console.log('--------------------------------------------------');
 console.log('[DEBUG] .env Path Check:', path.join(__dirname, '../.env'));
 console.log('[DEBUG] SUPERADMIN_MARIA_USER exists:', !!process.env.SUPERADMIN_MARIA_USER);
 console.log('[DEBUG] MARIA_USER exists:', !!process.env.MARIA_USER);
-console.log('[USER DB] Initializing Pool with user:', userToUse);
+console.log('[USER DB] Admin pool user:', superUser);
 console.log('--------------------------------------------------');
-
-if (userToUse === 'migracion' && process.env.SUPERADMIN_MARIA_USER !== 'migracion') {
-    console.warn('[WARNING] Superadmin user NOT FOUND in environment variables. Falling back to normal user.');
-}
 
 const poolConfig = {
      host: process.env.MARIA_HOST, 
      port: parseInt(process.env.MARIA_PORT || "3306"),
+     database: process.env.MARIA_USER_DB_NAME || 'user',  // BD separada para autenticacion
      connectionLimit: 10,
      connectTimeout: 10000,
      acquireTimeout: 10000,
      allowPublicKeyRetrieval: true
 };
 
-// Admin Pool (Full permissions)
+// Admin Pool — uses superadmin if available, falls back to normal user
 const adminPool = mariadb.createPool({
     ...poolConfig,
-    user: process.env.SUPERADMIN_MARIA_USER,
-    password: process.env.SUPERADMIN_MARIA_PASS
+    user: superUser,
+    password: superPass
 });
 
-// User Pool (Restricted permissions)
+// User Pool — always uses the standard restricted user
 const userPool = mariadb.createPool({
     ...poolConfig,
     user: process.env.MARIA_USER,
@@ -55,7 +55,6 @@ module.exports = {
         try {
             const pool = getPoolByRole(rol);
             conn = await pool.getConnection();
-            await conn.query("USE `user`").catch(() => {});
             const res = await conn.query(sql, params);
             return res;
         } finally {
@@ -68,7 +67,6 @@ module.exports = {
         try {
             const pool = getPoolByRole(rol);
             conn = await pool.getConnection();
-            await conn.query("USE `user`").catch(() => {});
             const res = await conn.query(sql, params);
             return res;
         } finally {

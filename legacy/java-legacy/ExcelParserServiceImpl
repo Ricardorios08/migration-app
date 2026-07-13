@@ -1,0 +1,348 @@
+package ar.gov.irrigacion.service.impl;
+
+// package com.example.service.impl;
+import ar.gov.irrigacion.domain.*;
+import ar.gov.irrigacion.service.ExcelParserService;
+import org.apache.poi.ss.usermodel.*;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.nio.file.Path;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.time.format.TextStyle;
+import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+@Service
+@Transactional
+public class ExcelParserServiceImpl implements ExcelParserService {
+
+    private static final Locale LOCALE_ES = new Locale("es");
+
+    @Value("${inspecciones-cauce-back.archivos}")
+    public String dirDestino;
+
+    @Override
+    public List<ExtractoBancario> parsear(ExtractoArchivo extractoArchivo) throws Exception {
+        Path path = Path.of(dirDestino + File.separator + extractoArchivo.getArchivoExcel().getNombre());
+        try (FileInputStream fis = new FileInputStream(path.toFile());
+             Workbook wb = WorkbookFactory.create(fis)) {
+
+            Sheet sheet = wb.getSheetAt(0);
+
+            int headerRowIdx = findHeaderRow(sheet);
+            if (headerRowIdx < 0) throw new IllegalStateException("No se encontró fila de encabezado con 'Fecha'");
+
+            Row headerRow = sheet.getRow(headerRowIdx);
+            Map<String, Integer> cols = mapColumns(headerRow);
+            Map<Integer, String> headerNames = getHeaderNames(headerRow);
+
+            List<ExtractoBancario> resultado = new ArrayList<>();
+            Set<java.time.Month> mesesEncontrados = new HashSet<>();
+            Set<Integer> aniosEncontrados = new HashSet<>();
+
+            for (int r = headerRowIdx + 1; r <= sheet.getLastRowNum(); r++) {
+                Row row = sheet.getRow(r);
+                if (row == null) continue;
+
+                // leer fecha
+                LocalDate fecha = readDateCell(row, cols.get("fecha"));
+                if (fecha == null) continue; // fila basura o resumen
+
+                mesesEncontrados.add(fecha.getMonth());
+
+                aniosEncontrados.add(fecha.getYear());
+
+                Long comprobante = readLongCell(row, cols.get("comprobante"));
+
+                String detalle = buildDetalle(row, cols, headerNames);
+                BigDecimal importe = readImporte(row, cols);
+
+                // crear entidad (sin relaciones)
+                ExtractoBancario eb = new ExtractoBancario();
+                eb.setFechaMovimiento(fecha);
+                eb.setNumeroComprobante(comprobante);
+                eb.setDetalle(detalle);
+
+                if (cols.containsKey("debe") && cols.containsKey("haber")) {
+                    BigDecimal debe = readBigDecimalCell(row, cols.get("debe"));
+                    BigDecimal haber = readBigDecimalCell(row, cols.get("haber"));
+                    eb.setDebe(debe == null ? BigDecimal.ZERO : debe.setScale(2, RoundingMode.HALF_UP));
+                    eb.setHaber(haber == null ? BigDecimal.ZERO : haber.setScale(2, RoundingMode.HALF_UP));
+                } else if (importe != null) {
+                    if (importe.signum() < 0) {
+                        eb.setDebe(importe.abs().setScale(2, RoundingMode.HALF_UP));
+                        eb.setHaber(BigDecimal.ZERO);
+                    } else {
+                        eb.setHaber(importe.setScale(2, RoundingMode.HALF_UP));
+                        eb.setDebe(BigDecimal.ZERO);
+                    }
+                } else {
+                    // Si no hay importe => saltar
+                    continue;
+                }
+
+                // setear relaciones que el caller completará (o aquí)
+                eb.setPeriodoPresupuestarioOrganismo(extractoArchivo.getPeriodoPresupuestarioOrganismo());
+                eb.setCuentaBancaria(extractoArchivo.getCuentaBancaria());
+
+                resultado.add(eb);
+            }
+
+            // Validación de meses: si hay más de 1 mes, lanzamos para que el caller lo notifique
+            if (mesesEncontrados.size() > 1) {
+                StringBuilder sb = new StringBuilder("El archivo contiene movimientos de múltiples meses: ");
+                mesesEncontrados.forEach(m ->
+                    sb.append(m.getDisplayName(TextStyle.FULL, new Locale("es", "ES"))).append(" ")
+                );
+                throw new IllegalStateException(sb.toString());
+            }
+
+            if (aniosEncontrados.size() > 1) {
+                StringBuilder sb = new StringBuilder("El archivo contiene movimientos de múltiples años: ");
+                aniosEncontrados.forEach(y -> sb.append(y).append(" "));
+                throw new IllegalStateException(sb.toString());
+            }
+
+            return resultado;
+        }
+    }
+
+    private int findHeaderRow(Sheet sheet) {
+        for (int i = 0; i <= sheet.getLastRowNum(); i++) {
+            Row row = sheet.getRow(i);
+            if (row == null) continue;
+
+            int hits = 0;
+
+            for (Cell cell : row) {
+                if (cell == null) continue;
+                String val = cell.toString().trim().toLowerCase();
+
+                // criterios que indican fila de encabezados
+                if (val.contains("fecha")) hits++;
+                if (val.contains("comprob")) hits++;
+                if (val.contains("concepto")) hits++;
+                if (val.contains("detalle")) hits++;
+                if (val.contains("movimiento")) hits++;
+                if (val.contains("importe")) hits++;
+                if (val.contains("debe")) hits++;
+                if (val.contains("debito")) hits++;
+                if (val.contains("haber")) hits++;
+                if (val.contains("credito")) hits++;
+            }
+
+            // si al menos 2-3 columnas cierran, es header real
+            if (hits >= 2) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private Map<Integer, String> getHeaderNames(Row headerRow) {
+        Map<Integer, String> map = new HashMap<>();
+        for (Cell c : headerRow) {
+            map.put(c.getColumnIndex(), getCellString(c));
+        }
+        return map;
+    }
+
+    private Map<String, Integer> mapColumns(Row headerRow) {
+        Map<String,Integer> map = new HashMap<>();
+        for (Cell c : headerRow) {
+            String txt = getCellString(c).toLowerCase(LOCALE_ES);
+            int idx = c.getColumnIndex();
+            if (txt.contains("fecha")) map.put("fecha", idx);
+            else if (txt.contains("concept") || txt.contains("detalle") || txt.contains("descr") || txt.contains("movim")) {
+                // multiple detail-ish columns will be concatenated
+                map.compute("detalle", (k,v)-> v==null?idx: v); // store first as anchor
+            } else if (txt.contains("importe") || txt.contains("monto") || txt.contains("valor")) {
+                map.put("importe", idx);
+            } else if (txt.contains("debe") || txt.contains("debito") || txt.contains("débito") || txt.contains("cargo")) {
+                map.put("debe", idx);
+            } else if (txt.contains("haber") || txt.contains("credito") || txt.contains("crédito") || txt.contains("abono")) {
+                map.put("haber", idx);
+            } else if (txt.contains("comprob")) {
+                map.put("comprobante", idx);
+            } else if (txt.contains("saldo")) {
+                map.put("saldo", idx);
+            } else {
+                // other columns ignored
+            }
+        }
+        return map;
+    }
+
+    private static final List<DateTimeFormatter> DATE_FORMATS = List.of(
+        DateTimeFormatter.ofPattern("d/M/yyyy"),
+        DateTimeFormatter.ofPattern("d-M-yyyy"),
+        DateTimeFormatter.ofPattern("yyyy-MM-dd"),
+        DateTimeFormatter.ofPattern("dd/MM/yyyy")
+    );
+
+    private static final List<DateTimeFormatter> DATE_TIME_FORMATS = List.of(
+        DateTimeFormatter.ofPattern("d/M/yyyy H:mm:ss"),
+        DateTimeFormatter.ofPattern("d/M/yyyy H:mm"),
+        DateTimeFormatter.ofPattern("yyyy-MM-dd H:mm:ss"),
+        DateTimeFormatter.ofPattern("yyyy-MM-dd H:mm")
+    );
+
+    private static final Pattern DATE_PATTERN =
+        Pattern.compile("\\d{1,4}[-/]\\d{1,2}[-/]\\d{1,4}");
+
+    private LocalDate readDateCell(Row row, Integer colIdx) {
+        if (colIdx == null) return null;
+
+        Cell c = row.getCell(colIdx);
+        if (c == null) return null;
+
+        // Excel fecha real
+        if (c.getCellType() == CellType.NUMERIC && DateUtil.isCellDateFormatted(c)) {
+            return c.getLocalDateTimeCellValue().toLocalDate();
+        }
+
+        String s = getCellString(c);
+        if (s == null || s.isBlank()) return null;
+
+        s = s.trim().replace("T", " ");
+
+        // 1️⃣ Intentar fecha + hora
+        for (DateTimeFormatter fmt : DATE_TIME_FORMATS) {
+            try {
+                return LocalDateTime.parse(s, fmt).toLocalDate();
+            } catch (DateTimeParseException ignored) {}
+        }
+
+        // 2️⃣ Intentar solo fecha
+        for (DateTimeFormatter fmt : DATE_FORMATS) {
+            try {
+                return LocalDate.parse(s, fmt);
+            } catch (DateTimeParseException ignored) {}
+        }
+
+        // 3️⃣ Extraer fecha con regex si viene mezclada
+        Matcher matcher = DATE_PATTERN.matcher(s);
+        if (matcher.find()) {
+            String datePart = matcher.group();
+            for (DateTimeFormatter fmt : DATE_FORMATS) {
+                try {
+                    return LocalDate.parse(datePart, fmt);
+                } catch (DateTimeParseException ignored) {}
+            }
+        }
+
+        return null;
+    }
+
+    private BigDecimal readBigDecimalCell(Row row, Integer colIdx) {
+        if (colIdx == null) return null;
+        Cell c = row.getCell(colIdx);
+        if (c == null) return null;
+        try {
+            if (c.getCellType() == CellType.NUMERIC) {
+                return BigDecimal.valueOf(c.getNumericCellValue());
+            } else {
+                String s = getCellString(c);
+                if (s == null || s.isBlank()) return null;
+                return parseEuropeanNumber(s);
+            }
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private Long readLongCell(Row row, Integer colIdx) {
+        if (colIdx == null) return null;
+        Cell c = row.getCell(colIdx);
+        if (c == null) return null;
+
+        try {
+            if (c.getCellType() == CellType.NUMERIC) {
+                return (long) c.getNumericCellValue();
+            } else {
+                String s = getCellString(c);
+                if (s == null || s.isBlank()) return null;
+
+                // solo dígitos
+                s = s.replaceAll("[^0-9]", "");
+                if (s.isBlank()) return null;
+
+                return Long.parseLong(s);
+            }
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private BigDecimal readImporte(Row row, Map<String,Integer> cols) {
+        if (cols.containsKey("importe")) return readBigDecimalCell(row, cols.get("importe"));
+        // some banks have importe split or sign column -> advanced handlers can be added
+        return null;
+    }
+
+    private String buildDetalle(Row row, Map<String,Integer> cols, Map<Integer, String> headerNames) {
+        // concatenate all text-like columns except fecha, importe, saldo, comprobante
+        StringBuilder sb = new StringBuilder();
+
+        for (Cell c : row) {
+            int idx = c.getColumnIndex();
+
+            // excluir columnas clave
+            if (cols.get("fecha") != null && cols.get("fecha") == idx) continue;
+            if (cols.get("comprobante") != null && cols.get("comprobante") == idx) continue;
+            if (cols.get("importe") != null && cols.get("importe") == idx) continue;
+            if (cols.get("saldo") != null && cols.get("saldo") == idx) continue;
+
+            String valor = getCellString(c);
+            if (valor == null || valor.isBlank()) continue;
+
+            // nombre de encabezado real
+            String header = headerNames.get(idx);
+            if (header == null || header.isBlank()) {
+                header = "Col" + idx;
+            }
+
+            if (sb.length() > 0) sb.append(" - ");
+
+            sb.append(header.trim()).append(": ").append(valor.trim());
+        }
+
+        String detalle = sb.substring(0, Math.min(sb.length(), 255));
+
+        return detalle;
+    }
+
+    private String getCellString(Cell c) {
+        if (c == null) return null;
+        try {
+            switch (c.getCellType()) {
+                case STRING: return c.getStringCellValue();
+                case NUMERIC:
+                    if (DateUtil.isCellDateFormatted(c)) return c.getLocalDateTimeCellValue().toLocalDate().toString();
+                    return String.valueOf(c.getNumericCellValue());
+                case BOOLEAN: return String.valueOf(c.getBooleanCellValue());
+                case FORMULA: return c.getCellFormula();
+                default: return "";
+            }
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    private BigDecimal parseEuropeanNumber(String s) {
+        // eliminar puntos (miles), convertir coma a punto
+        String cleaned = s.replace(".", "").replace(",", ".").replaceAll("[^0-9\\.-]", "");
+        if (cleaned.isBlank()) return null;
+        return new BigDecimal(cleaned);
+    }
+}

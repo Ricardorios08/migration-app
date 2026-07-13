@@ -12,6 +12,11 @@ const ComparisonReport = () => {
     const [pageSize] = useState(20);
     const [search, setSearch] = useState('');
     const [error, setError] = useState(null);
+    const [filterYear, setFilterYear] = useState('');
+    const [filterMonth, setFilterMonth] = useState('');
+    const [concepts, setConcepts] = useState([]);
+    const [filterConcept, setFilterConcept] = useState('');
+    const [exportLoading, setExportLoading] = useState(false);
 
     const getAuthHeaders = () => {
         const token = localStorage.getItem('nomade_token');
@@ -30,11 +35,33 @@ const ComparisonReport = () => {
             .catch(err => console.error('Error fetching offices:', err));
     }, []);
 
+    useEffect(() => {
+        setFilterConcept('');
+        if (selectedOffice) {
+            fetch(`${API_BASE_URL}/api/ctacte-fn/concepts?officeId=${selectedOffice}`, {
+                headers: getAuthHeaders()
+            })
+                .then(res => res.json())
+                .then(data => setConcepts(data))
+                .catch(err => console.error('Error fetching concepts:', err));
+        }
+    }, [selectedOffice]);
+
+    const hasAllRequiredFilters = !!(selectedOffice && filterYear && filterMonth && filterConcept);
+
     const fetchData = async (pageNum = 1) => {
+        const hasSearch = !!(search && search.trim());
+        if (!hasAllRequiredFilters && !hasSearch) {
+            setError("Por favor, seleccione todos los filtros requeridos (Año, Cuota y Concepto) o ingrese un padrón específico para realizar la búsqueda.");
+            setData([]);
+            setTotalPages(0);
+            return;
+        }
+
         setLoading(true);
         setError(null);
         try {
-            const url = `${API_BASE_URL}/api/ctacte-fn/report/comparison?officeId=${selectedOffice}&page=${pageNum}&limit=${pageSize}&search=${encodeURIComponent(search)}`;
+            const url = `${API_BASE_URL}/api/ctacte-fn/report/comparison?officeId=${selectedOffice}&page=${pageNum}&limit=${pageSize}&search=${encodeURIComponent(search)}&filterYear=${filterYear}&filterMonth=${filterMonth}&filterConcept=${encodeURIComponent(filterConcept)}`;
             const res = await fetch(url, {
                 headers: getAuthHeaders()
             });
@@ -51,6 +78,79 @@ const ComparisonReport = () => {
             setLoading(false);
         }
     };
+
+    const downloadCSV = async () => {
+        if (!hasAllRequiredFilters) {
+            alert("Seleccione más filtros para continuar");
+            return;
+        }
+        
+        setExportLoading(true);
+        setError(null);
+        try {
+            const url = `${API_BASE_URL}/api/ctacte-fn/report/comparison?export=true&officeId=${selectedOffice}&filterYear=${filterYear}&filterMonth=${filterMonth}&filterConcept=${encodeURIComponent(filterConcept)}`;
+            const res = await fetch(url, {
+                headers: getAuthHeaders()
+            });
+            
+            if (!res.ok) {
+                const errData = await res.json();
+                throw new Error(errData.error || `Error HTTP ${res.status}`);
+            }
+            
+            const result = await res.json();
+            
+            if (result.error) throw new Error(result.error);
+            if (!result.data || result.data.length === 0) {
+                alert("No hay datos para exportar");
+                return;
+            }
+
+            // Convert to CSV
+            const headers = [
+                "Cuenta/Padron",
+                "Nombre/Denominacion",
+                "CUIT",
+                "Total MD ($)",
+                "Total PG ($)",
+                "DIFERENCIA ($)"
+            ];
+
+            const rows = result.data.map(r => [
+                r.cuenta,
+                r.nombre,
+                r.cuit,
+                r.maria?.total?.toFixed(2) ?? '',
+                r.postgres?.total?.toFixed(2) ?? '',
+                r.diffTotal?.toFixed(2) ?? ''
+            ]);
+
+            const csvContent = "\uFEFF" + [
+                headers.join(";"),
+                ...rows.map(e => e.map(val => {
+                    if (val === null || val === undefined) return "";
+                    // Replace semicolons to avoid breaking columns and wrap strings in quotes
+                    const str = val.toString().replace(/;/g, ",");
+                    return `"${str}"`;
+                }).join(";"))
+            ].join("\n");
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            const urlBlob = URL.createObjectURL(blob);
+            link.setAttribute("href", urlBlob);
+            const conceptFilename = filterConcept.toLowerCase().replace(/[^a-z0-9]/g, "_");
+            link.setAttribute("download", `compara_ctacte_ofic_${selectedOffice}_${filterYear}_cuota_${filterMonth}_${conceptFilename}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        } catch (err) {
+            setError("Error al descargar CSV: " + err.message);
+        } finally {
+            setExportLoading(false);
+        }
+    };
+
 
     useEffect(() => {
         fetchData(1);
@@ -73,12 +173,15 @@ const ComparisonReport = () => {
         data.forEach(row => {
             let p = parseInt(row.PeriCtct);
             let b = parseInt(row.BimeCtct);
-            const key = p <= 2018 ? "2018-99" : `${p}-${b}`;
+            const concept = (row.DetaCtct || '').toString().trim();
+            const conceptLower = concept.toLowerCase();
+            const key = p <= 2018 ? `2018-99-${conceptLower}` : `${p}-${b}-${conceptLower}`;
             
             if (!groups[key]) {
                 groups[key] = {
                     PeriCtct: p <= 2018 ? 2018 : p,
                     BimeCtct: p <= 2018 ? 99 : b,
+                    Concept: concept || 'Sin Concepto',
                     FeveCtct: row.FeveCtct,
                     DebeCtct: 0,
                     RecaCtct: 0,
@@ -98,7 +201,8 @@ const ComparisonReport = () => {
         });
         return Object.values(groups).sort((a, b) => {
             if (b.PeriCtct !== a.PeriCtct) return b.PeriCtct - a.PeriCtct;
-            return b.BimeCtct - a.BimeCtct;
+            if (b.BimeCtct !== a.BimeCtct) return b.BimeCtct - a.BimeCtct;
+            return a.Concept.localeCompare(b.Concept);
         });
     };
 
@@ -106,27 +210,36 @@ const ComparisonReport = () => {
         setFullDetailLoading(true);
         try {
             const [mRes, pRes] = await Promise.all([
-                fetch(`${API_BASE_URL}/api/ctacte-fn/legacy/search?account=${account.cuenta}&officeId=${selectedOffice}&agrupar=true`, { headers: getAuthHeaders() }).then(r => r.json()),
-                fetch(`${API_BASE_URL}/api/ctacte-fn/new/search?account=${account.cuenta}&officeId=${selectedOffice}&showQuotaDetail=true`, { headers: getAuthHeaders() }).then(r => r.json())
+                fetch(`${API_BASE_URL}/api/ctacte-fn/legacy/search?account=${account.cuenta}&officeId=${selectedOffice}&agrupar=true&filterYear=${filterYear}&filterMonth=${filterMonth}`, { headers: getAuthHeaders() }).then(r => r.json()),
+                fetch(`${API_BASE_URL}/api/ctacte-fn/new/search?account=${account.cuenta}&officeId=${selectedOffice}&showQuotaDetail=true&filterYear=${filterYear}&filterMonth=${filterMonth}`, { headers: getAuthHeaders() }).then(r => r.json())
             ]);
 
-            const mariaMerged = consolidateData(mRes);
-            const pgMerged = consolidateData(pRes);
+            let mariaMerged = consolidateData(mRes);
+            let pgMerged = consolidateData(pRes);
+
+            if (filterConcept) {
+                mariaMerged = mariaMerged.filter(r => (r.Concept || '').toLowerCase() === filterConcept.toLowerCase());
+                pgMerged = pgMerged.filter(r => (r.Concept || '').toLowerCase() === filterConcept.toLowerCase());
+            }
 
             const allPeriods = Array.from(new Set([
-                ...mariaMerged.map(r => `${r.PeriCtct}-${r.BimeCtct}`),
-                ...pgMerged.map(r => `${r.PeriCtct}-${r.BimeCtct}`)
+                ...mariaMerged.map(r => `${r.PeriCtct}-${r.BimeCtct}-${(r.Concept || '').toLowerCase()}`),
+                ...pgMerged.map(r => `${r.PeriCtct}-${r.BimeCtct}-${(r.Concept || '').toLowerCase()}`)
             ])).sort((a,b) => {
-                const [pA, bA] = a.split('-').map(Number);
-                const [pB, bB] = b.split('-').map(Number);
-                if (pB !== pA) return pB - pA;
-                return bB - bA;
+                const [pA, bA, cA] = a.split('-');
+                const [pB, bB, cB] = b.split('-');
+                if (Number(pB) !== Number(pA)) return Number(pB) - Number(pA);
+                if (Number(bB) !== Number(bA)) return Number(bB) - Number(bA);
+                return (cA || '').localeCompare(cB || '');
             });
 
             const unified = allPeriods.map(key => {
-                const [p, b] = key.split('-').map(Number);
-                const m = mariaMerged.find(r => r.PeriCtct === p && r.BimeCtct === b) || { DebeCtct: 0, RecaCtct: 0, CredCtct: 0, TotaCtct: 0 };
-                const pg = pgMerged.find(r => r.PeriCtct === p && r.BimeCtct === b) || { DebeCtct: 0, RecaCtct: 0, CredCtct: 0, TotaCtct: 0 };
+                const [pStr, bStr, ...cParts] = key.split('-');
+                const p = Number(pStr);
+                const b = Number(bStr);
+                const cLower = cParts.join('-');
+                const m = mariaMerged.find(r => r.PeriCtct === p && r.BimeCtct === b && (r.Concept || '').toLowerCase() === cLower) || { DebeCtct: 0, RecaCtct: 0, CredCtct: 0, TotaCtct: 0, Concept: '' };
+                const pg = pgMerged.find(r => r.PeriCtct === p && r.BimeCtct === b && (r.Concept || '').toLowerCase() === cLower) || { DebeCtct: 0, RecaCtct: 0, CredCtct: 0, TotaCtct: 0, Concept: '' };
                 
                 const mTotal = m.DebeCtct + m.RecaCtct;
                 const mSaldo = mTotal - m.CredCtct;
@@ -134,7 +247,7 @@ const ComparisonReport = () => {
                 const pgSaldo = pgTotal - pg.CredCtct;
                 
                 const diff = Math.abs(mSaldo - pgSaldo);
-                return { key, p, b, m: { ...m, TotaCtct: mTotal, Saldo: mSaldo }, pg: { ...pg, TotaCtct: pgTotal, Saldo: pgSaldo }, diff, hasDiff: diff > 1.5 };
+                return { key, p, b, conceptName: m.Concept || pg.Concept || 'Sin Concepto', m: { ...m, TotaCtct: mTotal, Saldo: mSaldo }, pg: { ...pg, TotaCtct: pgTotal, Saldo: pgSaldo }, diff, hasDiff: diff > 1.5 };
             });
 
             setUnifiedFull(unified);
@@ -157,7 +270,7 @@ const ComparisonReport = () => {
         doc.text(`Fecha de Reporte: ${new Date().toLocaleString()}`, 15, 34);
 
         const tableBody = unifiedFull.map(row => [
-            `${row.p}/${row.b === 99 ? 'ANT.' : row.b}`,
+            `${row.p}/${row.b === 99 ? 'ANT.' : row.b} - ${row.conceptName}`,
             formatCurrency(row.m.DebeCtct),
             formatCurrency(row.m.RecaCtct),
             formatCurrency(row.m.CredCtct),
@@ -225,60 +338,134 @@ const ComparisonReport = () => {
     return (
         <div className="view-container" style={{ padding: '2rem', height: '100%', overflowY: 'auto', background: '#0a0b10' }}>
             <div style={{ marginBottom: '2.5rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '2rem' }}>
-                    <div>
-                        <h1 style={{ fontSize: '2rem', fontWeight: '800', color: '#fff', marginBottom: '0.5rem', letterSpacing: '-0.02em' }}>
-                            Compara Ctacte Listado
-                        </h1>
-                        <p style={{ color: 'var(--text-dim)', fontSize: '1rem' }}>Auditoría masiva de migración: MariaDB vs PostgreSQL</p>
-                    </div>
+                <div style={{ marginBottom: '1.5rem' }}>
+                    <h1 style={{ fontSize: '2rem', fontWeight: '800', color: '#fff', marginBottom: '0.5rem', letterSpacing: '-0.02em' }}>
+                        Compara Ctacte Listado
+                    </h1>
+                    <p style={{ color: 'var(--text-dim)', fontSize: '1rem' }}>Auditoría masiva de migración: MariaDB vs PostgreSQL</p>
+                </div>
 
-                    <div style={{ display: 'flex', gap: '0.75rem' }}>
-                        <div style={{ background: 'rgba(255,255,255,0.03)', padding: '0.5rem', borderRadius: '12px', border: '1px solid var(--border)', display: 'flex', gap: '0.75rem' }}>
-                            <div className="filter-group" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', background: 'rgba(124, 77, 255, 0.1)', padding: '0.25rem 0.75rem', borderRadius: '8px' }}>
-                                <Filter size={16} color="var(--primary)" />
-                                <select 
-                                    style={{ background: 'transparent', border: 'none', color: 'white', fontWeight: '600', cursor: 'pointer', outline: 'none' }}
-                                    value={selectedOffice}
-                                    onChange={(e) => setSelectedOffice(e.target.value)}
-                                >
-                                    {offices.map(o => (
-                                        <option key={o.id} value={o.id} style={{ background: '#1a1b23' }}>{o.name}</option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div className="search-box" style={{ position: 'relative', width: '240px' }}>
-                                <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }} />
-                                <input 
-                                    type="text" 
-                                    className="form-input" 
-                                    placeholder="Buscar padrón..."
-                                    style={{ 
-                                        padding: '0.6rem 1rem 0.6rem 2.5rem', 
-                                        width: '100%', 
-                                        background: 'rgba(0,0,0,0.2)', 
-                                        border: '1px solid var(--border)',
-                                        borderRadius: '8px',
-                                        color: 'white',
-                                        fontSize: '0.9rem'
-                                    }}
-                                    value={search}
-                                    onChange={(e) => setSearch(e.target.value)}
-                                    onKeyDown={(e) => e.key === 'Enter' && fetchData(1)}
-                                />
-                            </div>
-                            
-                            <button 
-                                className="btn btn-primary" 
-                                style={{ padding: '0.6rem 1.5rem', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
-                                onClick={() => fetchData(1)}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
+                    <div style={{ background: 'rgba(255,255,255,0.03)', padding: '0.5rem', borderRadius: '12px', border: '1px solid var(--border)', display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                        <div className="filter-group" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', background: 'rgba(124, 77, 255, 0.1)', padding: '0.25rem 0.75rem', borderRadius: '8px' }}>
+                            <Filter size={16} color="var(--primary)" />
+                            <select 
+                                style={{ background: 'transparent', border: 'none', color: 'white', fontWeight: '600', cursor: 'pointer', outline: 'none' }}
+                                value={selectedOffice}
+                                onChange={(e) => setSelectedOffice(e.target.value)}
                             >
-                                <Search size={18} />
-                                Buscar
-                            </button>
+                                {offices.map(o => (
+                                    <option key={o.id} value={o.id} style={{ background: '#1a1b23' }}>{o.name}</option>
+                                ))}
+                            </select>
                         </div>
+
+                        <div className="filter-group" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', background: 'rgba(251, 191, 36, 0.1)', padding: '0.25rem 0.75rem', borderRadius: '8px' }}>
+                            <span style={{ fontSize: '0.75rem', color: '#fbbf24', fontWeight: '600' }}>Año:</span>
+                            <input
+                                type="number"
+                                placeholder="Todos"
+                                value={filterYear}
+                                onChange={(e) => setFilterYear(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && fetchData(1)}
+                                style={{ background: 'transparent', border: 'none', color: 'white', width: '60px', fontSize: '0.9rem', fontWeight: 'bold', outline: 'none' }}
+                            />
+                        </div>
+
+                        <div className="filter-group" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', background: 'rgba(251, 191, 36, 0.1)', padding: '0.25rem 0.75rem', borderRadius: '8px' }}>
+                            <span style={{ fontSize: '0.75rem', color: '#fbbf24', fontWeight: '600' }}>Cuota:</span>
+                            <input
+                                type="number"
+                                placeholder="Todas"
+                                value={filterMonth}
+                                onChange={(e) => setFilterMonth(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && fetchData(1)}
+                                style={{ background: 'transparent', border: 'none', color: 'white', width: '55px', fontSize: '0.9rem', fontWeight: 'bold', outline: 'none' }}
+                            />
+                        </div>
+
+                        <div className="filter-group" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', background: 'rgba(251, 191, 36, 0.1)', padding: '0.25rem 0.75rem', borderRadius: '8px' }}>
+                            <span style={{ fontSize: '0.75rem', color: '#fbbf24', fontWeight: '600' }}>Concepto:</span>
+                            <select 
+                                style={{ background: 'transparent', border: 'none', color: 'white', fontWeight: 'bold', outline: 'none', maxWidth: '180px', fontSize: '0.9rem' }}
+                                value={filterConcept}
+                                onChange={(e) => setFilterConcept(e.target.value)}
+                            >
+                                <option value="" style={{ background: '#1a1b23' }}>Todos</option>
+                                {concepts.map(c => (
+                                    <option key={c} value={c} style={{ background: '#1a1b23' }}>{c}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div className="search-box" style={{ position: 'relative', width: '240px' }}>
+                            <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }} />
+                            <input 
+                                type="text" 
+                                className="form-input" 
+                                placeholder="Buscar padrón..."
+                                style={{ 
+                                    padding: '0.6rem 1rem 0.6rem 2.5rem', 
+                                    width: '100%', 
+                                    background: 'rgba(0,0,0,0.2)', 
+                                    border: '1px solid var(--border)',
+                                    borderRadius: '8px',
+                                    color: 'white',
+                                    fontSize: '0.9rem'
+                                }}
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && fetchData(1)}
+                            />
+                        </div>
+                        
+                        <button 
+                            className="btn btn-primary" 
+                            style={{ padding: '0.6rem 1.5rem', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                            onClick={() => fetchData(1)}
+                        >
+                            <Search size={18} />
+                            Buscar
+                        </button>
+
+                        <button 
+                            className="btn btn-success" 
+                            style={{ 
+                                padding: '0.3rem 0.6rem', 
+                                borderRadius: '8px', 
+                                display: 'flex', 
+                                flexDirection: 'column',
+                                alignItems: 'center', 
+                                justifyContent: 'center',
+                                background: hasAllRequiredFilters ? '#10b981' : '#4b5563',
+                                cursor: hasAllRequiredFilters ? 'pointer' : 'not-allowed',
+                                border: 'none',
+                                color: 'white',
+                                opacity: hasAllRequiredFilters ? 1 : 0.6,
+                                height: 'auto',
+                                minWidth: '80px',
+                                textAlign: 'center'
+                            }}
+                            onClick={downloadCSV}
+                            disabled={!hasAllRequiredFilters || exportLoading}
+                            title={!hasAllRequiredFilters ? "Seleccione Oficina, Año, Cuota y Concepto para descargar" : "Descargar Excel/CSV completo"}
+                        >
+                            {exportLoading ? (
+                                <div style={{ border: '2px solid rgba(255,255,255,0.2)', borderTop: '2px solid white', borderRadius: '50%', width: '16px', height: '16px', animation: 'spin 1s linear infinite' }}></div>
+                            ) : (
+                                <>
+                                    <Download size={16} />
+                                    <span style={{ fontSize: '0.65rem', fontWeight: '700', marginTop: '2px', lineHeight: '1' }}>EXPORTAR<br/>CSV</span>
+                                </>
+                            )}
+                        </button>
                     </div>
+                    {exportLoading && (
+                        <div style={{ color: '#10b981', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold' }}>
+                            <div style={{ border: '2px solid rgba(16, 185, 129, 0.2)', borderTop: '2px solid #10b981', borderRadius: '50%', width: '12px', height: '12px', animation: 'spin 1s linear infinite' }}></div>
+                            <span>Generando...</span>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -295,19 +482,15 @@ const ComparisonReport = () => {
                             <tr style={{ background: 'rgba(255,255,255,0.05)', textAlign: 'left' }}>
                                 <th style={{ padding: '1rem' }}>Padrón / Persona</th>
                                 <th style={{ padding: '1rem' }}>Cod. MariaDB</th>
-                                <th style={{ padding: '1rem', textAlign: 'center', borderLeft: '2px solid var(--border)' }}>ANT. 2018 (MD)</th>
-                                <th style={{ padding: '1rem', textAlign: 'center' }}>TOTAL MD</th>
-                                <th style={{ padding: '1rem', textAlign: 'center', color: 'var(--primary)' }}>SALDO MD</th>
-                                <th style={{ padding: '1rem', textAlign: 'center', borderLeft: '4px solid var(--border)' }}>ANT. 2018 (PG)</th>
-                                <th style={{ padding: '1rem', textAlign: 'center' }}>TOTAL PG</th>
-                                <th style={{ padding: '1rem', textAlign: 'center', color: '#10b981' }}>SALDO PG</th>
+                                <th style={{ padding: '1rem', textAlign: 'center', borderLeft: '2px solid var(--border)' }}>TOTAL MD</th>
+                                <th style={{ padding: '1rem', textAlign: 'center', borderLeft: '4px solid var(--border)' }}>TOTAL PG</th>
                                 <th style={{ padding: '1rem', textAlign: 'center', borderLeft: '2px solid var(--border)' }}>DIF.</th>
                             </tr>
                         </thead>
                         <tbody>
                             {loading ? (
                                 Array(5).fill(0).map((_, i) => (
-                                    <tr key={i}><td colSpan="9" style={{ padding: '2rem', textAlign: 'center', opacity: 0.5 }}>Cargando datos...</td></tr>
+                                    <tr key={i}><td colSpan="5" style={{ padding: '2rem', textAlign: 'center', opacity: 0.5 }}>Cargando datos...</td></tr>
                                 ))
                             ) : data.length > 0 ? (
                                 data.map((row) => (
@@ -337,35 +520,23 @@ const ComparisonReport = () => {
                                         </td>
                                         
                                         {/* MariaDB Side */}
-                                        <td style={{ padding: '1rem', textAlign: 'right', borderLeft: '2px solid var(--border)', opacity: 0.8 }}>
-                                            {formatCurrency(row.maria.anterior)}
-                                        </td>
-                                        <td style={{ padding: '1rem', textAlign: 'right' }}>
+                                        <td style={{ padding: '1rem', textAlign: 'right', borderLeft: '2px solid var(--border)' }}>
                                             {formatCurrency(row.maria.total)}
-                                        </td>
-                                        <td style={{ padding: '1rem', textAlign: 'right', fontWeight: '700', color: 'var(--primary)' }}>
-                                            {formatCurrency(row.maria.saldo)}
                                         </td>
 
                                         {/* Postgres Side */}
-                                        <td style={{ padding: '1rem', textAlign: 'right', borderLeft: '4px solid var(--border)', opacity: 0.8 }}>
-                                            {formatCurrency(row.postgres.anterior)}
-                                        </td>
-                                        <td style={{ padding: '1rem', textAlign: 'right' }}>
+                                        <td style={{ padding: '1rem', textAlign: 'right', borderLeft: '4px solid var(--border)' }}>
                                             {formatCurrency(row.postgres.total)}
-                                        </td>
-                                        <td style={{ padding: '1rem', textAlign: 'right', fontWeight: '700', color: '#10b981' }}>
-                                            {formatCurrency(row.postgres.saldo)}
                                         </td>
 
                                         {/* Difference */}
-                                        <td style={{ padding: '1rem', textAlign: 'right', borderLeft: '2px solid var(--border)', color: row.diff > 1 ? '#ef4444' : '#10b981' }}>
-                                            {formatCurrency(row.diff)}
+                                        <td style={{ padding: '1rem', textAlign: 'right', borderLeft: '2px solid var(--border)', color: (row.diffTotal !== undefined ? row.diffTotal : Math.abs(row.maria.total - row.postgres.total)) > 1 ? '#ef4444' : '#10b981' }}>
+                                            {formatCurrency(row.diffTotal !== undefined ? row.diffTotal : Math.abs(row.maria.total - row.postgres.total))}
                                         </td>
                                     </tr>
                                 ))
                             ) : (
-                                <tr><td colSpan="9" style={{ padding: '3rem', textAlign: 'center' }}>No se encontraron registros en esta oficina.</td></tr>
+                                <tr><td colSpan="5" style={{ padding: '3rem', textAlign: 'center' }}>No se encontraron registros en esta oficina.</td></tr>
                             )}
                         </tbody>
                     </table>
@@ -571,7 +742,8 @@ const ComparisonReport = () => {
                                             transition: 'background 0.2s'
                                         }}>
                                             <td style={{ padding: '0.75rem', fontWeight: row.b === 99 ? '800' : '400', color: row.b === 99 ? 'var(--primary)' : 'inherit' }}>
-                                                {row.p}/{row.b === 99 ? 'ANT.' : row.b}
+                                                <div>{row.p}/{row.b === 99 ? 'ANT.' : row.b}</div>
+                                                <div style={{ fontSize: '0.7rem', opacity: 0.6, marginTop: '4px', fontWeight: 'normal', color: '#fbbf24' }}>{row.conceptName}</div>
                                             </td>
                                             
                                             {/* MariaDB Side */}

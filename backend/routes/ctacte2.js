@@ -213,7 +213,7 @@ router.get('/legacy/search', async (req, res) => {
                 const debtQuery = `
                     SELECT 
                         t.PeriCtct, t.BimeCtct, MAX(t.CuotDefa) as CuotDefa, MAX(t.FeveCtct) as FeveCtct, 
-                        IFNULL(c.DetaConc, IFNULL(MAX(t.DetaCtct), 'Sin Detalle')) as DetaCtct, 
+                        MAX(IFNULL(c.DetaConc, t.DetaCtct)) as DetaCtct, 
                         SUM(IFNULL(t.DebeCtct, 0)) - SUM(IFNULL(t.CredCtct, 0)) as DebeCtct, 
                         IF(MAX(t.FeveCtct) < ?, 
                            (SUM(IFNULL(t.DebeCtct, 0)) - SUM(IFNULL(t.CredCtct, 0))) * CEIL(DATEDIFF(?, MAX(t.FeveCtct)) / 30) * 0.03, 
@@ -228,7 +228,7 @@ router.get('/legacy/search', async (req, res) => {
                     FROM ${DB_NAME}.ctacte t
                     LEFT JOIN ${DB_RECAUDACION}.concepto c ON c.PeriInfo = t.PeriInfo AND c.CodiConc = t.CodiConc
                     WHERE t.CodiOfic = ? AND t.CuenCtct = ?
-                    GROUP BY t.PeriCtct, t.BimeCtct, t.PeriInfo, t.CodiConc
+                    GROUP BY t.PeriCtct, t.BimeCtct
                     HAVING (SUM(IFNULL(t.DebeCtct, 0)) - SUM(IFNULL(t.CredCtct, 0))) > 0.01
                     ORDER BY t.PeriCtct DESC, t.BimeCtct ASC
                 `;

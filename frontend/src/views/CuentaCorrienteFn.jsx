@@ -54,6 +54,16 @@ const CuentaCorrienteFn = ({ user }) => {
         return parseFloat(val || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     };
 
+    const getEffectiveDate = (row) => {
+        const debe = parseFloat(row.DebeCtct || 0);
+        const isPayment = (debe === 0);
+        const dateField = isPayment ? (row.FechaPago || row.FechaPagoReal || row.FechPago || row.FeveCtct) : row.FeveCtct;
+        if (!dateField || dateField === '0001-01-01' || dateField.startsWith('0001-01-01')) {
+            return row.FeveCtct ? new Date(row.FeveCtct) : new Date(0);
+        }
+        return new Date(dateField);
+    };
+
     const getAuthHeaders = () => {
         const token = localStorage.getItem('nomade_token');
         return {
@@ -303,6 +313,47 @@ const CuentaCorrienteFn = ({ user }) => {
                 if (b.PeriCtct !== a.PeriCtct) return b.PeriCtct - a.PeriCtct;
                 return a.BimeCtct - b.BimeCtct;
             });
+        } else {
+            // Sort details deterministically
+            displayData = [...legacyData].sort((a, b) => {
+                if (b.PeriCtct !== a.PeriCtct) return b.PeriCtct - a.PeriCtct;
+                if (a.BimeCtct !== b.BimeCtct) return a.BimeCtct - b.BimeCtct;
+                
+                // Primero el Debe (débito) y después el Haber (créditos/pagos)
+                const aDebe = parseFloat(a.DebeCtct || 0);
+                const bDebe = parseFloat(b.DebeCtct || 0);
+                const isADebit = aDebe > 0;
+                const isBDebit = bDebe > 0;
+                if (isADebit && !isBDebit) return -1;
+                if (!isADebit && isBDebit) return 1;
+                
+                const dateA = getEffectiveDate(a).getTime();
+                const dateB = getEffectiveDate(b).getTime();
+                if (dateA !== dateB) return dateA - dateB;
+                
+                if (aDebe !== bDebe) return bDebe - aDebe;
+                
+                const aCred = parseFloat(a.CredCtct || 0);
+                const bCred = parseFloat(b.CredCtct || 0);
+                if (aCred !== bCred) return bCred - aCred;
+                
+                const aDeta = (a.DetaCtct || a.DetailName || '').toString();
+                const bDeta = (b.DetaCtct || b.DetailName || '').toString();
+                return aDeta.localeCompare(bDeta);
+            });
+        }
+
+        // Calculate chronological running balance from bottom to top
+        let runningBal = 0;
+        for (let i = displayData.length - 1; i >= 0; i--) {
+            const row = displayData[i];
+            const rowDebe = parseFloat(row.DebeCtct || 0);
+            const rowReca = isMunic ? 0 : parseFloat(row.RecaCtct || 0);
+            const rowCred = parseFloat(row.CredCtct || 0);
+            const rowHaber = isMunic ? (rowDebe === 0 ? rowCred : Math.min(rowDebe, rowCred)) : rowCred;
+            
+            runningBal += rowDebe + rowReca - rowHaber;
+            row.cumulativeBalance = runningBal;
         }
 
         const rows = [];
@@ -325,8 +376,8 @@ const CuentaCorrienteFn = ({ user }) => {
             
             periodTotals.debe += rowDebe;
             periodTotals.reca += (isMunic ? 0 : parseFloat(row.RecaCtct || 0));
-            periodTotals.haber += (isMunic ? Math.min(rowDebe, rowCred) : rowCred);
-            periodTotals.total += (isMunic ? Math.max(0, rowDebe - rowCred) : parseFloat(row.TotaCtct || 0));
+            periodTotals.haber += (isMunic ? (rowDebe === 0 ? rowCred : Math.min(rowDebe, rowCred)) : rowCred);
+            periodTotals.total += (isMunic ? (rowDebe - (rowDebe === 0 ? rowCred : Math.min(rowDebe, rowCred))) : parseFloat(row.TotaCtct || 0));
 
             // Use DataRow normally, which now handles aggregated "Varios Conceptos" objects
             rows.push(<DataRow key={idx} row={row} />);
@@ -560,7 +611,14 @@ const CuentaCorrienteFn = ({ user }) => {
                     </div>
                 )}
             </td>
-            <td style={{ whiteSpace: 'nowrap' }}>{new Date(row.FeveCtct).toLocaleDateString()}</td>
+            <td style={{ whiteSpace: 'nowrap' }}>
+                {(() => {
+                    const debe = parseFloat(row.DebeCtct || 0);
+                    const displayDateVal = (debe === 0 && row.FechaPago && row.FechaPago !== '0001-01-01' && !row.FechaPago.startsWith('0001-01-01')) ? row.FechaPago : row.FeveCtct;
+                    return displayDateVal ? new Date(displayDateVal).toLocaleDateString() : '-';
+                })()}
+            </td>
+            <td style={{ fontSize: '0.8rem', opacity: 0.9 }}>{row.DetaCtct}</td>
             <td style={{ textAlign: 'center' }}>
                 {row.hasApremio ? (
                     <span title={`Apremio: ${row.NumeApre || 'Sí'}`} style={{ cursor: 'help' }}>
@@ -578,10 +636,7 @@ const CuentaCorrienteFn = ({ user }) => {
             <td style={{ color: '#ef4444' }}>${formatCurrency(row.DebeCtct)}</td>
             {!isMunic && <td style={{ color: '#f59e0b' }}>${formatCurrency(row.RecaCtct)}</td>}
             <td style={{ color: '#10b981' }}>
-                ${formatCurrency(isMunic ? Math.min(parseFloat(row.DebeCtct || 0), parseFloat(row.CredCtct || 0)) : row.CredCtct)}
-            </td>
-            <td style={{ fontWeight: 'bold' }}>
-                ${formatCurrency(isMunic ? Math.max(0, parseFloat(row.DebeCtct || 0) - parseFloat(row.CredCtct || 0)) : row.TotaCtct)}
+                ${formatCurrency(isMunic ? (parseFloat(row.DebeCtct || 0) === 0 ? parseFloat(row.CredCtct || 0) : Math.min(parseFloat(row.DebeCtct || 0), parseFloat(row.CredCtct || 0))) : row.CredCtct)}
             </td>
             <td>
                 {(() => {
@@ -624,15 +679,12 @@ const CuentaCorrienteFn = ({ user }) => {
 
     const SubtotalRow = ({ period, bime, totals }) => (
         <tr className="subtotal-row">
-            <td colSpan={4} style={{ textAlign: 'right', fontWeight: 'bold', color: 'var(--primary)' }}>
+            <td colSpan={5} style={{ textAlign: 'right', fontWeight: 'bold', color: 'var(--primary)' }}>
                 Subtotal {period}/{bime}:
             </td>
             <td style={{ color: '#ef4444', fontWeight: 'bold' }}>${formatCurrency(totals.debe)}</td>
             {!isMunic && <td style={{ color: '#f59e0b', fontWeight: 'bold' }}>${formatCurrency(totals.reca)}</td>}
             <td style={{ color: '#10b981', fontWeight: 'bold' }}>${formatCurrency(totals.haber)}</td>
-            <td style={{ borderTop: '1px solid var(--primary)', background: 'rgba(37, 99, 235, 0.1)' }}>
-                ${formatCurrency(isMunic ? (totals.debe - totals.haber) : totals.total)}
-            </td>
             <td></td>
         </tr>
     );
@@ -695,7 +747,7 @@ const CuentaCorrienteFn = ({ user }) => {
         try {
             let allLegacyData = [];
             for (const group of queryGroups) {
-                let legacyUrl = `${API_BASE_URL}/api/ctacte-fn/legacy/search?officeId=${group.office}&type=optimized&onlyDebt=${onlyDebt}&toDate=${toDate}&filterYear=${filterYear}&filterMonth=${filterMonth}`;
+                let legacyUrl = `${API_BASE_URL}/api/ctacte-fn/legacy/search?officeId=${group.office}&type=optimized&onlyDebt=${onlyDebt}&toDate=${toDate}&filterYear=${filterYear}&filterMonth=${filterMonth}&showQuotaDetail=${isDetailRequested}`;
                 group.accounts.forEach(acc => {
                     legacyUrl += `&account=${acc}`;
                 });
@@ -777,7 +829,74 @@ const CuentaCorrienteFn = ({ user }) => {
                         }
                         return acc;
                     }, {});
-                    displayData = Object.values(grouped);
+                } else if (!isLegacy) {
+                    // Split PostgreSQL paid rows for PDF consistency (only if it has both debit and credit)
+                    const splitData = [];
+                    srcData.forEach(row => {
+                        const rowDebe = parseFloat(row.DebeCtct || 0);
+                        const rowCred = parseFloat(row.CredCtct || 0);
+                        if (rowDebe > 0.01 && rowCred > 0.01) {
+                            splitData.push({
+                                ...row,
+                                CredCtct: 0,
+                                TotaCtct: rowDebe,
+                                NumeAcpa: null,
+                                FechaPago: null
+                            });
+                            splitData.push({
+                                ...row,
+                                DebeCtct: 0,
+                                RecaCtct: 0,
+                                TotaCtct: 0
+                            });
+                        } else {
+                            splitData.push(row);
+                        }
+                    });
+                    displayData = splitData;
+                }
+
+                // Sort details deterministically if not grouped
+                if (!isGrouped || showQuotaDetail) {
+                    displayData = [...displayData].sort((a, b) => {
+                        if (b.PeriCtct !== a.PeriCtct) return b.PeriCtct - a.PeriCtct;
+                        if (a.BimeCtct !== b.BimeCtct) return a.BimeCtct - b.BimeCtct;
+                        
+                        // Primero el Debe (débito) y después el Haber (créditos/pagos)
+                        const aDebe = parseFloat(a.DebeCtct || 0);
+                        const bDebe = parseFloat(b.DebeCtct || 0);
+                        const isADebit = aDebe > 0;
+                        const isBDebit = bDebe > 0;
+                        if (isADebit && !isBDebit) return -1;
+                        if (!isADebit && isBDebit) return 1;
+                        
+                        const dateA = getEffectiveDate(a).getTime();
+                        const dateB = getEffectiveDate(b).getTime();
+                        if (dateA !== dateB) return dateA - dateB;
+                        
+                        if (aDebe !== bDebe) return bDebe - aDebe;
+                        
+                        const aCred = parseFloat(a.CredCtct || 0);
+                        const bCred = parseFloat(b.CredCtct || 0);
+                        if (aCred !== bCred) return bCred - aCred;
+                        
+                        const aDeta = (a.DetaCtct || a.DetailName || '').toString();
+                        const bDeta = (b.DetaCtct || b.DetailName || '').toString();
+                        return aDeta.localeCompare(bDeta);
+                    });
+                }
+
+                // Calculate chronological running balance from bottom to top
+                let runningBal = 0;
+                for (let i = displayData.length - 1; i >= 0; i--) {
+                    const row = displayData[i];
+                    const pDebe = parseFloat(row.DebeCtct || 0);
+                    const pReca = isMunic ? 0 : parseFloat(row.RecaCtct || 0);
+                    const pHaberOriginal = parseFloat(row.CredCtct || 0);
+                    const pHaber = isMunic ? (pDebe === 0 ? pHaberOriginal : Math.min(pDebe, pHaberOriginal)) : pHaberOriginal;
+                    
+                    runningBal += pDebe + pReca - pHaber;
+                    row.cumulativeBalance = runningBal;
                 }
 
                 // Subtotal Logic injected as fake rows
@@ -808,8 +927,8 @@ const CuentaCorrienteFn = ({ user }) => {
                     const pReca = parseFloat(row.RecaCtct || 0);
                     const pHaberOriginal = parseFloat(row.CredCtct || 0);
                     
-                    const pHaber = isMunic ? Math.min(pDebe, pHaberOriginal) : pHaberOriginal;
-                    const pTotal = isMunic ? Math.max(0, pDebe - pHaber) : parseFloat(row.TotaCtct || 0);
+                    const pHaber = isMunic ? (pDebe === 0 ? pHaberOriginal : Math.min(pDebe, pHaberOriginal)) : pHaberOriginal;
+                    const pTotal = isMunic ? (pDebe - (pDebe === 0 ? pHaberOriginal : Math.min(pDebe, pHaberOriginal))) : parseFloat(row.TotaCtct || 0);
 
                     subTotals.debe += pDebe;
                     subTotals.reca += (isMunic ? 0 : pReca);
@@ -821,7 +940,15 @@ const CuentaCorrienteFn = ({ user }) => {
                     grandTotals.haber += pHaber;
                     grandTotals.total += pTotal;
 
-                    exportRows.push(row);
+                     const exportRow = {
+                         ...row,
+                         CredCtct: pHaber,
+                         TotaCtct: row.cumulativeBalance
+                     };
+                     if (pDebe === 0 && row.FechaPago && row.FechaPago !== '0001-01-01' && !row.FechaPago.startsWith('0001-01-01')) {
+                         exportRow.FeveCtct = row.FechaPago;
+                     }
+                     exportRows.push(exportRow);
                 });
 
                 if (showSubtotals && currentPeriod !== null) {
@@ -893,29 +1020,26 @@ const CuentaCorrienteFn = ({ user }) => {
                         { content: r.label, colSpan: 3, styles: { fontStyle: 'bold', halign: 'right', fillColor: [50, 50, 50], textColor: [255, 255, 255], fontSize: 9 } },
                         { content: `$${r.DebeCtct.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { fontStyle: 'bold', fillColor: [50, 50, 50], textColor: [255, 200, 200] } },
                         ...(isMunic ? [] : [{ content: `$${r.RecaCtct.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { fontStyle: 'bold', fillColor: [50, 50, 50], textColor: [253, 230, 138] } }]),
-                        { content: `$${r.CredCtct.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { fontStyle: 'bold', fillColor: [50, 50, 50], textColor: [167, 243, 208] } },
-                        { content: `$${r.TotaCtct.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { fontStyle: 'bold', fillColor: [30, 30, 30], textColor: [255, 255, 255] } }
+                        { content: `$${r.CredCtct.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { fontStyle: 'bold', fillColor: [50, 50, 50], textColor: [167, 243, 208] } }
                     ] : r.isSubtotal ? [
                         { content: r.label, colSpan: 3, styles: { fontStyle: 'bold', halign: 'right', textColor: legacyColor } },
                         { content: `$${r.DebeCtct.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { fontStyle: 'bold', textColor: [239, 68, 68] } },
                         ...(isMunic ? [] : [{ content: `$${r.RecaCtct.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { fontStyle: 'bold', textColor: [245, 158, 11] } }]),
-                        { content: `$${r.CredCtct.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { fontStyle: 'bold', textColor: [16, 185, 129] } },
-                        { content: `$${r.TotaCtct.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { fontStyle: 'bold', fillColor: [240, 253, 244] } }
+                        { content: `$${r.CredCtct.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { fontStyle: 'bold', textColor: [16, 185, 129] } }
                     ] : [
                         `${r.PeriCtct || ''}/${r.BimeCtct || ''}`,
                         r.FeveCtct ? new Date(r.FeveCtct).toLocaleDateString() : '-',
                         (r.DetaCtct || '').substring(0, 35),
                         `$${parseFloat(r.DebeCtct || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
                         ...(isMunic ? [] : [`$${parseFloat(r.RecaCtct || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`]),
-                        `$${parseFloat(r.CredCtct || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-                        `$${parseFloat(r.TotaCtct || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+                        `$${parseFloat(r.CredCtct || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
                     ]);
 
                 autoTable(doc, {
                     startY: currentY,
                     head: [isMunic 
-                        ? ['Pe/C', 'Vencimiento', 'Detalle', 'Debe', 'Haber', 'Total']
-                        : ['Pe/C', 'Vencimiento', 'Detalle', 'Debe', 'Recargo', 'Haber', 'Total']],
+                        ? ['Pe/C', 'Vencimiento', 'Detalle', 'Debe', 'Haber']
+                        : ['Pe/C', 'Vencimiento', 'Detalle', 'Debe', 'Recargo', 'Haber']],
                     body: legacyRows,
                     theme: 'grid',
                     headStyles: { fillColor: legacyColor, fontSize: 8 },
@@ -944,29 +1068,26 @@ const CuentaCorrienteFn = ({ user }) => {
                         { content: r.label, colSpan: 3, styles: { fontStyle: 'bold', halign: 'right', fillColor: [50, 50, 50], textColor: [255, 255, 255], fontSize: 9 } },
                         { content: `$${r.DebeCtct.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { fontStyle: 'bold', fillColor: [50, 50, 50], textColor: [255, 200, 200] } },
                         ...(isMunic ? [] : [{ content: `$${r.RecaCtct.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { fontStyle: 'bold', fillColor: [50, 50, 50], textColor: [253, 230, 138] } }]),
-                        { content: `$${r.CredCtct.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { fontStyle: 'bold', fillColor: [50, 50, 50], textColor: [167, 243, 208] } },
-                        { content: `$${r.TotaCtct.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { fontStyle: 'bold', fillColor: [30, 30, 30], textColor: [255, 255, 255] } }
+                        { content: `$${r.CredCtct.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { fontStyle: 'bold', fillColor: [50, 50, 50], textColor: [167, 243, 208] } }
                     ] : r.isSubtotal ? [
                         { content: r.label, colSpan: 3, styles: { fontStyle: 'bold', halign: 'right', textColor: mainColor } },
                         { content: `$${r.DebeCtct.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { fontStyle: 'bold', textColor: [239, 68, 68] } },
                         ...(isMunic ? [] : [{ content: `$${r.RecaCtct.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { fontStyle: 'bold', textColor: [245, 158, 11] } }]),
-                        { content: `$${r.CredCtct.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { fontStyle: 'bold', textColor: [16, 185, 129] } },
-                        { content: `$${r.TotaCtct.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { fontStyle: 'bold', fillColor: [239, 246, 255] } }
+                        { content: `$${r.CredCtct.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { fontStyle: 'bold', textColor: [16, 185, 129] } }
                     ] : [
                         `${r.PeriCtct || ''}/${r.BimeCtct || ''}`,
                         r.FeveCtct ? new Date(r.FeveCtct).toLocaleDateString() : '-',
                         `${r.DetaCtct || r.DetailName || r.TipoTributo || ''}`,
                         `$${parseFloat(r.DebeCtct || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
                         ...(isMunic ? [] : [`$${parseFloat(r.RecaCtct || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`]),
-                        `$${parseFloat(r.CredCtct || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-                        `$${parseFloat(r.TotaCtct || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+                        `$${parseFloat(r.CredCtct || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
                     ]);
 
                 autoTable(doc, {
                     startY: currentY,
                     head: [isMunic 
-                        ? ['Pe/C', 'Vencimiento', 'Concepto', 'Debe', 'Haber', 'Total']
-                        : ['Pe/C', 'Vencimiento', 'Concepto', 'Debe', 'Interés', 'Haber', 'Total']],
+                        ? ['Pe/C', 'Vencimiento', 'Concepto', 'Debe', 'Haber']
+                        : ['Pe/C', 'Vencimiento', 'Concepto', 'Debe', 'Interés', 'Haber']],
                     body: pgRows,
                     theme: 'grid',
                     headStyles: { fillColor: mainColor, fontSize: 8 },
@@ -1056,6 +1177,70 @@ const CuentaCorrienteFn = ({ user }) => {
                 if (b.PeriCtct !== a.PeriCtct) return b.PeriCtct - a.PeriCtct;
                 return a.BimeCtct - b.BimeCtct;
             });
+        } else {
+            // If not grouped, split paid rows into a debit row and a credit (payment) row (only if both are positive)
+            const splitData = [];
+            postgresData.forEach(row => {
+                const rowDebe = parseFloat(row.DebeCtct || 0);
+                const rowCred = parseFloat(row.CredCtct || 0);
+
+                if (rowDebe > 0.01 && rowCred > 0.01) {
+                    splitData.push({
+                        ...row,
+                        CredCtct: 0,
+                        TotaCtct: rowDebe,
+                        NumeAcpa: null,
+                        FechaPago: null
+                    });
+                    splitData.push({
+                        ...row,
+                        DebeCtct: 0,
+                        RecaCtct: 0,
+                        TotaCtct: 0
+                    });
+                } else {
+                    splitData.push(row);
+                }
+            });
+            displayData = splitData.sort((a, b) => {
+                if (b.PeriCtct !== a.PeriCtct) return b.PeriCtct - a.PeriCtct;
+                if (a.BimeCtct !== b.BimeCtct) return a.BimeCtct - b.BimeCtct;
+                
+                // Primero el Debe (débito) y después el Haber (créditos/pagos)
+                const aDebe = parseFloat(a.DebeCtct || 0);
+                const bDebe = parseFloat(b.DebeCtct || 0);
+                const isADebit = aDebe > 0;
+                const isBDebit = bDebe > 0;
+                if (isADebit && !isBDebit) return -1;
+                if (!isADebit && isBDebit) return 1;
+                
+                const dateA = getEffectiveDate(a).getTime();
+                const dateB = getEffectiveDate(b).getTime();
+                if (dateA !== dateB) return dateA - dateB;
+                
+                if (aDebe !== bDebe) return bDebe - aDebe;
+                
+                const aCred = parseFloat(a.CredCtct || 0);
+                const bCred = parseFloat(b.CredCtct || 0);
+                if (aCred !== bCred) return bCred - aCred;
+                
+                const aDeta = (a.DetaCtct || a.DetailName || '').toString();
+                const bDeta = (b.DetaCtct || b.DetailName || '').toString();
+                return aDeta.localeCompare(bDeta);
+            });
+        }
+
+        // Calculate chronological running balance from bottom to top
+        let pgRunningBalance = 0;
+        for (let i = displayData.length - 1; i >= 0; i--) {
+            const row = displayData[i];
+            const rowDebe = parseFloat(row.DebeCtct || 0);
+            const rowReca = isMunic ? 0 : parseFloat(row.RecaCtct || 0);
+            const rowCred = parseFloat(row.CredCtct || 0);
+            const rowHaber = isMunic ? (rowDebe === 0 ? rowCred : Math.min(rowDebe, rowCred)) : rowCred;
+            
+            pgRunningBalance += rowDebe + rowReca - rowHaber;
+            row.cumulativeBalance = pgRunningBalance;
         }
 
         const rows = [];
@@ -1102,8 +1287,8 @@ const CuentaCorrienteFn = ({ user }) => {
 
             periodTotals.debe += rowDebe;
             periodTotals.reca += (isMunic ? 0 : parseFloat(row.RecaCtct || 0));
-            periodTotals.haber += (isMunic ? Math.min(rowDebe, rowCred) : rowCred);
-            periodTotals.total += (isMunic ? Math.max(0, rowDebe - rowCred) : parseFloat(row.TotaCtct || 0));
+            periodTotals.haber += (isMunic ? (rowDebe === 0 ? rowCred : Math.min(rowDebe, rowCred)) : rowCred);
+            periodTotals.total += (isMunic ? (rowDebe - (rowDebe === 0 ? rowCred : Math.min(rowDebe, rowCred))) : parseFloat(row.TotaCtct || 0));
 
             // Comparison logic against appropriately grouped legacy data
             const legacyMatch = compareLegacyData.find(l => l.PeriCtct === row.PeriCtct && l.BimeCtct === row.BimeCtct);
@@ -1120,7 +1305,14 @@ const CuentaCorrienteFn = ({ user }) => {
                             </span>
                         </div>
                     </td>
-                    <td style={{ whiteSpace: 'nowrap' }}>{row.FeveCtct ? new Date(row.FeveCtct).toLocaleDateString() : (row.ctactefchalta ? new Date(row.ctactefchalta).toLocaleDateString() : '-')}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                        {(() => {
+                            const debe = parseFloat(row.DebeCtct || 0);
+                            const displayDateVal = (debe === 0 && row.FechaPago && row.FechaPago !== '0001-01-01' && !row.FechaPago.startsWith('0001-01-01')) ? row.FechaPago : row.FeveCtct;
+                            return displayDateVal ? new Date(displayDateVal).toLocaleDateString() : '-';
+                        })()}
+                    </td>
+                    <td style={{ fontSize: '0.8rem', opacity: 0.9 }}>{row.DetaCtct || row.DetailName}</td>
                     <td style={{ textAlign: 'center' }}>
                         {row.hasApremio ? (
                             <span title={`Apremio: ${row.NumeApre || row.numeapre || 'Sí'}`} style={{ cursor: 'help' }}>
@@ -1144,11 +1336,9 @@ const CuentaCorrienteFn = ({ user }) => {
                         </td>
                     )}
                     <td style={{ color: '#10b981' }}>
-                        ${formatCurrency(isMunic ? Math.min(parseFloat(row.DebeCtct || 0), parseFloat(row.CredCtct || 0)) : row.CredCtct)}
+                        ${formatCurrency(isMunic ? (parseFloat(row.DebeCtct || 0) === 0 ? parseFloat(row.CredCtct || 0) : Math.min(parseFloat(row.DebeCtct || 0), parseFloat(row.CredCtct || 0))) : row.CredCtct)}
                     </td>
-                    <td style={{ fontWeight: 'bold' }}>
-                        ${formatCurrency(isMunic ? Math.max(0, parseFloat(row.DebeCtct || 0) - parseFloat(row.CredCtct || 0)) : row.TotaCtct)}
-                    </td>
+
                     <td>
                         <div 
                             className={`status-pill ${row.NumeAcpa && row.NumeAcpa != '0' ? 'P' : 'D'}`}
@@ -1631,12 +1821,12 @@ const CuentaCorrienteFn = ({ user }) => {
                                     <tr>
                                         <th>Periodo</th>
                                         <th>Fecha Venc</th>
+                                        <th>Detalle</th>
                                         <th>Apr.</th>
                                         <th>Plan</th>
                                         <th>Debe</th>
                                         {!isMunic && <th>Recargo</th>}
                                         <th>Haber</th>
-                                        <th>Total</th>
                                         <th>Estado/Ref</th>
                                     </tr>
                                 </thead>
@@ -1645,7 +1835,7 @@ const CuentaCorrienteFn = ({ user }) => {
                                 </tbody>
                                 <tfoot style={{ background: 'rgba(255,255,255,0.05)', fontWeight: 'bold' }}>
                                     <tr>
-                                        <td colSpan={4} style={{ textAlign: 'right' }}>TOTALES GENERALES:</td>
+                                        <td colSpan={5} style={{ textAlign: 'right' }}>TOTALES GENERALES:</td>
                                         <td style={{ color: '#ef4444' }}>
                                             ${formatCurrency(legacyData.reduce((acc, row) => acc + parseFloat(row.DebeCtct || 0), 0))}
                                         </td>
@@ -1658,15 +1848,7 @@ const CuentaCorrienteFn = ({ user }) => {
                                             ${formatCurrency(legacyData.reduce((acc, row) => {
                                                 const d = parseFloat(row.DebeCtct || 0);
                                                 const h = parseFloat(row.CredCtct || 0);
-                                                return acc + (isMunic ? Math.min(d, h) : h);
-                                            }, 0))}
-                                        </td>
-                                        <td style={{ fontSize: '1.1rem', borderTop: '2px solid var(--primary)' }}>
-                                            ${formatCurrency(legacyData.reduce((acc, row) => {
-                                                const d = parseFloat(row.DebeCtct || 0);
-                                                const h = parseFloat(row.CredCtct || 0);
-                                                const r = parseFloat(row.RecaCtct || 0);
-                                                return acc + (isMunic ? Math.max(0, d - h) : (d + r - h));
+                                                return acc + (isMunic ? (d === 0 ? h : Math.min(d, h)) : h);
                                             }, 0))}
                                         </td>
                                         <td></td>
@@ -1702,12 +1884,12 @@ const CuentaCorrienteFn = ({ user }) => {
                                     <tr>
                                         <th>Periodo</th>
                                         <th>Vencimiento</th>
+                                        <th>Concepto</th>
                                         <th>Apr.</th>
                                         <th>Plan</th>
                                         <th>Debe</th>
                                         {!isMunic && <th>Interés</th>}
                                         <th>Haber</th>
-                                        <th>Total</th>
                                         <th>Estado/Ref</th>
                                     </tr>
                                 </thead>
@@ -1716,7 +1898,7 @@ const CuentaCorrienteFn = ({ user }) => {
                                 </tbody>
                                 <tfoot style={{ background: 'rgba(255,255,255,0.05)', fontWeight: 'bold' }}>
                                     <tr>
-                                        <td colSpan={4} style={{ textAlign: 'right' }}>TOTALES POSTGRES:</td>
+                                        <td colSpan={5} style={{ textAlign: 'right' }}>TOTALES POSTGRES:</td>
                                         <td style={{ color: '#ef4444' }}>
                                             ${formatCurrency(postgresData.reduce((acc, row) => acc + parseFloat(row.DebeCtct || 0), 0))}
                                         </td>
@@ -1729,15 +1911,7 @@ const CuentaCorrienteFn = ({ user }) => {
                                             ${formatCurrency(postgresData.reduce((acc, row) => {
                                                 const d = parseFloat(row.DebeCtct || 0);
                                                 const h = parseFloat(row.CredCtct || 0);
-                                                return acc + (isMunic ? Math.min(d, h) : h);
-                                            }, 0))}
-                                        </td>
-                                        <td style={{ fontSize: '1.1rem', borderTop: '2px solid var(--primary)' }}>
-                                            ${formatCurrency(postgresData.reduce((acc, row) => {
-                                                const d = parseFloat(row.DebeCtct || 0);
-                                                const h = parseFloat(row.CredCtct || 0);
-                                                const r = parseFloat(row.RecaCtct || 0);
-                                                return acc + (isMunic ? Math.max(0, d - h) : (d + r - h));
+                                                return acc + (isMunic ? (d === 0 ? h : Math.min(d, h)) : h);
                                             }, 0))}
                                         </td>
                                         <td></td>

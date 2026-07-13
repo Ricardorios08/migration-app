@@ -1,0 +1,213 @@
+package ar.gov.irrigacion.service.impl;
+
+// package com.example.service.impl;
+
+import ar.gov.irrigacion.domain.*;
+import ar.gov.irrigacion.service.PdfParserService;
+import ar.gov.irrigacion.service.utils.MesUtils;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import technology.tabula.ObjectExtractor;
+import technology.tabula.Page;
+import technology.tabula.RectangularTextContainer;
+import technology.tabula.Table;
+import technology.tabula.extractors.SpreadsheetExtractionAlgorithm;
+
+import java.io.File;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.Month;
+import java.time.format.DateTimeFormatter;
+import java.time.format.TextStyle;
+import java.util.*;
+import java.util.stream.Collectors;
+
+@Service
+@Transactional
+public class PdfParserServiceImpl implements PdfParserService {
+
+    @Value("${inspecciones-cauce-back.archivos}")
+    public String dirDestino;
+
+    @Override
+    public List<ExtractoBancario> parsear(ExtractoArchivo extractoArchivo) throws Exception {
+
+        File file = new File(dirDestino + File.separator + extractoArchivo.getArchivoPdf().getNombre());
+        try (PDDocument document = PDDocument.load(file)) {
+
+            ObjectExtractor extractor = new ObjectExtractor(document);
+            SpreadsheetExtractionAlgorithm sea = new SpreadsheetExtractionAlgorithm();
+
+            List<ExtractoBancario> resultado = new ArrayList<>();
+            List<ExtractoBancario> fueraDeMes = new ArrayList<>();
+
+            Month mesEsperado = MesUtils.fromSpanish(extractoArchivo.getNombreMes());
+
+            int anioEsperado =
+                extractoArchivo.getPeriodoPresupuestarioOrganismo()
+                    .getPeriodoPresupuestario().getPeriodo();
+
+            for (int page = 1; page <= document.getNumberOfPages(); page++) {
+
+                Page p = extractor.extract(page);
+                List<Table> tables = sea.extract(p);
+
+                for (Table t : tables) {
+
+                    for (List<RectangularTextContainer> row : t.getRows()) {
+
+                        List<String> cols = row.stream()
+                            .map(RectangularTextContainer::getText)
+                            .map(String::trim)
+                            .filter(s -> !s.isBlank())
+                            .collect(Collectors.toList());
+
+                        System.out.println("DEBUG COLS: " + cols);
+
+                        if (esFilaSaldo(cols)) {
+                            continue;
+                        }
+
+                        if (cols.size() < 2) continue;
+
+                        if (cols.stream().noneMatch(c -> c.matches("\\d{2}/\\d{2}/\\d{4}"))) {
+                            continue;
+                        }
+
+                        LocalDate fecha = detectFecha(cols);
+                        if (fecha == null) continue;
+
+                        if (esFilaEncabezado(cols)) continue;
+
+                        // detectar comprobante primero
+                        Long comprobante = detectComprobante(cols);
+
+                        // detectar montos EXCLUYENDO comprobante
+                        BigDecimal debe = detectDebe(cols, comprobante);
+                        BigDecimal haber = detectHaber(cols, comprobante);
+
+                        if (debe == null && haber == null) continue;
+
+                        String detalle = buildDetallePdf(cols, fecha, comprobante);
+
+                        // construir UNA sola vez
+                        ExtractoBancario eb = new ExtractoBancario();
+                        eb.setFechaMovimiento(fecha);
+                        eb.setNumeroComprobante(comprobante);
+                        eb.setDetalle(detalle);
+                        eb.setDebe(debe == null ? BigDecimal.ZERO : debe);
+                        eb.setHaber(haber == null ? BigDecimal.ZERO : haber);
+                        eb.setPeriodoPresupuestarioOrganismo(
+                            extractoArchivo.getPeriodoPresupuestarioOrganismo()
+                        );
+                        eb.setCuentaBancaria(
+                            extractoArchivo.getCuentaBancaria()
+                        );
+
+                        // validar mes y año
+                        if (fecha.getMonth() != mesEsperado || fecha.getYear() != anioEsperado) {
+                            fueraDeMes.add(eb);
+                            continue;
+                        }
+
+                        resultado.add(eb);
+                    }
+                }
+            }
+
+            if (!fueraDeMes.isEmpty()) {
+                System.out.println("⚠ Movimientos fuera del período: " + fueraDeMes.size());
+            }
+
+            return resultado;
+        }
+    }
+
+
+    // Detectores adaptativos
+    private LocalDate detectFecha(List<String> cols) {
+        return cols.stream()
+            .filter(c -> c.matches("\\d{2}/\\d{2}/\\d{4}"))
+            .findFirst()
+            .map(c -> LocalDate.parse(c, DateTimeFormatter.ofPattern("dd/MM/yyyy")))
+            .orElse(null);
+    }
+
+    private BigDecimal detectDebe(List<String> cols, Long comprobante) {
+        for (String c : cols) {
+            if (esComprobante(c, comprobante)) continue;
+            if (c.startsWith("-") && esMonto(c)) {
+                return parseMonto(c).abs();
+            }
+        }
+        return null;
+    }
+
+    private BigDecimal detectHaber(List<String> cols, Long comprobante) {
+        for (String c : cols) {
+            if (esComprobante(c, comprobante)) continue;
+            if (!c.startsWith("-") && esMonto(c)) {
+                return parseMonto(c);
+            }
+        }
+        return null;
+    }
+
+    private boolean esComprobante(String c, Long comprobante) {
+        return comprobante != null && c.replaceAll("[^0-9]", "")
+            .equals(comprobante.toString());
+    }
+
+    private Long detectComprobante(List<String> cols) {
+        for (String c : cols) {
+            String clean = c.replaceAll("[^0-9]", "");
+            if (clean.isBlank()) continue;
+
+            // si NO tiene coma ni punto → candidato a comprobante
+            if (!c.contains(",") && !c.contains(".") && !c.contains("/") && !c.contains("-")) {
+                try {
+                    return Long.parseLong(clean);
+                } catch (Exception ignored) {
+                }
+            }
+        }
+        return null;
+    }
+
+    private BigDecimal parseMonto(String s) {
+        try {
+            return new BigDecimal(
+                s.replace(".", "").replace(",", ".")
+            );
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private boolean esMonto(String s) {
+        return s.matches(".*[.,]\\d{2}.*");
+    }
+
+    private boolean esFilaEncabezado(List<String> cols) {
+        String joined = String.join(" ", cols).toLowerCase();
+        return joined.contains("fecha")
+            && (joined.contains("importe") || joined.contains("debe"));
+    }
+
+    private String buildDetallePdf(List<String> cols, LocalDate fecha, Long comprobante) {
+        String fechaTxt = fecha.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+
+        return cols.stream()
+            .filter(c -> !c.contains(fechaTxt))
+            .filter(c -> comprobante == null || !c.contains(comprobante.toString()))
+            .filter(c -> !esMonto(c))
+            .collect(Collectors.joining(" - "));
+    }
+
+    private boolean esFilaSaldo(List<String> cols) {
+        String joined = String.join(" ", cols).toLowerCase();
+        return joined.contains("saldo al");
+    }
+}

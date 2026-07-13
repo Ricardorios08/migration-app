@@ -31,6 +31,7 @@ import CtacteModule from './views/CtacteModule';
 import AnalyticsExplorer from './views/AnalyticsExplorer';
 import ExplorerDashboard from './views/ExplorerDashboard';
 import MetabaseReports from './views/MetabaseReports';
+import ConversorBancario from './views/ConversorBancario';
 import { API_URL } from './config';
 
 function App() {
@@ -39,6 +40,14 @@ function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const [theme, setTheme] = useState(() => localStorage.getItem('nomade_theme') || 'dark');
+  const [originalRole, setOriginalRole] = useState(null);
+
+  // Apply theme class to body
+  useEffect(() => {
+    document.body.classList.toggle('theme-light', theme === 'light');
+    localStorage.setItem('nomade_theme', theme);
+  }, [theme]);
 
   useEffect(() => {
     const token = localStorage.getItem('nomade_token');
@@ -51,8 +60,11 @@ function App() {
         .then(res => {
           const userData = res.data.user;
           setUser(userData);
+          setOriginalRole(userData.rol);
           if (userData.rol === 'municipalidad') {
             setView('ctacte_fn');
+          } else if (userData.rol === 'conversor') {
+            setView('conversor');
           }
         })
         .catch(err => {
@@ -69,8 +81,11 @@ function App() {
 
   const handleLogin = (userData) => {
     setUser(userData);
+    setOriginalRole(userData.rol);
     if (userData.rol === 'municipalidad') {
       setView('ctacte_fn');
+    } else if (userData.rol === 'conversor') {
+      setView('conversor');
     } else {
       setView('dashboard');
     }
@@ -81,7 +96,20 @@ function App() {
     localStorage.removeItem('nomade_user');
     delete axios.defaults.headers.common['Authorization'];
     setUser(null);
+    setOriginalRole(null);
     setView('dashboard');
+  };
+
+  const handleRoleChange = (newRol) => {
+    setUser(prev => ({ ...prev, rol: newRol }));
+    // Navigate to default view for that role
+    if (newRol === 'municipalidad') setView('ctacte_fn');
+    else if (newRol === 'conversor') setView('conversor');
+    else setView('dashboard');
+  };
+
+  const handleThemeToggle = () => {
+    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   };
 
   if (checkingAuth) {
@@ -105,7 +133,15 @@ function App() {
         onLogout={handleLogout}
       />
       <main className="main-content">
-        <Header user={user} onMenuToggle={() => setMobileMenuOpen(!mobileMenuOpen)} />
+        <Header
+          user={user}
+          onMenuToggle={() => setMobileMenuOpen(!mobileMenuOpen)}
+          onLogout={handleLogout}
+          theme={theme}
+          onThemeToggle={handleThemeToggle}
+          onRoleChange={handleRoleChange}
+          originalRole={originalRole}
+        />
         <div className="body-content-wrapper">
           {view === 'audit_module' ? (
             <AuditModule setView={setView} user={user} />
@@ -163,6 +199,8 @@ function App() {
             user?.rol === 'superadmin' ? <ComerciosExcel /> : <AuditDashboard />
           ) : view === 'metabase' ? (
             user?.rol === 'superadmin' ? <MetabaseReports user={user} /> : <AuditDashboard />
+          ) : view === 'conversor' ? (
+            (user?.rol === 'superadmin' || user?.rol === 'conversor' || user?.rol === 'municipalidad') ? <ConversorBancario /> : <AuditDashboard />
           ) : (
             <AuditDashboard />
           )}
