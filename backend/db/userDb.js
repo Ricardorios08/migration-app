@@ -1,78 +1,67 @@
 const path = require('path');
-const dotenv = require('dotenv');
-dotenv.config({ path: path.join(__dirname, '../.env') });
+const Database = require('better-sqlite3');
 
-const mariadb = require('mariadb');
+// SQLite database file lives next to this file
+const DB_PATH = path.join(__dirname, 'users.sqlite');
 
-// Use superadmin credentials if defined and different from the normal user,
-// otherwise fall back to the standard user (migracion) that has confirmed access.
-const superUser = process.env.SUPERADMIN_MARIA_USER || process.env.MARIA_USER;
-const superPass = process.env.SUPERADMIN_MARIA_PASS || process.env.MARIA_PASS;
-console.log('--------------------------------------------------');
-console.log('[DEBUG] .env Path Check:', path.join(__dirname, '../.env'));
-console.log('[DEBUG] SUPERADMIN_MARIA_USER exists:', !!process.env.SUPERADMIN_MARIA_USER);
-console.log('[DEBUG] MARIA_USER exists:', !!process.env.MARIA_USER);
-console.log('[USER DB] Admin pool user:', superUser);
-console.log('--------------------------------------------------');
+let db;
+try {
+    db = new Database(DB_PATH);
+    db.pragma('journal_mode = WAL'); // mejor concurrencia lectura/escritura
+    db.pragma('foreign_keys = ON');
 
-const poolConfig = {
-     host: process.env.MARIA_HOST, 
-     port: parseInt(process.env.MARIA_PORT || "3306"),
-     database: process.env.MARIA_USER_DB_NAME || 'user',  // BD separada para autenticacion
-     connectionLimit: 10,
-     connectTimeout: 10000,
-     acquireTimeout: 10000,
-     allowPublicKeyRetrieval: true
+    // Crear tabla si no existe (primera vez)
+    db.exec(`
+        CREATE TABLE IF NOT EXISTS user (
+            id      INTEGER PRIMARY KEY AUTOINCREMENT,
+            nombre_usuario TEXT NOT NULL UNIQUE,
+            password       TEXT NOT NULL,
+            rol            TEXT NOT NULL DEFAULT 'viewer'
+        )
+    `);
+
+    console.log('[USER DB] SQLite inicializado correctamente:', DB_PATH);
+} catch (err) {
+    console.error('[USER DB] Error al abrir SQLite:', err.message);
+    process.exit(1);
+}
+
+/**
+ * Ejecuta una consulta SQL sobre la tabla de usuarios (SQLite).
+ * La firma es compatible con la versión anterior basada en MariaDB:
+ *   query(sql, params, rol)  — rol se ignora (ya no hay pool por rol)
+ *
+ * Soporta SELECT, INSERT, UPDATE y DELETE.
+ * Devuelve siempre una Promise para mantener la interfaz async/await.
+ */
+const query = (sql, params = [], _rol = null) => {
+    return new Promise((resolve, reject) => {
+        try {
+            const normalized = sql.trim().toUpperCase();
+            if (normalized.startsWith('SELECT')) {
+                const rows = db.prepare(sql).all(params);
+                resolve(rows);
+            } else {
+                const info = db.prepare(sql).run(params);
+                resolve(info);
+            }
+        } catch (err) {
+            reject(err);
+        }
+    });
 };
 
-// Admin Pool — uses superadmin if available, falls back to normal user
-const adminPool = mariadb.createPool({
-    ...poolConfig,
-    user: superUser,
-    password: superPass
-});
-
-// User Pool — always uses the standard restricted user
-const userPool = mariadb.createPool({
-    ...poolConfig,
-    user: process.env.MARIA_USER,
-    password: process.env.MARIA_PASS
-});
-
-console.log('[USER DB] Initialized Dynamic Pools (Admin & User)');
-
-const getPoolByRole = (rol) => {
-    if (rol === 'admin' || rol === 'superadmin') {
-        return adminPool;
-    }
-    return userPool;
-};
+/**
+ * Alias con la firma (rol, sql, params) para compatibilidad con queryWithRole.
+ */
+const queryWithRole = (rol, sql, params = []) => query(sql, params, rol);
 
 module.exports = {
-    // Legacy query (uses userPool or adminPool based on env if no role provided)
-    query: async (sql, params, rol = null) => {
-        let conn;
-        try {
-            const pool = getPoolByRole(rol);
-            conn = await pool.getConnection();
-            const res = await conn.query(sql, params);
-            return res;
-        } finally {
-            if (conn) conn.release();
-        }
-    },
-    // New function to query with explicit role
-    queryWithRole: async (rol, sql, params) => {
-        let conn;
-        try {
-            const pool = getPoolByRole(rol);
-            conn = await pool.getConnection();
-            const res = await conn.query(sql, params);
-            return res;
-        } finally {
-            if (conn) conn.release();
-        }
-    },
-    adminPool,
-    userPool
+    query,
+    queryWithRole,
+    // Exponemos el objeto db por si algún módulo lo necesita directamente
+    db,
+    // Mantener aliases de pool para que no rompa si algo los importa
+    adminPool: null,
+    userPool: null,
 };

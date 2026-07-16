@@ -126,6 +126,7 @@ const UserManagement = () => {
                             >
                                 <option value="usuario">Usuario</option>
                                 <option value="municipalidad">Municipalidad</option>
+                                <option value="conversor">Conversor</option>
                                 <option value="admin">Administrador</option>
                                 <option value="superadmin">Super Administrador</option>
                             </select>
@@ -164,11 +165,12 @@ const UserManagement = () => {
                                             className="input-field" 
                                             value={editRol} 
                                             onChange={(e) => setEditRol(e.target.value)}
-                                            disabled={u.rol === 'municipalidad' || !isAdmin} 
-                                            style={{ padding: '0.2rem', minHeight: 'auto', opacity: (u.rol === 'municipalidad' || !isAdmin) ? 0.6 : 1 }}
+                                            disabled={!isAdmin} 
+                                            style={{ padding: '0.2rem', minHeight: 'auto', opacity: !isAdmin ? 0.6 : 1 }}
                                         >
                                             <option value="usuario">Usuario</option>
                                             <option value="municipalidad">Municipalidad</option>
+                                            <option value="conversor">Conversor</option>
                                             <option value="admin">Administrador</option>
                                             <option value="superadmin">Super Administrador</option>
                                         </select>
@@ -187,7 +189,7 @@ const UserManagement = () => {
                                                 onChange={(e) => setEditPassword(e.target.value)}
                                                 style={{ padding: '0.2rem', minHeight: 'auto', fontSize: '0.8rem' }}
                                             />
-                                            {u.rol === 'municipalidad' && <small style={{ display: 'block', fontSize: '0.65rem', color: 'orange' }}>Solo edición de contraseña permitida</small>}
+                                            {!isAdmin && <small style={{ display: 'block', fontSize: '0.65rem', color: 'orange' }}>Solo edición de contraseña permitida</small>}
                                         </div>
                                     )}
                                 </td>

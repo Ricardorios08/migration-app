@@ -43,7 +43,7 @@ function App() {
   const [theme, setTheme] = useState(() => localStorage.getItem('nomade_theme') || 'dark');
   const [originalRole, setOriginalRole] = useState(null);
 
-  // Apply theme class to body
+  // Aplica la clase al body y guarda en localStorage (fallback rápido)
   useEffect(() => {
     document.body.classList.toggle('theme-light', theme === 'light');
     localStorage.setItem('nomade_theme', theme);
@@ -61,6 +61,8 @@ function App() {
           const userData = res.data.user;
           setUser(userData);
           setOriginalRole(userData.rol);
+          // Aplicar tema guardado del usuario
+          if (userData.theme) setTheme(userData.theme);
           if (userData.rol === 'municipalidad') {
             setView('ctacte_fn');
           } else if (userData.rol === 'conversor') {
@@ -82,6 +84,8 @@ function App() {
   const handleLogin = (userData) => {
     setUser(userData);
     setOriginalRole(userData.rol);
+    // Aplicar tema guardado del usuario al hacer login
+    if (userData.theme) setTheme(userData.theme);
     if (userData.rol === 'municipalidad') {
       setView('ctacte_fn');
     } else if (userData.rol === 'conversor') {
@@ -109,7 +113,10 @@ function App() {
   };
 
   const handleThemeToggle = () => {
-    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+    const newTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(newTheme);
+    // Persistir en el servidor (best-effort, no bloquea)
+    axios.put(`${API_URL}/auth/theme`, { theme: newTheme }).catch(() => {});
   };
 
   if (checkingAuth) {

@@ -41,3 +41,8 @@ vpn/*.log
 # Config files
 vite.config.js
 frontend/vite.config.js
+
+# SQLite user database (contains password hashes — never commit)
+backend/db/users.sqlite
+backend/db/users.sqlite-shm
+backend/db/users.sqlite-wal

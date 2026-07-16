@@ -9,11 +9,6 @@ const { logAction } = require('../utils/logger');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
 
-// TEMPORAL: hasta hacer ALTER TABLE para agregar el rol 'conversor' en la DB
-// Si el nombre_usuario es 'conversor', forzar ese rol independientemente de la DB
-const HARDCODED_ROL_OVERRIDES = { conversor: 'conversor' };
-const resolveRol = (nombre_usuario, rolDB) =>
-  HARDCODED_ROL_OVERRIDES[nombre_usuario] ?? rolDB;
 const LOG_PATH = path.join(__dirname, '../logs/audit.log');
 const BACKUP_DIR = path.join(__dirname, '../logs/backups');
 
@@ -68,15 +63,13 @@ router.post('/login', async (req, res) => {
         const validPassword = await bcrypt.compare(password, user.password);
         if (!validPassword) return res.status(401).json({ error: 'Usuario o contraseña incorrectos' });
 
-        const rolFinal = resolveRol(user.nombre_usuario, user.rol);
-
         const token = jwt.sign(
-            { id: user.id, nombre_usuario: user.nombre_usuario, rol: rolFinal },
+            { id: user.id, nombre_usuario: user.nombre_usuario, rol: user.rol },
             JWT_SECRET,
             { expiresIn: '8h' }
         );
 
-        res.json({ token, user: { id: user.id, nombre_usuario: user.nombre_usuario, rol: rolFinal } });
+        res.json({ token, user: { id: user.id, nombre_usuario: user.nombre_usuario, rol: user.rol, theme: user.theme || 'dark' } });
         logAction(user.nombre_usuario, 'LOGIN', 'Inicio de sesión exitoso', req);
     } catch (err) {
         logAction(nombre_usuario || 'UNKNOWN', 'LOGIN_FAILED', `Error: ${err.message}`, req);
@@ -84,10 +77,14 @@ router.post('/login', async (req, res) => {
     }
 });
 
-router.get('/me', authenticateToken, (req, res) => {
-    // Aplicar override de rol también al verificar token existente
-    const rolFinal = resolveRol(req.user.nombre_usuario, req.user.rol);
-    res.json({ user: { ...req.user, rol: rolFinal } });
+router.get('/me', authenticateToken, async (req, res) => {
+    try {
+        const rows = await userDb.query('SELECT theme FROM user WHERE id = ?', [req.user.id]);
+        const theme = rows.length > 0 ? (rows[0].theme || 'dark') : 'dark';
+        res.json({ user: { ...req.user, theme } });
+    } catch {
+        res.json({ user: { ...req.user, theme: 'dark' } });
+    }
 });
 
 router.get('/users', authenticateToken, async (req, res) => {
@@ -217,5 +214,20 @@ router.put('/change-password', authenticateToken, async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
+// PUT /theme — guarda el tema del usuario autenticado
+router.put('/theme', authenticateToken, async (req, res) => {
+    const { theme } = req.body;
+    if (theme !== 'dark' && theme !== 'light') {
+        return res.status(400).json({ error: 'Tema inválido. Valores permitidos: dark, light' });
+    }
+    try {
+        await userDb.query('UPDATE user SET theme = ? WHERE id = ?', [theme, req.user.id]);
+        res.json({ message: 'OK', theme });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 
 module.exports = router;
