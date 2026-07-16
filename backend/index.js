@@ -99,7 +99,7 @@ app.get('/api/test-connections', async (req, res) => {
 
 // Servir frontend buildeado en producción
 const fs = require('fs');
-const frontendDist = path.join(__dirname, '../frontend/dist');
+const frontendDist = path.join(__dirname, '../dist');
 if (fs.existsSync(frontendDist)) {
     app.use(express.static(frontendDist));
     // React Router: cualquier ruta no-API devuelve el index.html
