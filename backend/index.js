@@ -97,6 +97,18 @@ app.get('/api/test-connections', async (req, res) => {
     res.json(result);
 });
 
+// Servir frontend buildeado en producción
+const fs = require('fs');
+const frontendDist = path.join(__dirname, '../frontend/dist');
+if (fs.existsSync(frontendDist)) {
+    app.use(express.static(frontendDist));
+    // React Router: cualquier ruta no-API devuelve el index.html
+    app.get('*', (req, res) => {
+        res.sendFile(path.join(frontendDist, 'index.html'));
+    });
+    console.log('[STATIC] Sirviendo frontend desde:', frontendDist);
+}
+
 // Start server
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);
