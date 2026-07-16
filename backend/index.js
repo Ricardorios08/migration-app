@@ -105,7 +105,7 @@ const frontendDist = path.join(__dirname, '../dist');
 if (fs.existsSync(frontendDist)) {
     app.use(express.static(frontendDist));
     // React Router: cualquier ruta no-API devuelve el index.html
-    app.get('*', (req, res) => {
+    app.get('(.*)', (req, res) => {
         res.sendFile(path.join(frontendDist, 'index.html'));
     });
     console.log('[STATIC] Sirviendo frontend desde:', frontendDist);
