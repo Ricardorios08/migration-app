@@ -3,6 +3,8 @@ const path = require('path');
 const dotenv = require('dotenv');
 dotenv.config({ path: path.join(__dirname, '.env') });
 
+const setupDb = require('./db/setupDb');
+
 const express = require('express');
 const cors = require('cors');
 const mariaDB = require('./db/maria');
@@ -109,7 +111,12 @@ if (fs.existsSync(frontendDist)) {
     console.log('[STATIC] Sirviendo frontend desde:', frontendDist);
 }
 
-// Start server
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on port ${PORT}`);
+// Start server — esperar a que el SQLite esté inicializado
+setupDb().then(() => {
+    app.listen(PORT, '0.0.0.0', () => {
+        console.log(`Server running on port ${PORT}`);
+    });
+}).catch(err => {
+    console.error('[SETUP DB] Error fatal al inicializar SQLite:', err.message);
+    process.exit(1);
 });
