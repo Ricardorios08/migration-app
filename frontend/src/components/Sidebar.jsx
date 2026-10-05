@@ -19,13 +19,15 @@ import {
   ClipboardCheck,
   Calculator,
   Compass,
-  FileSpreadsheet
+  FileSpreadsheet,
+  HelpCircle
 } from 'lucide-react';
 
 const Sidebar = ({ currentView, setView, collapsed, setCollapsed, mobileOpen, setMobileOpen, user, onLogout }) => {
   const isAuditView = ['audit_module', 'dashboard', 'comparison', 'integrity', 'rubros', 'logs'].includes(currentView);
   const isCtacteView = ['ctacte_module', 'ctacte', 'ctacte_fn', 'ctacte2'].includes(currentView);
-  const isConversor = user?.rol === 'conversor';
+  const isConversorFamily = user?.rol === 'conversor' || user?.rol === 'conversor_editar' || user?.rol === 'conversor_admin';
+  const isConversor = isConversorFamily; // oculta el resto del menú
 
   return (
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
@@ -178,15 +180,39 @@ const Sidebar = ({ currentView, setView, collapsed, setCollapsed, mobileOpen, se
           </>
         )}
 
-        {/* Conversor — visible para superadmin, conversor y municipalidad */}
-        {(user?.rol === 'superadmin' || user?.rol === 'conversor' || user?.rol === 'municipalidad') && (
+        {/* Conversor — visible para superadmin, conversor, conversor_editar, conversor_admin y municipalidad */}
+        {(user?.rol === 'superadmin' || user?.rol === 'conversor' || user?.rol === 'conversor_editar' || user?.rol === 'conversor_admin' || user?.rol === 'municipalidad') && (
+          <>
+            <div
+              className={`menu-item conversor ${currentView === 'conversor' ? 'active' : ''}`}
+              onClick={() => setView('conversor')}
+              title={collapsed ? "Conversor Bancario" : ""}
+            >
+              <FileSpreadsheet size={20} />
+              {!collapsed && <span>Conversor Bancario</span>}
+              {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
+            </div>
+            <div
+              className={`menu-item ayuda-conversor ${currentView === 'ayuda_conversor' ? 'active' : ''}`}
+              onClick={() => setView('ayuda_conversor')}
+              title={collapsed ? "Ayuda del Conversor" : ""}
+            >
+              <HelpCircle size={20} />
+              {!collapsed && <span>Ayuda del Conversor</span>}
+              {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
+            </div>
+          </>
+        )}
+
+        {/* Gestión de usuarios — solo para conversor_editar (acceso restringido) */}
+        {user?.rol === 'conversor_editar' && (
           <div
-            className={`menu-item conversor ${currentView === 'conversor' ? 'active' : ''}`}
-            onClick={() => setView('conversor')}
-            title={collapsed ? "Conversor Bancario" : ""}
+            className={`menu-item users ${currentView === 'users' ? 'active' : ''}`}
+            onClick={() => setView('users')}
+            title={collapsed ? 'Gestión Usuarios' : ''}
           >
-            <FileSpreadsheet size={20} />
-            {!collapsed && <span>Conversor Bancario</span>}
+            <Users size={20} />
+            {!collapsed && <span>Gestión Usuarios</span>}
             {!collapsed && <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
           </div>
         )}

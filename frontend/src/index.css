@@ -401,6 +401,11 @@ body {
   overflow: hidden;
 }
 
+.body-content-wrapper.scrollable {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 @media (max-width: 1024px) {
   .body-content-wrapper {
     overflow: visible;

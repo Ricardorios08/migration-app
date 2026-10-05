@@ -496,9 +496,11 @@ function generarTxt(filas, opciones = {}) {
 
     const lineas = [];
 
-    // Temporario: Restaurar la cabecera con nombres de columnas para pruebas
-    const header = '1.Sucursal(C);2.Cuenta(C);3.NumHoja(C);4.Secuencia(C);5.FechaMov(C);6.Referencia(C);7.CodMov(C);8.Descripcion(C);9.Importe(C);10.Saldo(C)';
-    lineas.push(header);
+    // NOTA: no se incluye una línea de encabezado con nombres de columnas.
+    // El sistema contable valida la primera línea del archivo como un registro
+    // de datos real (no como títulos), así que una fila de etiquetas ahí
+    // rompe la carga (errores de formato en cada columna). El archivo debe
+    // empezar directamente con el registro de Apertura (001).
 
     // 1. Registro de Apertura / Fila 001
     const aperturaRow = [

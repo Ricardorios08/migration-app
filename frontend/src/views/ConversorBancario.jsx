@@ -16,7 +16,9 @@ const COL_LABELS = {
   saldo: 'Saldo'
 };
 
-export default function ConversorBancario() {
+export default function ConversorBancario({ user }) {
+  // conversor_admin, conversor_editar, superadmin y municipalidad pueden editar; conversor solo lee
+  const canEdit = user?.rol === 'conversor_admin' || user?.rol === 'conversor_editar' || user?.rol === 'superadmin' || user?.rol === 'municipalidad' || user?.rol === 'admin';
   const [dragging, setDragging] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -646,7 +648,7 @@ export default function ConversorBancario() {
                         {COL_LABELS[c]}
                       </th>
                     ))}
-                    <th style={{ padding: '0.7rem 0.5rem', width: '40px' }}></th>
+                    {canEdit && <th style={{ padding: '0.7rem 0.5rem', width: '40px' }}></th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -662,52 +664,76 @@ export default function ConversorBancario() {
                       {COLS.map(campo => (
                         <td key={campo} style={{ padding: '0.4rem 0.5rem' }}>
                           {campo === 'codMov' ? (
-                            <select
-                              value={fila[campo]}
-                              onChange={e => editarFila(idx, campo, e.target.value)}
-                              style={{
-                                padding: '0.25rem 0.4rem', borderRadius: '6px',
+                            canEdit ? (
+                              <select
+                                value={fila[campo]}
+                                onChange={e => editarFila(idx, campo, e.target.value)}
+                                style={{
+                                  padding: '0.25rem 0.4rem', borderRadius: '6px',
+                                  background: fila[campo] === 'D' ? 'rgba(239,68,68,0.15)' : 'rgba(34,197,94,0.15)',
+                                  border: '1px solid var(--border)',
+                                  color: fila[campo] === 'D' ? '#f87171' : '#4ade80',
+                                  fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer'
+                                }}
+                              >
+                                <option value="D">D - Débito</option>
+                                <option value="H">H - Haber</option>
+                              </select>
+                            ) : (
+                              <span style={{
+                                padding: '0.25rem 0.6rem', borderRadius: '6px', display: 'inline-block',
                                 background: fila[campo] === 'D' ? 'rgba(239,68,68,0.15)' : 'rgba(34,197,94,0.15)',
-                                border: '1px solid var(--border)',
                                 color: fila[campo] === 'D' ? '#f87171' : '#4ade80',
-                                fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer'
-                              }}
-                            >
-                              <option value="D">D - Débito</option>
-                              <option value="H">H - Haber</option>
-                            </select>
+                                fontSize: '0.82rem', fontWeight: 700
+                              }}>
+                                {fila[campo] === 'D' ? 'D - Débito' : 'H - Haber'}
+                              </span>
+                            )
                           ) : (
-                            <input
-                              value={fila[campo] || ''}
-                              onChange={e => editarFila(idx, campo, e.target.value)}
-                              style={{
-                                padding: '0.25rem 0.5rem', borderRadius: '6px',
-                                background: 'transparent', border: '1px solid transparent',
+                            canEdit ? (
+                              <input
+                                value={fila[campo] || ''}
+                                onChange={e => editarFila(idx, campo, e.target.value)}
+                                style={{
+                                  padding: '0.25rem 0.5rem', borderRadius: '6px',
+                                  background: 'transparent', border: '1px solid transparent',
+                                  color: 'var(--text)', fontSize: '0.82rem',
+                                  width: campo === 'descripcion' ? '300px' : campo === 'importe' ? '100px' : '90px',
+                                  transition: 'border-color 0.15s'
+                                }}
+                                onFocus={e => e.target.style.borderColor = 'var(--accent)'}
+                                onBlur={e => e.target.style.borderColor = 'transparent'}
+                              />
+                            ) : (
+                              <span style={{
+                                display: 'inline-block', padding: '0.25rem 0.5rem',
                                 color: 'var(--text)', fontSize: '0.82rem',
                                 width: campo === 'descripcion' ? '300px' : campo === 'importe' ? '100px' : '90px',
-                                transition: 'border-color 0.15s'
-                              }}
-                              onFocus={e => e.target.style.borderColor = 'var(--accent)'}
-                              onBlur={e => e.target.style.borderColor = 'transparent'}
-                            />
+                                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+                              }}>
+                                {fila[campo] || ''}
+                              </span>
+                            )
                           )}
                         </td>
                       ))}
-                      <td style={{ padding: '0.4rem 0.5rem', textAlign: 'center' }}>
-                        <button
-                          onClick={() => eliminarFila(idx)}
-                          title="Eliminar fila"
-                          style={{
-                            background: 'none', border: 'none', cursor: 'pointer',
-                            color: 'rgba(239,68,68,0.5)', padding: '4px',
-                            borderRadius: '4px', display: 'flex', alignItems: 'center'
-                          }}
-                          onMouseOver={e => e.currentTarget.style.color = '#f87171'}
-                          onMouseOut={e => e.currentTarget.style.color = 'rgba(239,68,68,0.5)'}
-                        >
-                          <X size={14} />
-                        </button>
-                      </td>
+                      {canEdit && (
+                        <td style={{ padding: '0.4rem 0.5rem', textAlign: 'center' }}>
+                          <button
+                            onClick={() => eliminarFila(idx)}
+                            title="Eliminar fila"
+                            style={{
+                              background: 'none', border: 'none', cursor: 'pointer',
+                              color: 'rgba(239,68,68,0.5)', padding: '4px',
+                              borderRadius: '4px', display: 'flex', alignItems: 'center'
+                            }}
+                            onMouseOver={e => e.currentTarget.style.color = '#f87171'}
+                            onMouseOut={e => e.currentTarget.style.color = 'rgba(239,68,68,0.5)'}
+                          >
+                            <X size={14} />
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>

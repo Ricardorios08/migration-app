@@ -32,6 +32,7 @@ import AnalyticsExplorer from './views/AnalyticsExplorer';
 import ExplorerDashboard from './views/ExplorerDashboard';
 import MetabaseReports from './views/MetabaseReports';
 import ConversorBancario from './views/ConversorBancario';
+import AyudaConversor from './views/AyudaConversor';
 import { API_URL } from './config';
 
 function App() {
@@ -65,7 +66,7 @@ function App() {
           if (userData.theme) setTheme(userData.theme);
           if (userData.rol === 'municipalidad') {
             setView('ctacte_fn');
-          } else if (userData.rol === 'conversor') {
+          } else if (userData.rol === 'conversor' || userData.rol === 'conversor_admin' || userData.rol === 'conversor_editar') {
             setView('conversor');
           }
         })
@@ -88,7 +89,7 @@ function App() {
     if (userData.theme) setTheme(userData.theme);
     if (userData.rol === 'municipalidad') {
       setView('ctacte_fn');
-    } else if (userData.rol === 'conversor') {
+    } else if (userData.rol === 'conversor' || userData.rol === 'conversor_admin' || userData.rol === 'conversor_editar') {
       setView('conversor');
     } else {
       setView('dashboard');
@@ -108,7 +109,7 @@ function App() {
     setUser(prev => ({ ...prev, rol: newRol }));
     // Navigate to default view for that role
     if (newRol === 'municipalidad') setView('ctacte_fn');
-    else if (newRol === 'conversor') setView('conversor');
+    else if (newRol === 'conversor' || newRol === 'conversor_admin' || newRol === 'conversor_editar') setView('conversor');
     else setView('dashboard');
   };
 
@@ -149,7 +150,7 @@ function App() {
           onRoleChange={handleRoleChange}
           originalRole={originalRole}
         />
-        <div className="body-content-wrapper">
+        <div className={`body-content-wrapper${view === 'ayuda_conversor' ? ' scrollable' : ''}`}>
           {view === 'audit_module' ? (
             <AuditModule setView={setView} user={user} />
           ) : view === 'ctacte_module' ? (
@@ -186,8 +187,6 @@ function App() {
             <ApremioSearch />
           ) : view === 'comparison' ? (
             <ComparisonReport />
-          ) : view === 'users' ? (
-            <UserManagement />
           ) : view === 'profile' ? (
             <Profile user={user} />
           ) : view === 'logs' ? (
@@ -207,7 +206,11 @@ function App() {
           ) : view === 'metabase' ? (
             user?.rol === 'superadmin' ? <MetabaseReports user={user} /> : <AuditDashboard />
           ) : view === 'conversor' ? (
-            (user?.rol === 'superadmin' || user?.rol === 'conversor' || user?.rol === 'municipalidad') ? <ConversorBancario /> : <AuditDashboard />
+            (user?.rol === 'superadmin' || user?.rol === 'conversor' || user?.rol === 'conversor_admin' || user?.rol === 'conversor_editar' || user?.rol === 'municipalidad') ? <ConversorBancario user={user} /> : <AuditDashboard />
+          ) : view === 'ayuda_conversor' ? (
+            (user?.rol === 'superadmin' || user?.rol === 'conversor' || user?.rol === 'conversor_admin' || user?.rol === 'conversor_editar' || user?.rol === 'municipalidad') ? <AyudaConversor /> : <AuditDashboard />
+          ) : view === 'users' ? (
+            (user?.rol === 'superadmin' || user?.rol === 'admin' || user?.rol === 'municipalidad' || user?.rol === 'conversor_editar') ? <UserManagement user={user} /> : <AuditDashboard />
           ) : (
             <AuditDashboard />
           )}
