@@ -82,7 +82,7 @@ const Header = ({ user, onMenuToggle, onLogout, theme, onThemeToggle, onRoleChan
 
       {/* Right: connections + settings */}
       <div className="header-right">
-        {user?.rol !== 'municipalidad' && user?.rol !== 'conversor' && (
+        {user?.rol !== 'municipalidad' && user?.rol !== 'conversor' && user?.rol !== 'conversor_editar' && (
           <div className="connection-status">
             <div className="status-indicator">
               <Database size={16} color="#10b981" />
